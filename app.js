@@ -1,3 +1,12 @@
+// Register Service Worker for PWA Add to Homescreen
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('Service Worker registered successfully. Scope:', reg.scope))
+      .catch(err => console.warn('Service Worker registration failed:', err));
+  });
+}
+
 /* ==========================================================================
    TIM KHIDMAT JEJAK IMANI - CORE APPLICATION SCRIPT (UPDATED PHASE 3)
    Provides: SPA Router, Search Autocomplete, Saudi Date & Hijri year fix,
@@ -162,6 +171,18 @@ function loadState() {
       const data = snapshot.val();
       console.log("Firebase database on('value') listener triggered. Data received:", data);
       if (data) {
+        // Compare serialized states to prevent redundant rendering loop (local updates)
+        const localToCompare = JSON.parse(JSON.stringify(state));
+        delete localToCompare.currentUser;
+        const serializedLocal = JSON.stringify(localToCompare);
+        const serializedRemote = JSON.stringify(data);
+        
+        if (serializedLocal === serializedRemote) {
+          console.log("Received data is identical to local state. Skipping re-render.");
+          return;
+        }
+        
+        console.log("Received data is different. Merging and re-routing view.");
         const localCurrentUser = state.currentUser;
         state = data;
         state.currentUser = localCurrentUser;
