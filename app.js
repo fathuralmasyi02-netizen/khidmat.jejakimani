@@ -171,9 +171,14 @@ function loadState() {
       const data = snapshot.val();
       console.log("Firebase database on('value') listener triggered. Data received:", data);
       if (data) {
-        // Compare serialized states to prevent redundant rendering loop (local updates)
-        const localToCompare = JSON.parse(JSON.stringify(state));
-        delete localToCompare.currentUser;
+        // Shallow clone local state (excluding currentUser) for comparison
+        const localToCompare = {};
+        for (let k in state) {
+          if (k !== 'currentUser') {
+            localToCompare[k] = state[k];
+          }
+        }
+        
         const serializedLocal = JSON.stringify(localToCompare);
         const serializedRemote = JSON.stringify(data);
         
@@ -190,9 +195,13 @@ function loadState() {
         route();
       } else {
         console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with DEFAULT_STATE...");
-        const stateToSave = JSON.parse(JSON.stringify(DEFAULT_STATE));
-        delete stateToSave.currentUser;
-        firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
+        const stateToSave = {};
+        for (let k in DEFAULT_STATE) {
+          if (k !== 'currentUser') {
+            stateToSave[k] = DEFAULT_STATE[k];
+          }
+        }
+        firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
       }
     }, (error) => {
       console.error("Firebase read/write database listener failed:", error);
@@ -209,9 +218,13 @@ function saveState() {
   }
   
   if (firebaseDb) {
-    const stateToSave = JSON.parse(JSON.stringify(state));
-    delete stateToSave.currentUser;
-    firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
+    const stateToSave = {};
+    for (let k in state) {
+      if (k !== 'currentUser') {
+        stateToSave[k] = state[k];
+      }
+    }
+    firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
   }
 }
 
