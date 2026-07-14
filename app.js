@@ -63,7 +63,7 @@ const firebaseConfig = {
   messagingSenderId: "326697842694",
   appId: "1:326697842694:web:37412e495dda69f9baeb87",
   measurementId: "G-HQCGVQ9GTY",
-  databaseURL: "https://khidmat-jejakimani-default-rtdb.asia-southeast1.firebasedatabase.app"
+  databaseURL: "https://khidmat-jejakimani-default-rtdb.asia-southeast1.firebasedatabase.app/"
 };
 
 // Initialize Firebase
@@ -71,6 +71,7 @@ let firebaseDb = null;
 try {
   firebase.initializeApp(firebaseConfig);
   firebaseDb = firebase.database();
+  console.log("Firebase App & Realtime Database initialized successfully at URL: " + firebaseConfig.databaseURL);
 } catch (e) {
   console.warn("Firebase failed to initialize. Using localStorage fallback.", e);
 }
@@ -156,8 +157,10 @@ function loadState() {
   // Register real-time sync with Firebase
   if (firebaseDb && !isFirebaseListenerRegistered) {
     isFirebaseListenerRegistered = true;
+    console.log("Registering Firebase Realtime Database value listener...");
     firebaseDb.ref('jejak_imani_v2_db').on('value', (snapshot) => {
       const data = snapshot.val();
+      console.log("Firebase database on('value') listener triggered. Data received:", data);
       if (data) {
         const localCurrentUser = state.currentUser;
         state = data;
@@ -165,11 +168,13 @@ function loadState() {
         ensureStateCompat();
         route();
       } else {
-        // Init remote database if empty
+        console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with DEFAULT_STATE...");
         const stateToSave = JSON.parse(JSON.stringify(DEFAULT_STATE));
         delete stateToSave.currentUser;
         firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
       }
+    }, (error) => {
+      console.error("Firebase read/write database listener failed:", error);
     });
   }
 }
