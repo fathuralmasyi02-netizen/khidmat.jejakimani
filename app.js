@@ -4374,7 +4374,7 @@ function openPenjadwalanFormPopup(editId = null) {
           <label class="form-label">Kebutuhan Personel (Petugas)</label>
           <input type="number" id="task-required-staff" class="form-input" min="1" value="${isEdit ? (task.requiredStaff || 1) : 1}" required>
         </div>
-      </div>>
+      </div>
       
       <div class="form-group hidden" id="custom-task-name-container">
         <label class="form-label">Nama Kustom Jenis Penugasan</label>
@@ -4415,7 +4415,7 @@ function openPenjadwalanFormPopup(editId = null) {
     const groupIti = state.itineraries.find(i => i.groupName === groupName);
     if (groupIti && groupIti.activities) {
       groupIti.activities.forEach(a => {
-        kegiatanSelect.innerHTML += `<option value="${a.agenda}">${a.agenda} (${formatDateDisplay(a.date)})option>`;
+        kegiatanSelect.innerHTML += `<option value="${a.agenda}">${a.agenda} (${formatDateDisplay(a.date)})</option>`;
       });
     }
   };
@@ -4477,14 +4477,20 @@ function openPenjadwalanFormPopup(editId = null) {
       const selectedHotel = isEdit ? task.details.hotelName : "";
       const selectedPkgs = isEdit ? (task.details.packages || []) : [];
       
+      const hotelSelectHtml = hotelOptions ? `
+        <select id="c-hotel" class="form-select" required>
+          <option value="">-- Pilih --</option>
+          ${hotelOptions}
+        </select>
+      ` : `
+        <input type="text" id="c-hotel" class="form-input" placeholder="Ketik nama hotel..." required>
+      `;
+      
       conditionalBox.innerHTML = `
         <div class="grid-3col">
           <div class="form-group">
             <label class="form-label">Nama Hotel</label>
-            <select id="c-hotel" class="form-select" required>
-              <option value="">-- Pilih --</option>
-              ${hotelOptions}
-            </select>
+            ${hotelSelectHtml}
           </div>
           <div class="form-group"><label class="form-label">Total Pax</label><input type="number" id="c-pax" class="form-input" value="${isEdit ? (task.details.totalPax || '') : totalPaxVal}" required></div>
           <div class="form-group"><label class="form-label">Total Room</label><input type="number" id="c-rooms" class="form-input" value="${isEdit ? (task.details.totalRoom || '') : ''}" required></div>
@@ -4508,7 +4514,9 @@ function openPenjadwalanFormPopup(editId = null) {
           <div class="form-group"><label class="form-label">ETD (24 Jam)</label><input type="time" id="c-etd-time" class="form-input" value="${isEdit ? (task.details.etdTime || '') : ''}" required></div>
         `}
       `;
-      if (selectedHotel) {
+      if (selectedHotel && hotelOptions) {
+        document.getElementById("c-hotel").value = selectedHotel;
+      } else if (selectedHotel) {
         document.getElementById("c-hotel").value = selectedHotel;
       }
     } else if (type === "City Tour") {
@@ -4587,6 +4595,7 @@ function openPenjadwalanFormPopup(editId = null) {
   document.getElementById("task-submit-form-popup").onsubmit = (e) => {
     e.preventDefault();
     const groupName = gInput.value;
+    const requiredStaff = parseInt(document.getElementById("task-required-staff").value) || 1;
     const date = document.getElementById("task-date").value;
     const time = document.getElementById("task-time").value;
     const region = document.getElementById("task-region").value;
