@@ -87,6 +87,25 @@ try {
 
 let state = {};
 let isFirebaseListenerRegistered = false;
+let isFirebaseConnected = false;
+
+function updateDbStatusUI() {
+  const dots = document.querySelectorAll(".db-status-dot");
+  const texts = document.querySelectorAll(".db-status-text");
+  
+  dots.forEach(dot => {
+    if (dot) {
+      dot.style.backgroundColor = isFirebaseConnected ? "#10b981" : "#ef4444";
+      dot.style.boxShadow = isFirebaseConnected ? "0 0 6px #10b981" : "0 0 6px #ef4444";
+    }
+  });
+  
+  texts.forEach(text => {
+    if (text) {
+      text.textContent = isFirebaseConnected ? "Terhubung (Realtime)" : "Terputus (Lokal)";
+    }
+  });
+}
 
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
@@ -167,6 +186,17 @@ function loadState() {
   if (firebaseDb && !isFirebaseListenerRegistered) {
     isFirebaseListenerRegistered = true;
     console.log("Registering Firebase Realtime Database value listener...");
+    
+    try {
+      firebaseDb.ref('.info/connected').on('value', (snap) => {
+        isFirebaseConnected = (snap.val() === true);
+        console.log("Firebase connection status changed:", isFirebaseConnected);
+        updateDbStatusUI();
+      });
+    } catch(e) {
+      console.warn("Failed to attach .info/connected listener:", e);
+    }
+    
     firebaseDb.ref('jejak_imani_v2_db').on('value', (snapshot) => {
       const data = snapshot.val();
       console.log("Firebase database on('value') listener triggered. Data received:", data);
@@ -612,9 +642,15 @@ function renderUserPortal(subView) {
       </header>
       
       <!-- Subheader bar -->
-      <div class="user-sub-header">
+      <div class="user-sub-header" style="justify-content: space-between;">
         <span>📅 ${gregorianLongStr} / ${hijriStr}</span>
-        <span class="time-widget"><i data-lucide="clock" style="width: 11px; height: 11px;"></i> Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="db-status-wrapper" style="font-size:0.65rem; color:#4a5568; display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.85); padding:2px 8px; border-radius:12px; border: 1px solid rgba(0,0,0,0.05);">
+            <span class="db-status-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#ef4444; transition: all 0.3s ease;"></span>
+            <span class="db-status-text" style="font-weight:600;">Terputus (Lokal)</span>
+          </div>
+          <span class="time-widget"><i data-lucide="clock" style="width: 11px; height: 11px;"></i> Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
+        </div>
       </div>
       
       <!-- Render Workarea -->
@@ -2738,14 +2774,21 @@ function renderAdminPortal(subView) {
           </div>
         </nav>
         
-        <div class="admin-sidebar-footer">
-          <div class="admin-user-info">
-            <span class="admin-user-name">${state.currentUser.name}</span>
-            <span class="admin-user-role">Administrator</span>
+        <div class="admin-sidebar-footer" style="flex-direction: column; align-items: stretch; gap: 8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div class="admin-user-info">
+              <span class="admin-user-name">${state.currentUser.name}</span>
+              <span class="admin-user-role">Administrator</span>
+            </div>
+            <button class="logout-btn" id="admin-logout-btn" title="Logout">
+              <i data-lucide="log-out" style="width: 18px; height: 18px;"></i>
+            </button>
           </div>
-          <button class="logout-btn" id="admin-logout-btn" title="Logout">
-            <i data-lucide="log-out" style="width: 18px; height: 18px;"></i>
-          </button>
+          <div class="db-status-wrapper" style="font-size:0.7rem; color:var(--text-light); display:flex; align-items:center; gap:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:6px; margin-top:2px;">
+            <span class="db-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:#ef4444; transition: all 0.3s ease;"></span>
+            <span style="font-weight:600; opacity:0.9;">DB:</span>
+            <span class="db-status-text" style="font-weight:500;">Terputus (Lokal)</span>
+          </div>
         </div>
       </aside>
       
