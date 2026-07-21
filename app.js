@@ -229,7 +229,17 @@ function loadState() {
         state = data;
         state.currentUser = localCurrentUser;
         ensureStateCompat();
-        route();
+        
+        // Preserve active modal if open
+        const modalContainer = document.getElementById("modal-container");
+        const isModalOpen = modalContainer && !modalContainer.classList.contains("hidden");
+        
+        router();
+        updateDbStatusUI();
+        
+        if (isModalOpen && modalContainer) {
+          modalContainer.classList.remove("hidden");
+        }
       } else {
         console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with DEFAULT_STATE...");
         const stateToSave = {};
@@ -456,6 +466,7 @@ function router() {
   else if (hash.startsWith("#admin/")) renderAdminPortal(hash.replace("#admin/", ""));
   
   lucide.createIcons();
+  updateDbStatusUI();
 }
 
 window.addEventListener("hashchange", router);
