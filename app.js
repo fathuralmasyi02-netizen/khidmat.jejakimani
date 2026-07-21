@@ -137,6 +137,13 @@ function ensureStateCompat() {
   
   state.notifications = ensureArray(state.notifications);
   
+  state.rooms = ensureArray(state.rooms, DEFAULT_STATE.rooms || []);
+  state.rooms.forEach(room => {
+    if (room && typeof room === "object") {
+      room.guests = ensureArray(room.guests, []);
+    }
+  });
+  
   // Backwards compatibility for dates
   state.groups.forEach(g => {
     if (g) {
@@ -231,7 +238,7 @@ function loadState() {
             stateToSave[k] = DEFAULT_STATE[k];
           }
         }
-        firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
+        firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
       }
     }, (error) => {
       console.error("Firebase read/write database listener failed:", error);
@@ -1100,7 +1107,7 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       const type = typeEl.value;
 
       const dateObj = getSaudiDateTime();
-      simulatedPhotoData = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" style="background:#f1f5f9; font-family:sans-serif;"><rect width="300" height="200" fill="none" stroke="%23c5a850" stroke-width="6"/><text x="150" y="50" font-size="14" font-weight="bold" fill="%231e293b" text-anchor="middle">FOTO ABSEN TIM KHIDMAT</text><text x="150" y="85" font-size="11" fill="%23475569" text-anchor="middle">Grup: ${groupName}</text><text x="150" y="110" font-size="11" fill="%23475569" text-anchor="middle">Petugas: ${state.currentUser.name}</text><text x="150" y="135" font-size="10" fill="%2364748b" text-anchor="middle">Saudi: 	ext{${dateObj.gregorianLongStr}}</text><text x="150" y="155" font-size="10" fill="%2364748b" text-anchor="middle">Pukul: 	ext{${dateObj.timeStr}} (${type === 'Masuk' ? 'Check-In' : 'Check-Out'})</text></svg>`;
+      simulatedPhotoData = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" style="background:#f1f5f9; font-family:sans-serif;"><rect width="300" height="200" fill="none" stroke="%23c5a850" stroke-width="6"/><text x="150" y="50" font-size="14" font-weight="bold" fill="%231e293b" text-anchor="middle">FOTO ABSEN TIM KHIDMAT</text><text x="150" y="85" font-size="11" fill="%23475569" text-anchor="middle">Grup: ${groupName}</text><text x="150" y="110" font-size="11" fill="%23475569" text-anchor="middle">Petugas: ${state.currentUser.name}</text><text x="150" y="135" font-size="10" fill="%2364748b" text-anchor="middle">Saudi: ${dateObj.gregorianLongStr}</text><text x="150" y="155" font-size="10" fill="%2364748b" text-anchor="middle">Pukul: ${dateObj.timeStr} (${type === 'Masuk' ? 'Check-In' : 'Check-Out'})</text></svg>`;
 
       previewEl.innerHTML = `<img src="${simulatedPhotoData}" style="width:100%; border-radius:6px; border:1px solid var(--border-light);" />`;
       previewEl.classList.remove("hidden");
@@ -1140,7 +1147,7 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         task.status = "Selesai";
       }
 
-      addNotification("financial", `Absensi ${type}: ${state.currentUser.name} melakukan absen ${type} untuk tugas 	ext{${task.type}} (	ext{${groupName}})`, { username, groupName });
+      addNotification("financial", `Absensi ${type}: ${state.currentUser.name} melakukan absen ${type} untuk tugas ${task.type} (${groupName})`, { username, groupName });
       saveState();
       closeModal();
       showToast(`Absensi ${type} berhasil dikirim!`);
@@ -1596,7 +1603,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
       
       <div class="form-group" id="user-exp-group-container-popup">
         <label class="form-label">Grup Keberangkatan</label>
-        <input type="text" id="user-exp-group-input-popup" class="form-input" value="	ext{${prefilledGroup}}" placeholder="Ketik nama grup..." required>
+        <input type="text" id="user-exp-group-input-popup" class="form-input" value="${prefilledGroup}" placeholder="Ketik nama grup..." required>
         <div id="user-exp-group-suggestions-popup" class="suggestion-list hidden"></div>
       </div>
       
@@ -1669,7 +1676,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
   };
 
   const addItemRow = () => {
-    const rowId = `exp-item-${Date.now()}-Math.random()}`;
+    const rowId = `exp-item-${Date.now()}-${Math.random()}`;
     const div = document.createElement("div");
     div.className = "nested-form-card exp-item-row-popup";
     div.id = rowId;
@@ -2459,6 +2466,12 @@ function loadUserTab(tab) {
 
         document.getElementById("user-attendance-form-popup").onsubmit = (e) => {
           e.preventDefault();
+          
+          if (!simulatedPhotoData) {
+            showToast("Silakan ambil foto absensi terlebih dahulu.", "error");
+            return;
+          }
+
           const taskId = document.getElementById("user-absen-task-select").value;
           const type = document.getElementById("user-absen-type").value;
           
@@ -2466,10 +2479,10 @@ function loadUserTab(tab) {
             id: `att-${Date.now()}`,
             taskId,
             username,
-            date: new Date().toISOString().split('T')[0],
-            time: simulatedPhotoData.time,
+            date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
+            time: simulatedPhotoData.time || getSaudiDateTime().timeStr,
             type,
-            coords: simulatedPhotoData.coords,
+            coords: simulatedPhotoData.coords || "N/A",
             photo: "selfie_petugas_frame.jpg"
           };
           
@@ -2669,12 +2682,14 @@ function loadUserTab(tab) {
           const imigrasi = document.getElementById("user-arr-imigrasi-popup").value;
           const bus = document.getElementById("user-arr-bus-popup").value;
           let totalStr = "N/A";
-          if (imigrasi && bus) {
+          if (imigrasi && bus && imigrasi.includes(':') && bus.includes(':')) {
             const [h1, m1] = imigrasi.split(':').map(Number);
             const [h2, m2] = bus.split(':').map(Number);
-            let diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
-            if (diffMin < 0) diffMin += 24 * 60;
-            totalStr = `${Math.floor(diffMin / 60)} jam ${diffMin % 60} menit`;
+            if (!isNaN(h1) && !isNaN(m1) && !isNaN(h2) && !isNaN(m2)) {
+              let diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
+              if (diffMin < 0) diffMin += 24 * 60;
+              totalStr = `${Math.floor(diffMin / 60)} jam ${diffMin % 60} menit`;
+            }
           }
           detailText = `Landing: ${landing}\nKeluar Imigrasi: ${imigrasi}\nBus Berangkat: ${bus}\nTotal Waktu: ${totalStr}\nCatatan: ${detailText}`;
         } else if (catVal === "Waktu Kepulangan Bandara") {
@@ -2682,12 +2697,14 @@ function loadUserTab(tab) {
           const board = document.getElementById("user-dep-board-popup").value;
           const imigrasi = document.getElementById("user-dep-imigrasi-popup").value;
           let totalStr = "N/A";
-          if (board && imigrasi) {
+          if (board && imigrasi && board.includes(':') && imigrasi.includes(':')) {
             const [h1, m1] = board.split(':').map(Number);
             const [h2, m2] = imigrasi.split(':').map(Number);
-            let diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
-            if (diffMin < 0) diffMin += 24 * 60;
-            totalStr = `${Math.floor(diffMin / 60)} jam ${diffMin % 60} menit`;
+            if (!isNaN(h1) && !isNaN(m1) && !isNaN(h2) && !isNaN(m2)) {
+              let diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
+              if (diffMin < 0) diffMin += 24 * 60;
+              totalStr = `${Math.floor(diffMin / 60)} jam ${diffMin % 60} menit`;
+            }
           }
           detailText = `Bus Checkpoint: ${checkpoint}\nBus Naik: ${board}\nImigrasi: ${imigrasi}\nTotal Waktu: ${totalStr}\nCatatan: ${detailText}`;
         }
@@ -2876,20 +2893,6 @@ function renderAdminPortal(subView) {
     renderAdminAset();
   } else {
     window.location.hash = "#admin/dashboard";
-    tbody.querySelectorAll(".approve-delete-inc-btn").forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.getAttribute("data-id");
-        if (confirm("Setujui menghapus laporan kejadian ini secara permanen?")) {
-          const idx = state.reports.incidents.findIndex(x => x.id === id);
-          if (idx !== -1) {
-            state.reports.incidents.splice(idx, 1);
-            saveState();
-            showToast("Laporan kejadian dihapus.");
-            loadLaporanTabContent();
-          }
-        }
-      };
-    });
   }
   
   lucide.createIcons();
@@ -5065,7 +5068,7 @@ function openAdminPendingExpenseDetailPopup(expenseId) {
   document.getElementById("detail-approve-exp-btn").onclick = () => {
     e.status = "Disetujui";
     state.financial.transactions.push({
-      id: `tx-${Date.now()}`, type: "Pengeluaran", sender: e.username, recipient: "Vendor", amount: e.amount, date: new Date().toLocaleDateString('id-ID'), description: `[APPROVED] ${e.description}`, status: "Approved", refExpenseId: e.id
+      id: `tx-${Date.now()}`, type: "Pengeluaran", sender: e.username, recipient: "Vendor", amount: e.amount, date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'), description: `[APPROVED] ${e.description}`, status: "Approved", refExpenseId: e.id
     });
     saveState();
     closeModal();
@@ -5922,9 +5925,6 @@ function renderAdminFinancial() {
           <p><strong>Keterangan:</strong> ${tx.description || '-'}</p>
           ${itemsHtml}
           ${receiptHtml}
-        </div>
-          <p><strong>Jumlah:</strong> SAR ${tx.amount.toLocaleString('id-ID')}</p>
-          <p><strong>Deskripsi:</strong> ${tx.description || '-'}</p>
         </div>
         <form id="admin-edit-tx-form-popup">
           <div class="form-group"><label class="form-label">Deskripsi Baru</label><input type="text" id="et-desc" class="form-input" value="${tx.description || ''}" required></div>
