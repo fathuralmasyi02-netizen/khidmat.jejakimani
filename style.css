@@ -321,14 +321,33 @@ a {
 }
 
 .calendar-city-lbl {
-  display: block;
-  font-size: 0.55rem;
+  display: inline-block;
+  font-size: 0.65rem;
   font-weight: 800;
   line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.lbl-makkah { color: #f59e0b; }
-.lbl-madinah { color: #10b981; }
+.lbl-makkah, .calendar-city-lbl.lbl-makkah {
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.lbl-madinah, .calendar-city-lbl.lbl-madinah {
+  color: #047857;
+  background: #d1fae5;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.lbl-jeddah, .calendar-city-lbl.lbl-jeddah {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
 
 /* Photo Camera Frame Overlay */
 .photo-frame-container {
@@ -1761,11 +1780,19 @@ a {
     left: 0;
     bottom: 0;
     width: 260px;
-    box-shadow: 20px 0 50px rgba(0, 0, 0, 0.2);
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    z-index: 1000;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25);
+  }
+  
+  .admin-sidebar.open,
+  .admin-sidebar.active {
+    transform: translateX(0);
   }
   
   .admin-sidebar.collapsed {
-    transform: translateX(-260px);
+    transform: translateX(-100%);
     width: 260px; 
   }
   
@@ -1837,24 +1864,16 @@ a {
   outline-offset: 1.5px;
 }
 
-/* Remove extreme shadow on wallet action buttons */
+/* Wallet Action Buttons Style */
 .wallet-box .btn-secondary {
-  box-shadow: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  transition: var(--transition-fast) !important;
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  transition: var(--transition-fast);
 }
 .wallet-box .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.22);
 }
-
-
-/* Jeddah calendar label color style */
-.calendar-city-lbl.lbl-jeddah {
-  background-color: #fef3c7;
-  color: #d97706;
-}
-
 
 /* Google Calendar itinerary view style rules */
 .iti-cal-date-card {
@@ -1874,14 +1893,7 @@ a {
   transform: translateY(-1px);
 }
 
-
-/* Clean minimal section title & reduced widget shadows */
-.user-section-title::after {
-  display: none !important;
-  content: none !important;
-}
-
 .glass-card, .wallet-box-simpel, .assignment-card, .admin-card, .activity-list {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
-  border: 1px solid #f1f5f9 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
 }
