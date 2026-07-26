@@ -77,12 +77,16 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let firebaseDb = null;
-try {
-  firebase.initializeApp(firebaseConfig);
-  firebaseDb = firebase.database();
-  console.log("Firebase App & Realtime Database initialized successfully at URL: " + firebaseConfig.databaseURL);
-} catch (e) {
-  console.warn("Firebase failed to initialize. Using localStorage fallback.", e);
+if (typeof firebase !== 'undefined') {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    firebaseDb = firebase.database();
+    console.log("Firebase App & Realtime Database initialized successfully at URL: " + firebaseConfig.databaseURL);
+  } catch (e) {
+    console.warn("Firebase failed to initialize. Using localStorage fallback.", e);
+  }
+} else {
+  console.warn("Firebase SDK not loaded. Using localStorage fallback.");
 }
 
 let state = {};
@@ -141,6 +145,12 @@ function ensureStateCompat() {
   state.rooms.forEach(room => {
     if (room && typeof room === "object") {
       room.guests = ensureArray(room.guests, []);
+      room.guests.forEach(g => {
+        if (g && typeof g === "object" && !g.uniqueCode) {
+          const num = parseInt(g.guestNo) || 1;
+          g.uniqueCode = "JIBB-" + String(num).padStart(4, "0");
+        }
+      });
     }
   });
   
@@ -157,6 +167,191 @@ function ensureStateCompat() {
   if (state.notifications) {
     state.notifications = state.notifications.filter(n => n.timestamp > oneDayAgo);
   }
+
+  // Seed documents across all 7 requested categories for all groups
+  state.documents = ensureArray(state.documents, DEFAULT_STATE.documents || []);
+  state.groups.forEach(group => {
+    if (!group || !group.name) return;
+    const gName = group.name;
+    const cleanSlug = gName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+    const docItems = [
+      {
+        id: `doc-prof-${cleanSlug}`,
+        groupName: gName,
+        category: "Profiling Jamaah",
+        name: `Profiling Jamaah & Rekam Medis - ${gName}`,
+        file: `profiling_jamaah_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-visa-${cleanSlug}`,
+        groupName: gName,
+        category: "Visa",
+        name: `Manifest Visa Umroh KSA - ${gName}`,
+        file: `visa_manifest_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-paspor-${cleanSlug}`,
+        groupName: gName,
+        category: "Paspor",
+        name: `Manifest & Scan Paspor Jamaah - ${gName}`,
+        file: `manifest_paspor_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-ticket-${cleanSlug}`,
+        groupName: gName,
+        category: "E-Ticket",
+        name: `E-Ticket Penerbangan Saudia Airlines - ${gName}`,
+        file: `eticket_saudia_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-bus-${cleanSlug}`,
+        groupName: gName,
+        category: "Bus List",
+        name: `Bus List & Manifesto Transpor Bus 1 - ${gName}`,
+        file: `bus_list_manifest_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-paket-${cleanSlug}`,
+        groupName: gName,
+        category: "Paket Info",
+        name: `Informasi Paket & Layanan Akomodasi - ${gName}`,
+        file: `paket_info_${cleanSlug}.pdf`
+      },
+      {
+        id: `doc-iti-${cleanSlug}`,
+        groupName: gName,
+        category: "Itinerary",
+        name: `Itinerary Perjalanan Umroh Lengkap - ${gName}`,
+        file: `itinerary_lengkap_${cleanSlug}.pdf`
+      }
+    ];
+
+    docItems.forEach(d => {
+      if (!state.documents.some(x => (x.category === d.category || x.name === d.name) && x.groupName === d.groupName)) {
+        state.documents.push(d);
+      }
+    });
+  });
+
+  // Seed Data: "Umroh Reguler 20 Juli 2026 Madinah Awal (9 Hari)" & 25 Jamaah
+  const targetGroupName = "Umroh Reguler 20 Juli 2026 Madinah Awal (9 Hari)";
+  let targetGroup = state.groups.find(g => g.name === targetGroupName);
+  if (!targetGroup) {
+    targetGroup = {
+      name: targetGroupName,
+      rute: "Jakarta (CGK) - Madinah (MED) - Makkah - Jeddah (JED) - Jakarta (CGK)",
+      dateStart: "2026-07-20",
+      dateEnd: "2026-07-28",
+      hotels: ["Maden Al Rawda", "Al Marwa Rayhaan Rotana"],
+      packages: [
+        { name: "Sapphire Plus", pax: 25, hotelMadinah: "Maden Al Rawda", hotelMakkah: "Al Marwa Rayhaan Rotana" }
+      ],
+      flightArrival: [
+        { date: "2026-07-20", code: "SV819", takeoff: "11:00", landing: "17:30", remarks: "Direct Airport Madinah" }
+      ],
+      flightDeparture: [
+        { date: "2026-07-28", code: "SV818", takeoff: "21:00", landing: "11:00", remarks: "Direct CGK" }
+      ],
+      leaders: ["Ustadz H. Ahmad Ridwan"],
+      mutawwif: "Syekh Abdullah Al-Madani",
+      mealsArrival: ["Nasi Box Transit Madinah Airport"],
+      mealsDeparture: ["Buffet Resto Airport Jeddah"]
+    };
+    state.groups.unshift(targetGroup);
+  }
+
+  const hasTargetRooms = state.rooms.some(r => r.groupName === targetGroupName);
+  if (!hasTargetRooms) {
+    const jamaah25 = [
+      { guestNo: "1", name: "H. BAMBANG SUTRISNO", remark: "Laki-laki" },
+      { guestNo: "2", name: "HJ. SITI AMINAH", remark: "Perempuan" },
+      { guestNo: "3", name: "ACHMAD FAUZI", remark: "Laki-laki" },
+      { guestNo: "4", name: "DEWI LESTARI", remark: "Perempuan" },
+      { guestNo: "5", name: "RUDI HERMAWAN", remark: "Laki-laki" },
+      { guestNo: "6", name: "HJ. RATNA SARI", remark: "Perempuan" },
+      { guestNo: "7", name: "AYU VIDYA PUTRI", remark: "Perempuan" },
+      { guestNo: "8", name: "H. AGUS SETIAWAN", remark: "Laki-laki" },
+      { guestNo: "9", name: "NUR HIDAYAH", remark: "Perempuan" },
+      { guestNo: "10", name: "MUHAMMAD RIZKY", remark: "Laki-laki" },
+      { guestNo: "11", name: "HJ. ENDANG SRI WAHYUNI", remark: "Perempuan" },
+      { guestNo: "12", name: "DEDI KURNIAWAN", remark: "Laki-laki" },
+      { guestNo: "13", name: "RINA WATI", remark: "Perempuan" },
+      { guestNo: "14", name: "H. BUDI SANTOSO", remark: "Laki-laki" },
+      { guestNo: "15", name: "HJ. SRI RAHAYU", remark: "Perempuan" },
+      { guestNo: "16", name: "ANDI WIJAYA", remark: "Laki-laki" },
+      { guestNo: "17", name: "LIA FEBRIANI", remark: "Perempuan" },
+      { guestNo: "18", name: "TRI WAHYUDI", remark: "Laki-laki" },
+      { guestNo: "19", name: "HJ. NINGSIH", remark: "Perempuan" },
+      { guestNo: "20", name: "H. SUPRIYADI", remark: "Laki-laki" },
+      { guestNo: "21", name: "HJ. KARTINI", remark: "Perempuan" },
+      { guestNo: "22", name: "EKO PRASETYO", remark: "Laki-laki" },
+      { guestNo: "23", name: "ANITA INDAH", remark: "Perempuan" },
+      { guestNo: "24", name: "H. HENDRA GUNAWAN", remark: "Laki-laki" },
+      { guestNo: "25", name: "HJ. MAYA ROSIDA", remark: "Perempuan" }
+    ];
+
+    // Maden Al Rawda (Madinah)
+    state.rooms.push({
+      id: "rm-seed-1", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "1", roomNumber: "1001", typeBed: "Quad",
+      guests: [jamaah25[0], jamaah25[2], jamaah25[4], jamaah25[7]]
+    });
+    state.rooms.push({
+      id: "rm-seed-2", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "2", roomNumber: "1002", typeBed: "Quad",
+      guests: [jamaah25[1], jamaah25[3], jamaah25[5], jamaah25[6]]
+    });
+    state.rooms.push({
+      id: "rm-seed-3", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "3", roomNumber: "1003", typeBed: "Quad",
+      guests: [jamaah25[9], jamaah25[11], jamaah25[13], jamaah25[15]]
+    });
+    state.rooms.push({
+      id: "rm-seed-4", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "4", roomNumber: "1004", typeBed: "Quad",
+      guests: [jamaah25[8], jamaah25[10], jamaah25[12], jamaah25[14]]
+    });
+    state.rooms.push({
+      id: "rm-seed-5", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "5", roomNumber: "1005", typeBed: "Quad",
+      guests: [jamaah25[17], jamaah25[19], jamaah25[21], jamaah25[23]]
+    });
+    state.rooms.push({
+      id: "rm-seed-6", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "6", roomNumber: "1006", typeBed: "Quad",
+      guests: [jamaah25[16], jamaah25[18], jamaah25[20], jamaah25[22]]
+    });
+    state.rooms.push({
+      id: "rm-seed-7", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "7", roomNumber: "1007", typeBed: "Single",
+      guests: [jamaah25[24]]
+    });
+
+    // Al Marwa Rayhaan Rotana (Makkah)
+    state.rooms.push({
+      id: "rm-seed-8", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "1", roomNumber: "2101", typeBed: "Quad",
+      guests: [jamaah25[0], jamaah25[2], jamaah25[4], jamaah25[7]]
+    });
+    state.rooms.push({
+      id: "rm-seed-9", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "2", roomNumber: "2102", typeBed: "Quad",
+      guests: [jamaah25[1], jamaah25[3], jamaah25[5], jamaah25[6]]
+    });
+    state.rooms.push({
+      id: "rm-seed-10", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "3", roomNumber: "2103", typeBed: "Quad",
+      guests: [jamaah25[9], jamaah25[11], jamaah25[13], jamaah25[15]]
+    });
+    state.rooms.push({
+      id: "rm-seed-11", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "4", roomNumber: "2104", typeBed: "Quad",
+      guests: [jamaah25[8], jamaah25[10], jamaah25[12], jamaah25[14]]
+    });
+    state.rooms.push({
+      id: "rm-seed-12", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "5", roomNumber: "2105", typeBed: "Quad",
+      guests: [jamaah25[17], jamaah25[19], jamaah25[21], jamaah25[23]]
+    });
+    state.rooms.push({
+      id: "rm-seed-14", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "7", roomNumber: "2107", typeBed: "Single",
+      guests: [jamaah25[24]]
+    });
+  }
+
+  // Clear seeded itinerary and assignment data
+  state.itineraries = [];
+  state.assignments = [];
+  state.assignmentOffers = [];
 }
 
 function loadState() {
@@ -221,6 +416,14 @@ function loadState() {
         
         if (serializedLocal === serializedRemote) {
           console.log("Received data is identical to local state. Skipping re-render.");
+          return;
+        }
+        
+        // Prevent re-rendering / losing focus if the user is actively typing in a form field
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+        const isEditing = activeTag === "input" || activeTag === "textarea" || activeTag === "select" || (document.activeElement && document.activeElement.isContentEditable);
+        if (isEditing) {
+          console.log("User is currently typing/editing in a form field. Skipping router() call to preserve focus.");
           return;
         }
         
@@ -646,9 +849,9 @@ function renderUserPortal(subView) {
   });
   const hasUnread = userNotifications.some(n => n.timestamp > (state.lastReadNotificationTimestamp || 0));
   
-  APP_CONTAINER.innerHTML = `
-    <div class="user-layout">
-      <!-- Header -->
+  let headerHtml = "";
+  if (activeSubView === "dashboard") {
+    headerHtml = `
       <header class="user-header">
         <div class="user-brand-container">
           <img src="assets/logo.png" alt="Logo jejak imani" class="user-header-logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%220.9em%22 font-size=%2290%22>🕋</text></svg>';">
@@ -665,27 +868,47 @@ function renderUserPortal(subView) {
           </button>
         </div>
       </header>
+    `;
+  } else {
+    let subViewTitle = "Menu";
+    if (activeSubView === "apply-tugas") subViewTitle = "Daftar Tugas";
+    else if (activeSubView === "roomlist") subViewTitle = "Roomlist";
+    else if (activeSubView === "documents") subViewTitle = "Dokumen";
+    else if (activeSubView === "laporan") {
+      const tab = new URLSearchParams(window.location.hash.split("?")[1] || "").get("tab");
+      if (tab === "absensi") subViewTitle = "Absensi";
+      else if (tab === "insiden") subViewTitle = "Kejadian";
+      else subViewTitle = "Riwayat Transaksi";
+    }
+    else if (activeSubView === "scan-qr") subViewTitle = "Scan QR";
+    
+    headerHtml = `
+      <header class="user-header" style="justify-content: flex-start; gap: 16px;">
+        <button class="user-action-btn" id="user-back-btn" title="Kembali" style="padding: 4px; margin: 0; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <i data-lucide="arrow-left" style="width: 24px; height: 24px; color: var(--text-main);"></i>
+        </button>
+        <h1 class="user-header-title" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin: 0;">${subViewTitle}</h1>
+      </header>
+    `;
+  }
+
+  APP_CONTAINER.innerHTML = `
+    <div class="user-layout">
+      <!-- Header -->
+      ${headerHtml}
       
       <!-- Render Workarea -->
       <main class="user-content" id="user-subview-content"></main>
       
       <!-- Floating bottom nav bar -->
-      <nav class="user-footer-nav">
+      <nav class="user-footer-nav" style="display:grid; grid-template-columns: repeat(2, 1fr);">
         <div class="user-nav-item ${activeSubView === 'dashboard' ? 'active' : ''}" data-target="dashboard">
           <i data-lucide="layout-dashboard"></i>
           <span>Dashboard</span>
         </div>
-        <div class="user-nav-item ${activeSubView === 'roomlist' ? 'active' : ''}" data-target="roomlist">
-          <i data-lucide="hotel"></i>
-          <span>Roomlist</span>
-        </div>
-        <div class="user-nav-item ${activeSubView === 'documents' ? 'active' : ''}" data-target="documents">
-          <i data-lucide="files"></i>
-          <span>Dokumen</span>
-        </div>
-        <div class="user-nav-item ${activeSubView === 'laporan' ? 'active' : ''}" data-target="laporan">
-          <i data-lucide="file-spreadsheet"></i>
-          <span>Laporan</span>
+        <div class="user-nav-item ${activeSubView === 'scan-qr' ? 'active' : ''}" data-target="scan-qr">
+          <i data-lucide="qr-code"></i>
+          <span>Scan QR</span>
         </div>
       </nav>
     </div>
@@ -696,119 +919,125 @@ function renderUserPortal(subView) {
     item.onclick = () => window.location.hash = `#user/${item.getAttribute("data-target")}`;
   });
   
-  // Notifications bell click
-  document.getElementById("user-notif-btn").onclick = () => {
-    state.lastReadNotificationTimestamp = Date.now();
-    saveState();
-    
-    // Clear green dot immediately
-    const greenDot = document.querySelector(".badge-dot-green");
-    if (greenDot) greenDot.remove();
-    
-    const myTasks2 = state.assignments.filter(t => t.staff.includes(state.currentUser.username));
-    const myGroups2 = myTasks2.map(t => t.groupName);
-    const userNotifications = state.notifications.filter(n => {
-      if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
-      if (n.metadata) {
-        if (n.metadata.username === state.currentUser.username) return true;
-        if (n.metadata.groupName && myGroups2.includes(n.metadata.groupName)) return true;
-      }
-      const lowerMsg = n.message.toLowerCase();
-      const lowerName = state.currentUser.name.toLowerCase();
-      const lowerUser = state.currentUser.username.toLowerCase();
-      if (lowerMsg.includes(lowerName) || lowerMsg.includes(lowerUser)) return true;
-      return false;
-    });
-
-    const listHtml = userNotifications.length === 0 
-      ? `<p style='text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px;'>Tidak ada notifikasi baru.</p>`
-      : `<div class="activity-list" style="box-shadow:none; padding:0;">
-          ${userNotifications.slice().reverse().map(n => `
-            <div class="activity-item">
-              <div class="activity-icon"><i data-lucide="${n.type === 'financial' ? 'wallet' : (n.type === 'penjadwalan' ? 'calendar-range' : 'info')}"></i></div>
-              <div class="activity-body">
-                <div class="activity-text">${n.message}</div>
-                <div class="activity-time">${new Date(n.timestamp).toLocaleTimeString('id-ID')} Saudi</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>`;
-    openModal("Notifikasi", listHtml);
-  };
-  
-  // Settings profile (REMOVE SALDO DOMPET)
-  document.getElementById("user-settings-btn").onclick = () => {
-    const settingsHtml = `
-      <div style="text-align: center; margin-bottom: 20px;">
-        <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gold); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 800; margin: 0 auto 10px auto;">
-          ${state.currentUser.name.charAt(0)}
-        </div>
-        <h4 style="font-weight: 800;">${state.currentUser.name}</h4>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">Username: <code>${state.currentUser.username}</code></p>
-      </div>
-
-      <form id="edit-user-profile-form">
-        <div class="form-group">
-          <label class="form-label">Nama Lengkap</label>
-          <input type="text" id="prof-name" class="form-input" value="${state.currentUser.name}" required>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Nomor WhatsApp</label>
-          <input type="text" id="prof-whatsapp" class="form-input" value="${state.currentUser.whatsapp || ''}" required>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Wilayah Operasional</label>
-          <select id="prof-region" class="form-select" required>
-            <option value="Makkah" ${state.currentUser.region === 'Makkah' ? 'selected' : ''}>Makkah</option>
-            <option value="Madinah" ${state.currentUser.region === 'Madinah' ? 'selected' : ''}>Madinah</option>
-            <option value="Jeddah" ${state.currentUser.region === 'Jeddah' ? 'selected' : ''}>Jeddah</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Ubah Password Baru</label>
-          <input type="password" id="prof-pass" class="form-input" placeholder="Kosongkan jika tidak diubah" autocomplete="new-password">
-        </div>
-        
-        <button type="submit" class="btn btn-primary" style="margin-bottom:12px;">SIMPAN PROFIL</button>
-        <button type="button" id="user-logout" class="btn btn-danger">LOGOUT</button>
-      </form>
-    `;
-    openModal("Pengaturan Akun", settingsHtml);
-    
-    document.getElementById("user-logout").onclick = () => {
-      closeModal();
-      state.currentUser = null;
+  if (activeSubView === "dashboard") {
+    // Notifications bell click
+    document.getElementById("user-notif-btn").onclick = () => {
+      state.lastReadNotificationTimestamp = Date.now();
       saveState();
-      window.location.hash = "#login";
+      
+      const greenDot = document.querySelector(".badge-dot-green");
+      if (greenDot) greenDot.remove();
+      
+      const myTasks2 = state.assignments.filter(t => t.staff.includes(state.currentUser.username));
+      const myGroups2 = myTasks2.map(t => t.groupName);
+      const userNotifications = state.notifications.filter(n => {
+        if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
+        if (n.metadata) {
+          if (n.metadata.username === state.currentUser.username) return true;
+          if (n.metadata.groupName && myGroups2.includes(n.metadata.groupName)) return true;
+        }
+        const lowerMsg = n.message.toLowerCase();
+        const lowerName = state.currentUser.name.toLowerCase();
+        const lowerUser = state.currentUser.username.toLowerCase();
+        if (lowerMsg.includes(lowerName) || lowerMsg.includes(lowerUser)) return true;
+        return false;
+      });
+
+      const listHtml = userNotifications.length === 0 
+        ? `<p style='text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px;'>Tidak ada notifikasi baru.</p>`
+        : `<div class="activity-list" style="box-shadow:none; padding:0;">
+            ${userNotifications.slice().reverse().map(n => `
+              <div class="activity-item">
+                <div class="activity-icon"><i data-lucide="${n.type === 'financial' ? 'wallet' : (n.type === 'penjadwalan' ? 'calendar-range' : 'info')}"></i></div>
+                <div class="activity-body">
+                  <div class="activity-text">${n.message}</div>
+                  <div class="activity-time">${new Date(n.timestamp).toLocaleTimeString('id-ID')} Saudi</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>`;
+      openModal("Notifikasi", listHtml);
     };
     
-    document.getElementById("edit-user-profile-form").onsubmit = (e) => {
-      e.preventDefault();
-      const nName = document.getElementById("prof-name").value.trim();
-      const nWa = document.getElementById("prof-whatsapp").value.trim();
-      const nRegion = document.getElementById("prof-region").value;
-      const nPass = document.getElementById("prof-pass").value;
+    // Settings profile
+    document.getElementById("user-settings-btn").onclick = () => {
+      const settingsHtml = `
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gold); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 800; margin: 0 auto 10px auto;">
+            ${state.currentUser.name.charAt(0)}
+          </div>
+          <h4 style="font-weight: 800;">${state.currentUser.name}</h4>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Username: <code>${state.currentUser.username}</code></p>
+        </div>
+
+        <form id="edit-user-profile-form">
+          <div class="form-group">
+            <label class="form-label">Nama Lengkap</label>
+            <input type="text" id="prof-name" class="form-input" value="${state.currentUser.name}" required>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Nomor WhatsApp</label>
+            <input type="text" id="prof-whatsapp" class="form-input" value="${state.currentUser.whatsapp || ''}" required>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Wilayah Operasional</label>
+            <select id="prof-region" class="form-select" required>
+              <option value="Makkah" ${state.currentUser.region === 'Makkah' ? 'selected' : ''}>Makkah</option>
+              <option value="Madinah" ${state.currentUser.region === 'Madinah' ? 'selected' : ''}>Madinah</option>
+              <option value="Jeddah" ${state.currentUser.region === 'Jeddah' ? 'selected' : ''}>Jeddah</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Ubah Password Baru</label>
+            <input type="password" id="prof-pass" class="form-input" placeholder="Kosongkan jika tidak diubah" autocomplete="new-password">
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="margin-bottom:12px;">SIMPAN PROFIL</button>
+          <button type="button" id="user-logout" class="btn btn-danger">LOGOUT</button>
+        </form>
+      `;
+      openModal("Pengaturan Akun", settingsHtml);
       
-      const idx = state.users.findIndex(u => u.username === state.currentUser.username);
-      if (idx !== -1) {
-        state.users[idx].name = nName;
-        state.users[idx].whatsapp = nWa;
-        state.users[idx].region = nRegion;
-        if (nPass) state.users[idx].password = nPass;
-        
-        state.currentUser.name = nName;
-        state.currentUser.whatsapp = nWa;
-        state.currentUser.region = nRegion;
-        saveState();
+      document.getElementById("user-logout").onclick = () => {
         closeModal();
-        showToast("Pengaturan berhasil disimpan.");
-        renderUserPortal(subView);
-      }
+        state.currentUser = null;
+        saveState();
+        window.location.hash = "#login";
+      };
+      
+      document.getElementById("edit-user-profile-form").onsubmit = (e) => {
+        e.preventDefault();
+        const nName = document.getElementById("prof-name").value.trim();
+        const nWa = document.getElementById("prof-whatsapp").value.trim();
+        const nRegion = document.getElementById("prof-region").value;
+        const nPass = document.getElementById("prof-pass").value;
+        
+        const idx = state.users.findIndex(u => u.username === state.currentUser.username);
+        if (idx !== -1) {
+          state.users[idx].name = nName;
+          state.users[idx].whatsapp = nWa;
+          state.users[idx].region = nRegion;
+          if (nPass) state.users[idx].password = nPass;
+          
+          state.currentUser.name = nName;
+          state.currentUser.whatsapp = nWa;
+          state.currentUser.region = nRegion;
+          saveState();
+          closeModal();
+          showToast("Pengaturan berhasil disimpan.");
+          renderUserPortal(subView);
+        }
+      };
     };
-  };
+  } else {
+    const backBtn = document.getElementById("user-back-btn");
+    if (backBtn) {
+      backBtn.onclick = () => window.location.hash = "#user/dashboard";
+    }
+  }
   
   if (activeSubView === "dashboard") renderUserDashboard();
   else if (activeSubView === "apply-tugas") renderUserApplyTugas();
@@ -911,27 +1140,32 @@ function openUserWalletTransferPopup(callbackOnSuccess = null) {
   };
 }
 
-
-
-function openTaskDetailPopup(taskId) {
+function openUserTaskDetailPopup(taskId) {
   const task = state.assignments.find(t => t.id === taskId);
-  if (!task) return;
+  if (!task) {
+    showToast("Data penugasan tidak ditemukan", "error");
+    return;
+  }
+  
+  const details = task.details || {};
+  const taskType = task.type || task.title || "Penugasan Lapangan";
+  const taskRegion = task.region || "Saudi Arabia";
   
   const detailHtml = `
     <div style="font-size:0.85rem; line-height:1.6; color:var(--text-main); padding: 4px 0;">
       <div style="margin-bottom:14px; border-bottom:1px solid #f1f3f5; padding-bottom:8px;">
-        <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${task.type}</span>
-        <span class="badge badge-success">${task.status}</span>
+        <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${taskType}</span>
+        <span class="badge badge-success">${task.status || 'Aktif'}</span>
       </div>
       <table class="detail-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Rombongan:</td><td style="font-weight:800;">${task.groupName}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Waktu Saudi:</td><td>${formatDateDisplay(task.date)} | ${task.time}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Wilayah:</td><td>${task.region}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${task.details.eta || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${task.details.totalPax || '-'} Pax</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${task.details.hotelName || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Layanan:</td><td>${task.details.service || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan:</td><td>${task.details.remarks || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Rombongan:</td><td style="font-weight:800;">${task.groupName || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Waktu Saudi:</td><td>${formatDateDisplay(task.date)} | ${task.time || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Wilayah:</td><td>${taskRegion}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${details.eta || details.flightNo || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${details.totalPax || '-'} Pax</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${details.hotelName || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Layanan:</td><td>${details.service || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan:</td><td>${details.remarks || task.notes || '-'}</td></tr>
       </table>
       <div style="margin-top:20px; display:flex; justify-content:flex-end;">
         <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
@@ -1219,26 +1453,31 @@ function renderUserDashboard() {
       </div>
     `).join('')}
 
-    <!-- Main Menu Shortcut Buttons (1-Color Gold Outline Icons) -->
-    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-bottom:24px;">
-      <div onclick="window.location.hash='#user/apply-tugas'" class="glass-card" style="padding:12px 4px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
+    <!-- Main Menu Shortcut Buttons (1-Color Gold Outline Icons - 5 Items Grid) -->
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:24px;">
+      <div onclick="window.location.hash='#user/apply-tugas'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
         <i data-lucide="clipboard-list" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.72rem; font-weight:800; color:#1e293b;">Daftar Tugas</div>
+        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Daftar Tugas</div>
       </div>
       
-      <div onclick="window.location.hash='#user/laporan?tab=absensi'" class="glass-card" style="padding:12px 4px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
+      <div onclick="window.location.hash='#user/laporan?tab=absensi'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
         <i data-lucide="user-check" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.72rem; font-weight:800; color:#1e293b;">Absensi</div>
+        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Absensi</div>
       </div>
       
-      <div onclick="window.location.hash='#user/laporan?tab=insiden'" class="glass-card" style="padding:12px 4px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
+      <div onclick="window.location.hash='#user/laporan?tab=insiden'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
         <i data-lucide="alert-triangle" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.72rem; font-weight:800; color:#1e293b;">Kejadian</div>
+        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Kejadian</div>
       </div>
 
-      <div onclick="window.location.hash='#user/scan-qr'" class="glass-card" style="padding:12px 4px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
-        <i data-lucide="qr-code" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.72rem; font-weight:800; color:#1e293b;">Scan QR</div>
+      <div onclick="window.location.hash='#user/roomlist'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
+        <i data-lucide="hotel" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
+        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Roomlist</div>
+      </div>
+      
+      <div onclick="window.location.hash='#user/documents'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
+        <i data-lucide="files" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
+        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Dokumen</div>
       </div>
     </div>
     
@@ -1248,10 +1487,11 @@ function renderUserDashboard() {
       ${myActiveTasks.length === 0 ? `
         <p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:12px 0;">Tidak ada jadwal penugasan aktif hari ini.</p>
       ` : myActiveTasks.map(task => {
+        const details = task.details || {};
         const group = state.groups.find(g => g.name === task.groupName);
         const tlName = group && group.leaders && group.leaders.length > 0 ? group.leaders.join(', ') : "Belum Ditentukan";
         const muthawwifName = group && group.mutawwif ? group.mutawwif : "Belum Ditentukan";
-        const totalPaxVal = task.details.totalPax || (group ? group.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : 0);
+        const totalPaxVal = details.totalPax || (group ? group.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : 0);
         
         let flightPath = "CGK ➔ MED • JED ➔ CGK";
         if (group && group.flightArrival && group.flightArrival.length > 0) {
@@ -1264,11 +1504,11 @@ function renderUserDashboard() {
         
         let conditionalRow1 = "";
         let subtitleHtml = "";
-        const type = task.type || "";
+        const type = task.type || task.title || "Penugasan Lapangan";
         
         if (type.startsWith("Kedatangan Bandara")) {
-          const meal = task.details.meal || "N/A";
-          const destination = task.details.destination || (group && group.hotels && group.hotels.length > 0 ? group.hotels[0] : "Hotel Madinah");
+          const meal = details.meal || "N/A";
+          const destination = details.destination || (group && group.hotels && group.hotels.length > 0 ? group.hotels[0] : "Hotel Madinah");
           conditionalRow1 = `
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
               <div>
@@ -1282,8 +1522,8 @@ function renderUserDashboard() {
             </div>
           `;
         } else if (type.startsWith("Kepulangan Bandara")) {
-          const meal = task.details.meal || "N/A";
-          const source = task.details.source || (group && group.hotels && group.hotels.length > 0 ? group.hotels[group.hotels.length - 1] : "Hotel Makkah");
+          const meal = details.meal || "N/A";
+          const source = details.source || (group && group.hotels && group.hotels.length > 0 ? group.hotels[group.hotels.length - 1] : "Hotel Makkah");
           conditionalRow1 = `
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
               <div>
@@ -1297,9 +1537,9 @@ function renderUserDashboard() {
             </div>
           `;
         } else if (type.startsWith("Check In Hotel") || type.startsWith("Check Out Hotel")) {
-          const hotel = task.details.hotelName || "Belum Ditentukan";
-          const pkgs = task.details.packages && task.details.packages.length > 0 ? task.details.packages.join(' • ') : "Sapphire • Ruby";
-          const rooms = task.details.totalRoom || 0;
+          const hotel = details.hotelName || "Belum Ditentukan";
+          const pkgs = details.packages && details.packages.length > 0 ? details.packages.join(' • ') : "Sapphire • Ruby";
+          const rooms = details.totalRoom || 0;
           const isCheckIn = type.startsWith("Check In Hotel");
           
           subtitleHtml = `
@@ -1316,14 +1556,14 @@ function renderUserDashboard() {
               </div>
               <div>
                 <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="gift" style="width:12px; height:12px; color:var(--primary-gold);"></i> ${isCheckIn ? 'COMPLIMENTARY' : 'TUJUAN'}</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${isCheckIn ? (task.details.service || '-') : 'Hotel Makkah'}</div>
+                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${isCheckIn ? (details.service || '-') : 'Hotel Makkah'}</div>
               </div>
             </div>
           `;
         } else if (type.startsWith("City Tour")) {
-          const bus = task.details.destinationBus || "Bus 1";
+          const bus = details.destinationBus || "Bus 1";
           const pkgs = group && group.packages && group.packages.length > 0 ? group.packages.join(' • ') : "Sapphire • Ruby • Onyx";
-          const pickup = task.details.hotelPickup || "Mukhtaro Al Gharbi ➔ Al Anshor Golden Tulip";
+          const pickup = details.hotelPickup || "Mukhtaro Al Gharbi ➔ Al Anshor Golden Tulip";
           
           conditionalRow1 = `
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
@@ -1341,7 +1581,7 @@ function renderUserDashboard() {
           conditionalRow1 = `
             <div style="margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
               <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase;">KETERANGAN</span>
-              <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${task.details.remarks || task.details.customText || '-'}</div>
+              <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${details.remarks || details.customText || task.notes || '-'}</div>
             </div>
           `;
         }
@@ -1349,7 +1589,7 @@ function renderUserDashboard() {
         return `
           <div class="assignment-card" style="background:#ffffff; border-radius:16px; padding:16px; border:1px solid #f1f5f9; box-shadow: 0 1px 4px rgba(0,0,0,0.02); margin-bottom:16px; display:flex; flex-direction:column; position:relative;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
-              <span style="font-size:0.9rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.02em;">${task.type}</span>
+              <span style="font-size:0.9rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.02em;">${type}</span>
               <span style="font-size:0.8rem; font-weight:700; color:#64748b;">${formatDateDisplay(task.date)}</span>
             </div>
             
@@ -1359,7 +1599,7 @@ function renderUserDashboard() {
             <div style="border-top:1px solid #e9d5ff; border-top-color:var(--primary-gold); margin:8px 0 12px 0; opacity:0.35;"></div>
             
             <div style="font-size:0.88rem; font-weight:800; color:#0f172a; margin-bottom:4px; font-family:'Mulish', sans-serif;">
-              ${task.groupName}
+              ${task.groupName || '-'}
             </div>
             <div style="font-size:0.8rem; color:#475569; margin-bottom:12px; line-height:1.45;">
               <div>Tour Leader: <span style="font-weight:600; color:#1f2937;">${tlName}</span></div>
@@ -1373,7 +1613,7 @@ function renderUserDashboard() {
               </div>
               <div>
                 <span style="font-weight:700; font-size:0.68rem; color:#94a3b8; text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="bus" style="width:11px; height:11px;"></i> TOTAL BUS</span>
-                <div style="font-weight:700; color:#1e293b; margin-top:2px;">${task.details.busCount || 1} Bus</div>
+                <div style="font-weight:700; color:#1e293b; margin-top:2px;">${details.busCount || 1} Bus</div>
               </div>
             </div>
             
@@ -1497,19 +1737,70 @@ function renderUserRoomlist() {
   const groupNames = state.groups.map(g => g.name);
   
   container.innerHTML = `
-    <div class="form-group" style="margin-top:10px;">
-      <input type="text" id="user-rl-group-search" class="form-input" placeholder="Cari / Ketik Rombongan Grup Keberangkatan...">
-      <div id="user-rl-group-suggestions" class="suggestion-list hidden"></div>
-    </div>
-    
-    <div class="form-group hidden" id="user-rl-hotel-container">
-      <select id="user-rl-hotel-select" class="form-select"></select>
+    <!-- Header Collapsible Filter Bar -->
+    <div style="background:#ffffff; border-radius:12px; padding:12px 14px; border:1px solid #cbd5e1; margin-top:8px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+      <div id="user-rl-filter-header" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
+        <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:0.85rem; color:#1e293b;">
+          <i data-lucide="filter" style="width:16px; height:16px; color:#c5a850;"></i>
+          <span>Filter & Pencarian Roomlist</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; font-size:0.75rem; color:#64748b; font-weight:700;">
+          <span id="user-rl-filter-status-text">Buka/Tutup</span>
+          <i data-lucide="chevron-down" id="user-rl-filter-chevron" style="width:16px; height:16px; transition:transform 0.2s ease;"></i>
+        </div>
+      </div>
+
+      <!-- Collapsible Body (Tightly Spaced) -->
+      <div id="user-rl-filter-body" style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
+        <div style="position:relative;">
+          <input type="text" id="user-rl-group-search" class="form-input" placeholder="Cari / Pilih Rombongan Grup..." style="padding:6px 10px; font-size:0.85rem; height:auto;">
+          <div id="user-rl-group-suggestions" class="suggestion-list hidden"></div>
+        </div>
+
+        <div id="user-rl-hotel-container" class="hidden">
+          <select id="user-rl-hotel-select" class="form-select" style="padding:6px 10px; font-size:0.85rem; height:auto; margin:0;"></select>
+        </div>
+
+        <div>
+          <input type="text" id="user-rl-name-search" class="form-input" placeholder="Cari Nama Jamaah / No. Kamar / ID..." style="padding:6px 10px; font-size:0.85rem; height:auto;">
+        </div>
+      </div>
     </div>
     
     <div id="user-rl-table-container"></div>
   `;
   
+  lucide.createIcons();
+
+  const filterHeader = document.getElementById("user-rl-filter-header");
+  const filterBody = document.getElementById("user-rl-filter-body");
+  const chevron = document.getElementById("user-rl-filter-chevron");
+  
+  if (filterHeader && filterBody) {
+    filterHeader.onclick = () => {
+      filterBody.classList.toggle("hidden");
+      if (filterBody.classList.contains("hidden")) {
+        chevron.style.transform = "rotate(-90deg)";
+      } else {
+        chevron.style.transform = "rotate(0deg)";
+      }
+    };
+  }
+
+  let selectedGroup = "";
+  let selectedHotel = "";
+
+  const nameSearchInput = document.getElementById("user-rl-name-search");
+  if (nameSearchInput) {
+    nameSearchInput.oninput = () => {
+      if (selectedGroup && selectedHotel) {
+        renderRoomlistTable(selectedGroup, selectedHotel, nameSearchInput.value.trim());
+      }
+    };
+  }
+
   initSuggestionInput("user-rl-group-search", "user-rl-group-suggestions", groupNames, (groupName) => {
+    selectedGroup = groupName;
     const group = state.groups.find(g => g.name === groupName);
     if (!group) return;
     
@@ -1520,13 +1811,16 @@ function renderUserRoomlist() {
     hotelContainer.classList.remove("hidden");
     
     hotelSelect.onchange = () => {
-      renderRoomlistTable(groupName, hotelSelect.value);
+      selectedHotel = hotelSelect.value;
+      renderRoomlistTable(selectedGroup, selectedHotel, nameSearchInput ? nameSearchInput.value.trim() : "");
     };
   });
 }
 
 function findJamaahData(searchCode) {
   if (!searchCode) return null;
+  const sUpper = searchCode.toUpperCase().trim();
+  const numOnly = sUpper.replace(/^JIBB-0*/, '').replace(/^JIBB-/, '');
   
   let foundGuest = null;
   let roomsAllocated = [];
@@ -1534,7 +1828,21 @@ function findJamaahData(searchCode) {
   
   for (const r of state.rooms) {
     if (r && r.guests) {
-      const g = r.guests.find(x => x && (x.guestNo === searchCode || (x.name && x.name.toLowerCase().includes(searchCode.toLowerCase()))));
+      const g = r.guests.find(x => {
+        if (!x) return false;
+        const gNo = String(x.guestNo || '').trim();
+        const uCode = (x.uniqueCode || '').toUpperCase().trim();
+        const expectedCode = "JIBB-" + String(gNo).padStart(4, "0");
+        
+        return (
+          uCode === sUpper ||
+          gNo === searchCode ||
+          gNo === numOnly ||
+          expectedCode === sUpper ||
+          (uCode && uCode.replace('-', '') === sUpper.replace('-', '')) ||
+          (x.name && x.name.toLowerCase().includes(searchCode.toLowerCase()))
+        );
+      });
       if (g) {
         foundGuest = g;
         groupName = r.groupName;
@@ -1548,9 +1856,10 @@ function findJamaahData(searchCode) {
   }
   
   if (!foundGuest) {
-    if (searchCode === "7" || searchCode.toLowerCase().includes("ayu")) {
+    if (searchCode === "7" || sUpper.includes("AYU") || sUpper.includes("JIBB-0007")) {
       return {
         guestNo: "7",
+        uniqueCode: "JIBB-0007",
         name: "AYU VIDYA PUTRI",
         gender: "Perempuan",
         bus: "Bus 1",
@@ -1603,9 +1912,11 @@ function findJamaahData(searchCode) {
   }
   
   const pkg = (groupObj && groupObj.packages && groupObj.packages.length > 0) ? groupObj.packages[0].name.split(' ')[0] : "Sapphire";
-  
+  const uniqueCode = foundGuest.uniqueCode || ("JIBB-" + String(foundGuest.guestNo || "1").padStart(4, "0"));
+
   return {
     guestNo: foundGuest.guestNo || "1",
+    uniqueCode: uniqueCode,
     name: nameUpper,
     gender: gender,
     bus: "Bus 1",
@@ -1626,25 +1937,28 @@ function renderUserScanQr() {
   
   container.innerHTML = `
     <div style="padding: 16px; display:flex; flex-direction:column; gap:16px;">
-      <!-- QR Scanner Viewfinder (Camera Preview) -->
-      <div style="position:relative; width:100%; aspect-ratio:1/1; background:#4b5563; border-radius:16px; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <!-- Viewfinder Box -->
-        <div style="width:50%; height:50%; border:3.5px solid #c5a850; border-radius:24px; position:relative; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);">
+      <!-- QR Scanner Viewfinder (Camera Preview Element) -->
+      <div style="position:relative; width:100%; aspect-ratio:1/1; background:#0f172a; border-radius:16px; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <!-- Real Camera Stream Container -->
+        <div id="html5-qr-reader-container" style="width:100%; height:100%;"></div>
+        
+        <!-- Viewfinder Overlay Box -->
+        <div style="width:55%; height:55%; border:3.5px solid #c5a850; border-radius:24px; position:absolute; pointer-events:none; z-index:10; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);">
           <!-- Corner decorations -->
           <div style="position:absolute; top:-3px; left:-3px; width:20px; height:20px; border-top:4px solid #c5a850; border-left:4px solid #c5a850; border-radius:4px 0 0 0;"></div>
           <div style="position:absolute; top:-3px; right:-3px; width:20px; height:20px; border-top:4px solid #c5a850; border-right:4px solid #c5a850; border-radius:0 4px 0 0;"></div>
           <div style="position:absolute; bottom:-3px; left:-3px; width:20px; height:20px; border-bottom:4px solid #c5a850; border-left:4px solid #c5a850; border-radius:0 0 0 4px;"></div>
           <div style="position:absolute; bottom:-3px; right:-3px; width:20px; height:20px; border-bottom:4px solid #c5a850; border-right:4px solid #c5a850; border-radius:0 0 4px 0;"></div>
         </div>
-        <div style="position:absolute; bottom:16px; color:#fff; font-size:0.75rem; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8); background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:20px;">
-          Posisikan QR Code di dalam kotak
+        <div style="position:absolute; bottom:16px; color:#fff; font-size:0.75rem; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8); background:rgba(0,0,0,0.5); padding:4px 12px; border-radius:20px; z-index:11;">
+          Posisikan Kamera ke QR Code Jamaah
         </div>
       </div>
 
       <!-- Search Input Bar -->
       <div style="position:relative; display:flex; align-items:center; background:#ffffff; border-radius:12px; border:1px solid #cbd5e1; padding:10px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
         <i data-lucide="search" style="width:18px; height:18px; color:#94a3b8; margin-right:10px;"></i>
-        <input type="text" id="qr-search-input" class="form-input" placeholder="Masukkan Kode Unik" style="border:none; padding:0; margin:0; background:transparent; font-size:0.9rem; flex-grow:1; outline:none; height:auto; box-shadow:none;">
+        <input type="text" id="qr-search-input" class="form-input" placeholder="Masukkan ID Kode Unik (mis. JIBB-0001)..." style="border:none; padding:0; margin:0; background:transparent; font-size:0.9rem; flex-grow:1; outline:none; height:auto; box-shadow:none;">
         <i data-lucide="x-circle" id="qr-clear-btn" style="width:18px; height:18px; color:#94a3b8; cursor:pointer; display:none;"></i>
       </div>
 
@@ -1659,6 +1973,29 @@ function renderUserScanQr() {
   const clearBtn = document.getElementById("qr-clear-btn");
   const resultContainer = document.getElementById("qr-result-container");
   
+  // Attach html5-qrcode camera stream scanner
+  if (typeof Html5Qrcode !== "undefined") {
+    try {
+      const html5QrCode = new Html5Qrcode("html5-qr-reader-container");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          if (decodedText) {
+            searchInput.value = decodedText;
+            performSearch();
+            showToast(`Scan QR ID Berhasil: ${decodedText}`);
+          }
+        },
+        () => {}
+      ).catch(err => {
+        console.log("Kamera streaming tidak diizinkan atau berjalan di peramban tanpa akses kamera.", err);
+      });
+    } catch(e) {
+      console.log("Error menginisialisasi kamera scanner:", e);
+    }
+  }
+  
   const performSearch = () => {
     const val = searchInput.value.trim();
     if (!val) {
@@ -1672,7 +2009,7 @@ function renderUserScanQr() {
     if (!data) {
       resultContainer.innerHTML = `
         <div style="text-align:center; padding:24px; background:#fff; border-radius:12px; border:1px solid #f1f5f9; color:var(--text-muted); font-size:0.85rem;">
-          Jamaah dengan Kode/Nama "${val}" tidak ditemukan.
+          Jamaah dengan Kode/ID "${val}" tidak ditemukan.
         </div>
       `;
       return;
@@ -1681,17 +2018,20 @@ function renderUserScanQr() {
     resultContainer.innerHTML = `
       <div class="glass-card" style="background:#ffffff; border-radius:16px; padding:16px; border:1px solid #f1f5f9; box-shadow: 0 1px 4px rgba(0,0,0,0.02); display:flex; flex-direction:column; gap:12px;">
         
-        <!-- Header Info (Avatar, Name, Gender, Passport, Visa, Package Badge) -->
+        <!-- Header Info (Avatar, Name, Unique Code, Gender, Passport, Visa, Package Badge) -->
         <div style="display:flex; gap:12px; align-items:flex-start;">
           <div style="width:48px; height:48px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#64748b; font-size:1.4rem;">
             <i data-lucide="user" style="width:24px; height:24px;"></i>
           </div>
           <div style="flex-grow:1; font-size:0.82rem; color:#475569; line-height:1.4;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
-              <span style="font-weight:900; color:#0f172a; font-size:0.95rem;">${data.guestNo}. ${data.name}</span>
-              <span class="badge badge-info" style="background:#0070f3; color:white; font-size:0.68rem; padding:2px 8px; border-radius:12px; font-weight:800;">${data.package}</span>
+              <div>
+                <span style="font-weight:900; color:#0f172a; font-size:0.95rem; display:block;">${data.name}</span>
+                <span style="font-size:0.75rem; font-weight:800; color:#0070f3; background:#eff6ff; padding:2px 6px; border-radius:4px;">${data.uniqueCode}</span>
+              </div>
+              <span class="badge badge-info" style="background:#0070f3; color:white; font-size:0.68rem; padding:3px 10px; border-radius:12px; font-weight:800;">${data.package}</span>
             </div>
-            <div>${data.gender} | ${data.bus}</div>
+            <div style="margin-top:4px;">${data.gender} | ${data.bus}</div>
             <div style="color:#64748b;">Paspor: <span style="font-weight:600; color:#334155;">${data.passport}</span> &bull; Visa: <span style="font-weight:600; color:#334155;">${data.visa}</span></div>
           </div>
         </div>
@@ -1744,63 +2084,132 @@ function renderUserScanQr() {
   };
 }
 
-function renderRoomlistTable(groupName, hotelName) {
+function renderRoomlistTable(groupName, hotelName, searchQuery = "") {
   const container = document.getElementById("user-rl-table-container");
   if (!hotelName) {
     container.innerHTML = "";
     return;
   }
   
-  const filteredRooms = state.rooms.filter(r => r.groupName === groupName && r.hotelName === hotelName);
-  
-  if (filteredRooms.length === 0) {
-    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:20px;">Belum ada template roomlist untuk hotel ini.</p>`;
-    return;
+  let filteredRooms = state.rooms.filter(r => r.groupName === groupName && r.hotelName === hotelName);
+
+  if (searchQuery !== "") {
+    const sLower = searchQuery.toLowerCase();
+    filteredRooms = filteredRooms.filter(r => {
+      const matchRoomNum = r.roomNumber && r.roomNumber.toLowerCase().includes(sLower);
+      const matchRoomlistNum = r.roomlistNumber && r.roomlistNumber.toLowerCase().includes(sLower);
+      const matchGuest = r.guests && r.guests.some(g => 
+        (g.name && g.name.toLowerCase().includes(sLower)) ||
+        (g.guestNo && g.guestNo.includes(sLower)) ||
+        (g.uniqueCode && g.uniqueCode.toLowerCase().includes(sLower))
+      );
+      return matchRoomNum || matchRoomlistNum || matchGuest;
+    });
   }
   
+  if (filteredRooms.length === 0) {
+    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:0.88rem;padding:20px;">${searchQuery ? `Tidak ada kamar / jamaah yang cocok dengan "${searchQuery}".` : 'Belum ada template roomlist untuk hotel ini.'}</p>`;
+    return;
+  }
+
+  // Calculate detailed breakdown of room bed types
+  let countSingle = 0;
+  let countTwin = 0;
+  let countKing = 0;
+  let countTriple = 0;
+  let countQuad = 0;
+
+  filteredRooms.forEach(r => {
+    const t = (r.typeBed || '').toLowerCase();
+    if (t.includes('single')) countSingle++;
+    else if (t.includes('twin') || t.includes('double')) countTwin++;
+    else if (t.includes('king')) countKing++;
+    else if (t.includes('triple')) countTriple++;
+    else if (t.includes('quad')) countQuad++;
+    else countQuad++;
+  });
+
+  const totalCount = filteredRooms.length;
+  const parts = [];
+  if (countSingle > 0) parts.push(`S: ${countSingle}`);
+  if (countTwin > 0) parts.push(`Tw: ${countTwin}`);
+  if (countKing > 0) parts.push(`K: ${countKing}`);
+  if (countTriple > 0) parts.push(`T: ${countTriple}`);
+  if (countQuad > 0) parts.push(`Q: ${countQuad}`);
+
+  const breakdownText = parts.length > 0 
+    ? `${parts.join(', ')} (= ${totalCount})` 
+    : `Total: ${totalCount}`;
+  
+  const roomRowsHtml = filteredRooms.map((r, idx) => {
+    const guestNosStr = (r.guests && r.guests.length > 0)
+      ? r.guests.map(g => `(${g.guestNo})`).join(' ')
+      : '-';
+
+    let cleanBed = r.typeBed || 'Quad';
+    if (cleanBed.includes("Double")) cleanBed = "Twin";
+    else if (cleanBed.includes("Triple")) cleanBed = "Triple";
+    else if (cleanBed.includes("Quad")) cleanBed = "Quad";
+
+    const remarkIconsList = [];
+    if (r.guests && Array.isArray(r.guests)) {
+      r.guests.forEach(g => {
+        if (g && g.remark && g.remark.trim() !== "" && g.remark !== "none") {
+          if (!remarkIconsList.includes(g.remark)) {
+            remarkIconsList.push(g.remark);
+          }
+        }
+      });
+    }
+
+    const remarkIconsHtml = remarkIconsList.map(rem => {
+      if (rem === 'warning' || rem === '⚠️') {
+        return `<span style="font-size:1.15rem; line-height:1;" title="Warning">⚠️</span>`;
+      }
+      const hex = getHexColor(rem);
+      const remText = r.guests.find(x => x.remark === rem)?.remarkText || rem;
+      return `<span style="background:${hex}; width:16px; height:16px; border-radius:50%; display:inline-block; box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="${remText}"></span>`;
+    }).join(' ');
+
+    const roomNumDisplay = (r.roomNumber && r.roomNumber.trim() !== '' && r.roomNumber !== '-') 
+      ? `<strong style="color:#0f172a; font-weight:900; font-size:1.05rem;">${r.roomNumber}</strong>`
+      : `<strong style="color:#0070f3; font-weight:900; font-size:1.05rem;">-</strong>`;
+
+    return `
+      <div class="clickable-row" data-idx="${idx}" style="padding:14px 16px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:12px; transition:background 0.15s ease;">
+        <!-- Left Column: Room info & guest numbers -->
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <div style="font-size:0.95rem; display:flex; align-items:center; gap:8px;">
+            <span style="color:#64748b; font-weight:600;">#${r.roomlistNumber || (idx + 1)}</span>
+            <strong style="color:#0f172a; font-weight:800;">Kamar</strong>
+            ${roomNumDisplay}
+          </div>
+          <div style="font-size:0.84rem; color:#475569; font-weight:500;">
+            Jamaah : ${guestNosStr}
+          </div>
+        </div>
+
+        <!-- Right Column: Bed Type & Remark Icons -->
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:0.88rem; color:#334155; font-weight:600;">${cleanBed}</span>
+          <div style="display:flex; align-items:center; gap:4px; min-width:24px; justify-content:flex-end;">
+            ${remarkIconsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   container.innerHTML = `
-    <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      <span style="font-size:0.78rem; color:#1e293b; font-weight:800; background:#f1f5f9; padding:4px 10px; border-radius:6px; border:1px solid #cbd5e1;">
+        ${breakdownText}
+      </span>
       <button id="user-download-pdf-rl" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.75rem;"><i data-lucide="printer" style="width:14px;"></i> Download PDF</button>
     </div>
     
-    <div class="table-card">
-      <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Roomlist</th>
-              <th>Kamar</th>
-              <th>No. Jamaah</th>
-              <th>Bed</th>
-              <th>Remark</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredRooms.map((r, idx) => {
-              const guestNumbersHtml = r.guests.map(g => `<div><code>${g.guestNo}</code></div>`).join('');
-              const hasRemarks = r.guests.some(g => g.remark && g.remark.trim() !== "");
-              const remarkIconHtml = hasRemarks 
-                ? `<span style="cursor:pointer;" onclick="showToast('Ada jamaah berkebutuhan khusus/lansia di kamar ini.', 'error')">⚠️</span>` 
-                : '-';
-              
-              let cleanBed = r.typeBed;
-              if (cleanBed.includes("Double")) cleanBed = "Twin";
-              else if (cleanBed.includes("Triple")) cleanBed = "Triple";
-              else if (cleanBed.includes("Quad")) cleanBed = "Quad";
-              
-              return `
-                <tr class="clickable-row" data-idx="${idx}" style="cursor:pointer;">
-                  <td><strong>${r.roomlistNumber}</strong></td>
-                  <td><span style="color:var(--primary-gold); font-weight:700;">${r.roomNumber}</span></td>
-                  <td>${guestNumbersHtml}</td>
-                  <td>${cleanBed}</td>
-                  <td style="text-align:center;">${remarkIconHtml}</td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
+    <div style="background:#ffffff; border-radius:16px; border:1px solid #cbd5e1; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+      ${roomRowsHtml}
     </div>
   `;
   
@@ -1850,22 +2259,70 @@ function renderRoomlistTable(groupName, hotelName) {
       const targetRoom = filteredRooms[idx];
       if (!targetRoom) return;
       
+      const guestsListHtml = (targetRoom.guests && targetRoom.guests.length > 0) 
+        ? targetRoom.guests.map(g => {
+            let remarkBadge = "";
+            const remDesc = g.remarkText ? ` (${g.remarkText})` : "";
+            if (g.remark === "warning") {
+              remarkBadge = `<span style="background:#fef08a; color:#854d0e; font-size:0.72rem; padding:2px 8px; border-radius:10px; font-weight:800; border:1px solid #fde047;">⚠️ Warning${remDesc}</span>`;
+            } else if (g.remark && g.remark !== "none") {
+              const hex = getHexColor(g.remark);
+              remarkBadge = `<span style="background:${hex}; color:#ffffff; font-size:0.72rem; padding:2px 8px; border-radius:10px; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.2);">${g.remark}${remDesc}</span>`;
+            }
+            const uCodeStr = g.uniqueCode ? `<span style="background:#eff6ff; color:#0070f3; font-size:0.72rem; font-weight:800; padding:1px 6px; border-radius:4px;">${g.uniqueCode}</span>` : "";
+
+            return `
+              <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9; font-size:0.82rem; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <code style="font-size:0.78rem; font-weight:800; color:#475569; background:#e2e8f0; padding:1px 5px; border-radius:4px;">No. ${g.guestNo}</code>
+                  <strong style="color:#0f172a;">${g.name}</strong>
+                  ${uCodeStr}
+                </div>
+                <div>
+                  ${remarkBadge || '<span style="color:#94a3b8; font-size:0.75rem;">-</span>'}
+                </div>
+              </div>
+            `;
+          }).join('') 
+        : '<p style="color:#94a3b8; font-size:0.8rem; text-align:center; margin:0;">Tidak ada daftar jamaah di kamar ini.</p>';
+
       const formHtml = `
-        <div style="font-size:0.9rem; margin-bottom:16px;">
-          <p><strong>Grup:</strong> ${targetRoom.groupName}</p>
-          <p><strong>Hotel:</strong> ${targetRoom.hotelName}</p>
-          <p><strong>Roomlist No:</strong> ${targetRoom.roomlistNumber} | <strong>Bed:</strong> ${targetRoom.typeBed}</p>
+        <div style="background:#f8fafc; border-radius:12px; padding:14px; border:1px solid #e2e8f0; margin-bottom:16px; font-size:0.85rem; color:#334155;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
+            <span>Grup Keberangkatan:</span>
+            <strong style="color:#0f172a;">${targetRoom.groupName}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
+            <span>Hotel Akomodasi:</span>
+            <strong style="color:#0f172a;">${targetRoom.hotelName}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+            <span>No. Roomlist / Kasur:</span>
+            <strong style="color:#0f172a;">${targetRoom.roomlistNumber} (${targetRoom.typeBed})</strong>
+          </div>
+        </div>
+
+        <div style="background:#ffffff; border-radius:12px; border:1px solid #cbd5e1; padding:14px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+          <div style="font-size:0.85rem; font-weight:800; color:#1e293b; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <i data-lucide="users" style="width:16px; height:16px; color:#c5a850;"></i>
+            <span>Daftar Penghuni Kamar (${targetRoom.guests ? targetRoom.guests.length : 0} Orang) & Remark</span>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${guestsListHtml}
+          </div>
         </div>
         
         <form id="user-edit-room-num-form-popup">
           <div class="form-group">
-            <label class="form-label">Nomor Kamar</label>
-            <input type="text" id="user-edit-room-number-input" class="form-input" value="${targetRoom.roomNumber}" required>
+            <label class="form-label" style="font-weight:800;">Edit Nomor Kamar Baru</label>
+            <input type="text" id="user-edit-room-number-input" class="form-input" value="${targetRoom.roomNumber}" placeholder="mis. 1007 atau 2105" required>
           </div>
-          <button type="submit" class="btn btn-gold">SIMPAN NOMOR KAMAR</button>
+          <button type="submit" class="btn btn-gold" style="font-weight:800; width:100%;"><i data-lucide="check-circle"></i> SIMPAN NOMOR KAMAR</button>
         </form>
       `;
       openModal("Edit Nomor Kamar (Pop Up)", formHtml);
+      lucide.createIcons();
       
       document.getElementById("user-edit-room-num-form-popup").onsubmit = (event) => {
         event.preventDefault();
@@ -1883,22 +2340,202 @@ function renderRoomlistTable(groupName, hotelName) {
 }
 
 // --- USER SUB-VIEW: DOCUMENTS ---
+function getDocCategoryBadge(cat) {
+  const map = {
+    "Profiling Jamaah": { bg: "#eff6ff", color: "#0070f3", border: "#bfdbfe" },
+    "Visa": { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
+    "Paspor": { bg: "#fefce8", color: "#ca8a04", border: "#fef08a" },
+    "E-Ticket": { bg: "#faf5ff", color: "#9333ea", border: "#e9d5ff" },
+    "Bus List": { bg: "#fff7ed", color: "#c2410c", border: "#ffedd5" },
+    "Paket Info": { bg: "#fdf2f8", color: "#db2777", border: "#fbcfe8" },
+    "Itinerary": { bg: "#f0fdfa", color: "#0d9488", border: "#99f6e4" }
+  };
+  const style = map[cat] || { bg: "#f8fafc", color: "#475569", border: "#cbd5e1" };
+  return `<span style="background:${style.bg}; color:${style.color}; border:1px solid ${style.border}; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px;">${cat || 'Dokumen'}</span>`;
+}
+
+function openDocPreviewModal(doc) {
+  const cat = doc.category || "Dokumen";
+  let contentHtml = "";
+
+  if (cat === "Profiling Jamaah" || doc.name.includes("Profiling")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Total Jamaah Terprofiling: <strong>25 Pax</strong></span>
+          <span style="color:#16a34a; font-weight:800;">✓ Data Kesehatan & Khusus Lengkap</span>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
+          <tr style="background:#f1f5f9; font-weight:800;"><th>No</th><th>ID / Name</th><th>Gender</th><th>Catatan Medis / Khusus</th><th>VIP Status</th></tr>
+          <tr><td>1</td><td><b>JIBB-0001</b> - H. BAMBANG SUTRISNO</td><td>Laki-laki</td><td>Hipertensi (Obat Rutin)</td><td>Sapphire VIP</td></tr>
+          <tr><td>2</td><td><b>JIBB-0002</b> - HJ. SITI AMINAH</td><td>Perempuan</td><td>Perlu Pendamping / Lansia</td><td>Sapphire VIP</td></tr>
+          <tr><td>3</td><td><b>JIBB-0003</b> - ACHMAD FAUZI</td><td>Laki-laki</td><td>Sehat / Manula Active</td><td>Sapphire VIP</td></tr>
+          <tr><td>7</td><td><b>JIBB-0007</b> - AYU VIDYA PUTRI</td><td>Perempuan</td><td>Infan / Kebutuhan Baby Stroller</td><td>Sapphire VIP</td></tr>
+          <tr><td>11</td><td><b>JIBB-0011</b> - HJ. ENDANG SRI WAHYUNI</td><td>Perempuan</td><td>Kursi Roda (Layanan Tawaf/Sai)</td><td>Sapphire VIP</td></tr>
+        </table>
+        <p style="font-size:0.75rem; color:#64748b; margin-top:8px;">* Menampilkan cuplikan ringkasan 25 data profiling jamaah grup ${doc.groupName}.</p>
+      </div>
+    `;
+  } else if (cat === "Visa" || doc.name.includes("Visa")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#f0fdf4; padding:10px 14px; border-radius:8px; border:1px solid #bbf7d0; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div><strong style="color:#15803d;">Ministry of Hajj & Umrah KSA</strong><br><span style="font-size:0.75rem;">Status: ISSUED / APPROVED (25 Pax)</span></div>
+          <span style="font-size:1.2rem;">🟢</span>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
+          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Visa</th><th>Nama Jamaah</th><th>No. Paspor</th><th>Validity</th></tr>
+          <tr><td>6168664001</td><td>H. BAMBANG SUTRISNO</td><td>X8582841</td><td>90 Hari (Single Entry)</td></tr>
+          <tr><td>6168664002</td><td>HJ. SITI AMINAH</td><td>X8582842</td><td>90 Hari (Single Entry)</td></tr>
+          <tr><td>6168664007</td><td>AYU VIDYA PUTRI</td><td>X8582843</td><td>90 Hari (Single Entry)</td></tr>
+        </table>
+      </div>
+    `;
+  } else if (cat === "Paspor" || doc.name.includes("Paspor")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#fefce8; padding:10px 14px; border-radius:8px; border:1px solid #fef08a; margin-bottom:12px;">
+          <strong style="color:#854d0e;">Manifest Paspor RI & Masa Berlaku</strong>
+          <div style="font-size:0.75rem; color:#713f12;">Minimal masa berlaku paspor 6 bulan sebelum tanggal keberangkatan.</div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
+          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Paspor</th><th>Nama di Paspor</th><th>Tgl Expire</th><th>Kantor Imigrasi</th></tr>
+          <tr><td>X8582841</td><td>BAMBANG SUTRISNO</td><td>12/10/2032</td><td>Jakarta Selatan</td></tr>
+          <tr><td>X8582842</td><td>SITI AMINAH</td><td>14/05/2031</td><td>Jakarta Pusat</td></tr>
+          <tr><td>X8582843</td><td>AYU VIDYA PUTRI</td><td>20/08/2033</td><td>Bandung</td></tr>
+        </table>
+      </div>
+    `;
+  } else if (cat === "E-Ticket" || doc.name.includes("Ticket") || doc.name.includes("Tiket")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#faf5ff; padding:12px; border-radius:8px; border:1px solid #e9d5ff; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-weight:800; color:#7e22ce;">
+            <span>SAUDIA AIRLINES (SV-819 / SV-818)</span>
+            <span>PNR: SV-JKT-8821</span>
+          </div>
+          <div style="font-size:0.78rem; color:#6b21a8; margin-top:4px;">
+            CGK (Jakarta) &rarr; MED (Madinah) &bull; JED (Jeddah) &rarr; CGK (Jakarta)<br>
+            Bagasi: 2x 23 Kg per Jamaah | Kabin: 7 Kg
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (cat === "Bus List" || doc.name.includes("Bus")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#fff7ed; padding:12px; border-radius:8px; border:1px solid #ffedd5; margin-bottom:12px;">
+          <strong style="color:#c2410c;">BUS 1 - Mercedes Travego 2024 (45 Seat)</strong>
+          <div style="font-size:0.75rem; color:#9a3412; margin-top:2px;">
+            Driver: Abu Fahad (+966-501234567) &bull; Tour Leader: Ustadz H. Ahmad Ridwan
+          </div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
+          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Seat</th><th>Nama Jamaah</th><th>Status Koper</th></tr>
+          <tr><td>1A & 1B</td><td>H. BAMBANG SUTRISNO & HJ. SITI AMINAH</td><td>2 Koper Besar (Bagasi 1)</td></tr>
+          <tr><td>2A & 2B</td><td>AYU VIDYA PUTRI (Infan)</td><td>1 Koper + Stroller</td></tr>
+        </table>
+      </div>
+    `;
+  } else if (cat === "Paket Info" || doc.name.includes("Paket")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#fdf2f8; padding:12px; border-radius:8px; border:1px solid #fbcfe8; margin-bottom:12px;">
+          <strong style="color:#be185d;">PAKET VIP SAPPHIRE PLUS (9 HARI)</strong>
+          <div style="font-size:0.78rem; color:#9d174d; margin-top:4px;">
+            &bull; Hotel Madinah: Maden Al Rawda (5 Bintang - Depan Masjid Nabawi)<br>
+            &bull; Hotel Makkah: Al Marwa Rayhaan Rotana (5 Bintang - Kompleks Abraj Al Bait)<br>
+            &bull; Kereta Cepat Haramain Express (Business Class)<br>
+            &bull; Catering: Full Board Indonesian Buffet 3x Sehari
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (cat === "Itinerary" || doc.name.includes("Itinerary")) {
+    contentHtml = `
+      <div style="font-size:0.84rem; color:#334155;">
+        <div style="background:#f0fdfa; padding:12px; border-radius:8px; border:1px solid #99f6e4; margin-bottom:12px;">
+          <strong style="color:#0f766e;">RUNDOWN ITINERARY UMROH 9 HARI</strong>
+        </div>
+        <ul style="padding-left:18px; line-height:1.6; font-size:0.78rem;">
+          <li><b>Hari 1:</b> Kumpul CGK Terminal 3 &rarr; Flight SV-819 to Madinah &rarr; Check-in Maden Al Rawda.</li>
+          <li><b>Hari 2:</b> Ziarah Raudhah & Ziarah Dalam Masjid Nabawi.</li>
+          <li><b>Hari 3:</b> City Tour Madinah (Masjid Quba, Jabal Uhud, Kebun Kurma).</li>
+          <li><b>Hari 4:</b> Check-out Madinah &rarr; Miqat Bir Ali &rarr; Kereta Cepat Haramain to Makkah &rarr; Pelaksanaan Umroh 1.</li>
+          <li><b>Hari 5:</b> Perbanyak Ibadah Mandiri di Masjidil Haram Makkah.</li>
+          <li><b>Hari 6:</b> City Tour Makkah (Jabal Tsur, Arafah, Muzdalifah, Mina, Jabal Nur).</li>
+          <li><b>Hari 7:</b> Perbanyak Ibadah & Persiapan Thawaf Wada.</li>
+          <li><b>Hari 8:</b> Thawaf Wada &rarr; Transfer to Airport Jeddah &rarr; Flight SV-818 to Jakarta.</li>
+          <li><b>Hari 9:</b> Tiba di Bandara Soekarno-Hatta (CGK). Umroh Maqbool Insya Allah.</li>
+        </ul>
+      </div>
+    `;
+  } else {
+    contentHtml = `
+      <div style="border:1px solid #e2e8f0; border-radius:8px; padding:20px; background:#fcfcfd; margin-bottom:12px; font-size:0.85rem; color:#475569;">
+        📄 [BERKAS DOKUMEN SOP OPERASIONAL]<br>
+        <span style="font-size:0.78rem; color:#64748b;">Berkas standar operasional prosedur penugasan tim lapangan.</span>
+      </div>
+    `;
+  }
+
+  const docPreviewHtml = `
+    <div style="padding: 4px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+        <div>
+          <h4 style="font-family:'Martel',serif; font-size:1.05rem; font-weight:800; color:#0f172a; margin-bottom:2px;">${cleanDocName(doc.name, doc.groupName)}</h4>
+          <span style="font-size:0.75rem; color:#64748b;">Grup: ${doc.groupName}</span>
+        </div>
+        ${getDocCategoryBadge(cat)}
+      </div>
+
+      ${contentHtml}
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+        <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 14px; font-size:0.78rem;">Tutup</button>
+        <button class="btn btn-gold" onclick="showToast('Unduh Berkas Berhasil!')" style="width:auto; padding:6px 14px; font-size:0.78rem; font-weight:800;">
+          <i data-lucide="download" style="width:14px;"></i> Download Berkas
+        </button>
+      </div>
+    </div>
+  `;
+  openModal(`Preview Berkas (${cat})`, docPreviewHtml);
+  lucide.createIcons();
+}
+
 function renderUserDocuments() {
   const container = document.getElementById("user-subview-content");
   const groupNames = state.groups.map(g => g.name);
   
+  let selectedCategory = "Semua";
+  
+  const categories = ["Semua", "Profiling Jamaah", "Visa", "Paspor", "E-Ticket", "Bus List", "Paket Info", "Itinerary"];
+  
   container.innerHTML = `
-    <div class="form-group" style="margin-top:10px;">
-      <input type="text" id="user-doc-group-search" class="form-input" placeholder="Cari / Ketik Grup untuk Mengakses File...">
+    <!-- Group Search Filter -->
+    <div class="form-group" style="margin-top:8px; margin-bottom:14px;">
+      <input type="text" id="user-doc-group-search" class="form-input" placeholder="Cari / Ketik Grup Keberangkatan untuk Membuka Dokumen..." style="padding:8px 12px; font-size:0.88rem;">
       <div id="user-doc-suggestions" class="suggestion-list hidden"></div>
     </div>
     
-    <h3 class="user-section-title">Dokumen Tersemat (SOP)</h3>
-    <div class="document-list" id="sop-pinned-list" style="margin-bottom:24px;"></div>
+    <!-- Category Tabs Bar -->
+    <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; margin-bottom:16px; scrollbar-width:thin;">
+      ${categories.map(c => `
+        <button class="btn user-doc-cat-tab ${c === 'Semua' ? 'btn-gold' : 'btn-secondary'}" data-cat="${c}" style="width:auto; padding:5px 12px; font-size:0.75rem; white-space:nowrap; border-radius:16px; font-weight:700;">
+          ${c}
+        </button>
+      `).join('')}
+    </div>
     
-    <h3 class="user-section-title">Dokumen Grup</h3>
+    <h3 class="user-section-title">Dokumen Tersemat (SOP)</h3>
+    <div class="document-list" id="sop-pinned-list" style="margin-bottom:20px;"></div>
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h3 class="user-section-title" style="margin:0;">Dokumen Berkas Grup</h3>
+      <span id="user-doc-count-badge" style="font-size:0.75rem; color:#64748b; font-weight:700;"></span>
+    </div>
     <div class="document-list" id="group-docs-list">
-      <p style="color:var(--text-light); text-align:center; font-size:0.85rem; padding:10px;">Silakan cari grup terlebih dahulu untuk memunculkan berkas.</p>
+      <p style="color:var(--text-light); text-align:center; font-size:0.85rem; padding:16px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Silakan cari / pilih grup terlebih dahulu untuk memunculkan dokumen (Profiling, Visa, Paspor, E-Ticket, Bus List, Paket Info, Itinerary).</p>
     </div>
   `;
   
@@ -1912,56 +2549,90 @@ function renderUserDocuments() {
         <div class="document-info">
           <div class="document-icon"><i data-lucide="pin" style="color:var(--primary-gold);"></i></div>
           <div>
-            <div class="document-name">${doc.name}</div>
+            <div class="document-name">${cleanDocName(doc.name, doc.groupName)}</div>
             <div class="document-meta">${doc.groupName} | SOP</div>
           </div>
         </div>
-        <button class="btn btn-secondary preview-doc-btn" data-name="${doc.name}" style="width:auto; padding:6px 12px; font-size:0.75rem;">Preview</button>
+        <button class="btn btn-secondary preview-doc-btn" data-id="${doc.id}" style="width:auto; padding:6px 12px; font-size:0.75rem;">Preview</button>
       </div>
     `).join('');
   }
-  
-  initSuggestionInput("user-doc-group-search", "user-doc-suggestions", groupNames, (groupName) => {
-    const groupDocs = state.documents.filter(d => d.groupName === groupName);
+
+  let activeGroupName = "";
+
+  const renderGroupDocs = () => {
     const docsContainer = document.getElementById("group-docs-list");
-    
-    if (groupDocs.length === 0) {
-      docsContainer.innerHTML = `<p style="color:var(--text-muted); text-align:center; font-size:0.85rem; padding:20px;">Tidak ada dokumen khusus untuk grup ini.</p>`;
+    const countBadge = document.getElementById("user-doc-count-badge");
+
+    if (!activeGroupName) {
+      docsContainer.innerHTML = `<p style="color:var(--text-light); text-align:center; font-size:0.85rem; padding:16px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Silakan cari / pilih grup terlebih dahulu untuk memunculkan dokumen.</p>`;
+      if (countBadge) countBadge.textContent = "";
       return;
     }
+
+    let groupDocs = state.documents.filter(d => d.groupName === activeGroupName);
     
+    if (selectedCategory !== "Semua") {
+      groupDocs = groupDocs.filter(d => d.category === selectedCategory || d.name.toLowerCase().includes(selectedCategory.toLowerCase()));
+    }
+
+    if (countBadge) countBadge.textContent = `${groupDocs.length} Berkas`;
+
+    if (groupDocs.length === 0) {
+      docsContainer.innerHTML = `<p style="color:var(--text-muted); text-align:center; font-size:0.85rem; padding:20px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Tidak ada dokumen kriteria "${selectedCategory}" untuk grup ini.</p>`;
+      return;
+    }
+
     docsContainer.innerHTML = groupDocs.map(doc => `
-      <div class="document-item">
-        <div class="document-info">
-          <div class="document-icon"><i data-lucide="file-text"></i></div>
+      <div class="document-item" style="background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div class="document-info" style="display:flex; align-items:center; gap:10px;">
+          <div class="document-icon" style="width:36px; height:36px; border-radius:8px; background:#f8fafc; display:flex; align-items:center; justify-content:center; color:#c5a850;">
+            <i data-lucide="file-text" style="width:20px; height:20px;"></i>
+          </div>
           <div>
-            <div class="document-name">${doc.name}</div>
-            <div class="document-meta">Grup: ${doc.groupName}</div>
+            <div class="document-name" style="font-weight:800; font-size:0.88rem; color:#0f172a; margin-bottom:2px;">${cleanDocName(doc.name, doc.groupName)}</div>
+            <div class="document-meta" style="display:flex; align-items:center; gap:6px;">
+              ${getDocCategoryBadge(doc.category || 'Dokumen')}
+            </div>
           </div>
         </div>
-        <button class="btn btn-secondary preview-doc-btn" data-name="${doc.name}" style="width:auto; padding:6px 12px; font-size:0.75rem;">Preview</button>
+        <button class="btn btn-gold preview-doc-btn" data-id="${doc.id}" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800;">Preview</button>
       </div>
     `).join('');
-    
+
     lucide.createIcons();
     bindPreviewEvents();
+  };
+  
+  // Category tabs click listener
+  document.querySelectorAll(".user-doc-cat-tab").forEach(tab => {
+    tab.onclick = () => {
+      document.querySelectorAll(".user-doc-cat-tab").forEach(t => {
+        t.classList.remove("btn-gold");
+        t.classList.add("btn-secondary");
+      });
+      tab.classList.remove("btn-secondary");
+      tab.classList.add("btn-gold");
+      selectedCategory = tab.getAttribute("data-cat");
+      renderGroupDocs();
+    };
+  });
+
+  initSuggestionInput("user-doc-group-search", "user-doc-suggestions", groupNames, (groupName) => {
+    activeGroupName = groupName;
+    renderGroupDocs();
   });
   
   function bindPreviewEvents() {
     document.querySelectorAll(".preview-doc-btn").forEach(btn => {
       btn.onclick = () => {
-        const name = btn.getAttribute("data-name");
-        const docPreviewHtml = `
-          <div style="text-align: center; padding: 10px;">
-            <h4 style="font-family:'Martel',serif; font-size:1.1rem; margin-bottom:12px;">${name}</h4>
-            <div style="border:1px solid #e2e8f0; border-radius:var(--radius-sm); padding:40px 20px; background:#fcfcfd; margin-bottom:16px;">
-              📄 [SIMULASI DOKUMEN PDF VIEW]<br>
-              <span style="font-size:0.8rem; color:var(--text-muted);">Konten berkas preview.</span>
-            </div>
-            <button class="btn btn-gold" onclick="showToast('Mengunduh berkas...')"><i data-lucide="download"></i> Download Berkas</button>
-          </div>
-        `;
-        openModal("Preview Dokumen", docPreviewHtml);
+        const id = btn.getAttribute("data-id");
+        const doc = state.documents.find(d => d.id === id);
+        if (doc) {
+          openDocPreviewModal(doc);
+        } else {
+          showToast("Berkas dokumen tidak ditemukan.");
+        }
       };
     });
   }
@@ -1975,31 +2646,12 @@ function renderUserLaporan() {
   const container = document.getElementById("user-subview-content");
   
   container.innerHTML = `
-    <!-- Tab Navigation -->
-    <div class="tab-header" style="margin-top:10px;">
-      <div class="tab-btn active" id="tab-user-kas-btn" data-tab="kas">Kas Pengeluaran</div>
-      <div class="tab-btn" id="tab-user-absen-btn" data-tab="absensi">Absensi Tim</div>
-      <div class="tab-btn" id="tab-user-inc-btn" data-tab="insiden">Kejadian</div>
-    </div>
-    
     <div id="user-laporan-tab-container"></div>
   `;
-  
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  tabBtns.forEach(btn => {
-    btn.onclick = () => {
-      tabBtns.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      loadUserTab(btn.getAttribute("data-tab"));
-    };
-  });
   
   const urlParams = window.location.hash.split("?")[1];
   if (urlParams && urlParams.startsWith("tab=")) {
     const tabName = urlParams.replace("tab=", "");
-    tabBtns.forEach(b => b.classList.remove("active"));
-    const matchBtn = Array.from(tabBtns).find(b => b.getAttribute("data-tab") === tabName);
-    if (matchBtn) matchBtn.classList.add("active");
     loadUserTab(tabName);
   } else {
     loadUserTab("kas");
@@ -2207,174 +2859,6 @@ function openUserLaporKasPopup(prefilledGroup = "") {
   };
 }
 
-
-function openUserLaporKasPopup(prefilledGroup = "") {
-  const username = state.currentUser.username;
-  const activeTasks = state.assignments.filter(a => a.staff.includes(username) && a.status === "Aktif");
-  const activityOptions = activeTasks.map(t => `<option value="${t.type}">${t.type} (${(t.groupName || "").substring(0, 20)}...)</option>`).join('');
-
-  const popupHtml = `
-    <form id="user-submit-exp-form-popup">
-      <div class="form-group">
-        <label class="form-label">Grup Keberangkatan</label>
-        <input type="text" id="user-exp-group-input-popup" class="form-input" value="${prefilledGroup}" placeholder="Ketik nama grup..." required>
-        <div id="user-exp-group-suggestions-popup" class="suggestion-list hidden"></div>
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label">Kolom Kegiatan</label>
-        <select id="user-exp-activity-popup" class="form-select" required>
-          <option value="">-- Pilih Kegiatan --</option>
-          ${activityOptions}
-        </select>
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label">Deskripsi Pengeluaran</label>
-        <textarea id="user-exp-desc-popup" class="form-textarea" rows="3" required></textarea>
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label">Foto Struk / Nota (Multi-upload)</label>
-        <input type="file" id="user-exp-photo-popup" class="form-input" accept="image/*" multiple required>
-      </div>
-
-      <h5 style="margin-top:20px; margin-bottom:10px; font-weight:800;">Rincian Item Biaya</h5>
-      <div id="user-exp-items-container" style="display:flex; flex-direction:column; gap:12px;"></div>
-      <button type="button" id="user-exp-add-item-btn" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.8rem; margin-bottom:20px;">+ Tambah Item</button>
-
-      <div style="background:#f1f3f5; padding:12px; border-radius:6px; font-weight:800; font-size:0.95rem; margin-bottom:20px; border:1px solid #ced4da;">
-        Total Keseluruhan: SAR <span id="user-exp-grand-total">0</span>
-      </div>
-      
-      <button type="submit" class="btn btn-primary">Submit Laporan</button>
-    </form>
-  `;
-  openModal("Tambah Pengeluaran Kas", popupHtml);
-  
-  initSuggestionInput("user-exp-group-input-popup", "user-exp-group-suggestions-popup", state.groups.map(g => g.name));
-
-  const itemsContainer = document.getElementById("user-exp-items-container");
-  
-  const calculateExpGrandTotal = () => {
-    let grandTotal = 0;
-    const totals = itemsContainer.querySelectorAll(".item-total");
-    totals.forEach(t => {
-      grandTotal += parseFloat(t.value) || 0;
-    });
-    document.getElementById("user-exp-grand-total").textContent = grandTotal;
-  };
-
-  const addItemRow = () => {
-    const rowId = `exp-item-${Date.now()}-Math.random()}`;
-    const div = document.createElement("div");
-    div.className = "nested-form-card exp-item-row-popup";
-    div.id = rowId;
-    div.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <strong>Item Baru</strong>
-        <button type="button" class="nested-remove-btn" onclick="document.getElementById('${rowId}').remove(); calculateExpGrandTotal();">&times;</button>
-      </div>
-      <div class="grid-3col" style="gap:8px;">
-        <div class="form-group">
-          <label class="form-label">Kategori</label>
-          <select class="form-select item-cat" required>
-            <option value="Fee Handling">Fee Handling</option>
-            <option value="Tip Bellboy">Tip Bellboy</option>
-            <option value="Zamzam">Zamzam</option>
-            <option value="Lainnya">Lainnya</option>
-          </select>
-          <input type="text" class="form-input item-custom-cat hidden" placeholder="Kategori Kustom" style="margin-top:6px;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Harga Satuan</label>
-          <input type="number" class="form-input item-price" placeholder="SAR" min="0" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Qty</label>
-          <input type="number" class="form-input item-qty" placeholder="QTY" min="1" required>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Jumlah</label>
-        <input type="number" class="form-input item-total" placeholder="SAR" disabled readonly>
-      </div>
-    `;
-    itemsContainer.appendChild(div);
-    
-    const catSelect = div.querySelector(".item-cat");
-    const customInput = div.querySelector(".item-custom-cat");
-    const priceInput = div.querySelector(".item-price");
-    const qtyInput = div.querySelector(".item-qty");
-    const totalInput = div.querySelector(".item-total");
-    
-    catSelect.onchange = () => {
-      if (catSelect.value === "Lainnya") {
-        customInput.classList.remove("hidden");
-        customInput.required = true;
-      } else {
-        customInput.classList.add("hidden");
-        customInput.required = false;
-      }
-    };
-    
-    const updateRowTotal = () => {
-      const price = parseFloat(priceInput.value) || 0;
-      const qty = parseFloat(qtyInput.value) || 0;
-      totalInput.value = price * qty;
-      calculateExpGrandTotal();
-    };
-    
-    priceInput.oninput = updateRowTotal;
-    qtyInput.oninput = updateRowTotal;
-  };
-
-  document.getElementById("user-exp-add-item-btn").onclick = addItemRow;
-  addItemRow();
-  
-  document.getElementById("user-submit-exp-form-popup").onsubmit = (e) => {
-    e.preventDefault();
-    const groupName = document.getElementById("user-exp-group-input-popup").value;
-    const activity = document.getElementById("user-exp-activity-popup").value;
-    const desc = document.getElementById("user-exp-desc-popup").value.trim();
-    const grandTotal = parseInt(document.getElementById("user-exp-grand-total").textContent);
-    
-    const itemRows = itemsContainer.querySelectorAll(".exp-item-row-popup");
-    const items = Array.from(itemRows).map(row => {
-      const cat = row.querySelector(".item-cat").value;
-      const customCat = row.querySelector(".item-custom-cat").value.trim();
-      return {
-        category: cat === "Lainnya" ? customCat : cat,
-        price: parseInt(row.querySelector(".item-price").value) || 0,
-        qty: parseInt(row.querySelector(".item-qty").value) || 1,
-        total: parseInt(row.querySelector(".item-total").value) || 0
-      };
-    });
-    
-    const newExp = {
-      id: `exp-${Date.now()}`,
-      username,
-      groupName,
-      wallet: activity,
-      amount: grandTotal,
-      description: desc,
-      date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
-      receipt: "struk_user_multi.jpg",
-      status: "Pending",
-      items
-    };
-    
-    state.financial.expenses.push(newExp);
-    state.financial.wallets[username] -= grandTotal;
-    saveState();
-    
-    addNotification("financial", `Laporan Kas: ${state.currentUser.name} membelanjakan SAR ${grandTotal} (${desc})`, { username, groupName });
-    closeModal();
-    showToast("Laporan Kas disubmit!");
-    loadUserTab("kas");
-  };
-}
-
 function loadUserTab(tab) {
   const container = document.getElementById("user-laporan-tab-container");
   const username = state.currentUser.username;
@@ -2418,34 +2902,81 @@ function loadUserTab(tab) {
     });
 
     container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;">
-        <span style="font-size:0.9rem; font-weight:700; color:${myWalletBal < 0 ? '#ef4444' : 'var(--text-main)'};">
-          Saldo Kas: SAR ${myWalletBal.toLocaleString('id-ID')} ${myWalletBal < 0 ? '(Piutang)' : ''}
-        </span>
-        <div style="display:flex; gap:8px;">
-          <button id="user-transfer-kas-btn" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.8rem; border-color:var(--primary-gold); color:var(--primary-gold);"><i data-lucide="send" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Transfer Kas</button>
-          <button id="add-exp-user-popup-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem;"><i data-lucide="plus"></i> Tambah Pengeluaran</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap; background:#ffffff; padding:12px 14px; border-radius:12px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+        <div style="font-size:0.92rem; font-weight:800; color:${myWalletBal < 0 ? '#ef4444' : '#0f172a'}; display:flex; align-items:center; gap:6px;">
+          <i data-lucide="wallet" style="width:18px; height:18px; color:#c5a850;"></i>
+          <span>Saldo Kas Dompet: <span style="color:${myWalletBal < 0 ? '#ef4444' : '#10b981'}; font-weight:900;">SAR ${myWalletBal.toLocaleString('id-ID')}</span> ${myWalletBal < 0 ? '(Piutang)' : ''}</span>
         </div>
       </div>
 
-      <div class="form-group" style="margin-bottom:16px;">
-        <input type="text" id="user-tx-search" class="form-input" placeholder="Cari Riwayat Transaksi (tipe, deskripsi, tanggal)...">
+      <!-- Filters Section -->
+      <div style="background:#ffffff; border-radius:12px; padding:12px; border:1px solid #cbd5e1; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02); display:flex; flex-direction:column; gap:10px;">
+        <!-- Search bar -->
+        <input type="text" id="user-tx-search" class="form-input" placeholder="Cari deskripsi, tipe, nominal, atau status..." style="padding:8px 12px; font-size:0.85rem;">
+        
+        <!-- Filters Row: Date Range & Category -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+          <div>
+            <label style="font-size:0.68rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:3px;">Dari Tanggal</label>
+            <input type="date" id="user-tx-date-from" class="form-input" style="padding:6px 8px; font-size:0.78rem;">
+          </div>
+          <div>
+            <label style="font-size:0.68rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:3px;">Smp Tanggal</label>
+            <input type="date" id="user-tx-date-to" class="form-input" style="padding:6px 8px; font-size:0.78rem;">
+          </div>
+          <div>
+            <label style="font-size:0.68rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:3px;">Kategori</label>
+            <select id="user-tx-cat-filter" class="form-select" style="padding:6px 8px; font-size:0.78rem;">
+              <option value="Semua">Semua Kategori</option>
+              <option value="Uang Masuk">Uang Masuk</option>
+              <option value="Uang Keluar">Uang Keluar</option>
+              <option value="Transfer">Transfer</option>
+            </select>
+          </div>
+        </div>
       </div>
       
       <!-- List History -->
-      <h4 class="user-section-title">Riwayat Transaksi</h4>
       <div class="activity-list" id="user-tx-history-list" style="box-shadow:var(--shadow-neumorphic);"></div>
     `;
     
     const renderTxList = () => {
-      const query = document.getElementById("user-tx-search").value.toLowerCase().trim();
+      const query = document.getElementById("user-tx-search") ? document.getElementById("user-tx-search").value.toLowerCase().trim() : "";
+      const dateFrom = document.getElementById("user-tx-date-from") ? document.getElementById("user-tx-date-from").value : "";
+      const dateTo = document.getElementById("user-tx-date-to") ? document.getElementById("user-tx-date-to").value : "";
+      const catFilter = document.getElementById("user-tx-cat-filter") ? document.getElementById("user-tx-cat-filter").value : "Semua";
+
       const listEl = document.getElementById("user-tx-history-list");
-      const filtered = combinedTxs.filter(tx => 
-        tx.category.toLowerCase().includes(query) || 
-        tx.description.toLowerCase().includes(query) || 
-        formatDateDisplay(tx.date).toLowerCase().includes(query) ||
-        tx.status.toLowerCase().includes(query)
-      );
+      
+      const filtered = combinedTxs.filter(tx => {
+        // Search Filter
+        if (query !== "") {
+          const matchQuery = 
+            tx.category.toLowerCase().includes(query) || 
+            tx.description.toLowerCase().includes(query) || 
+            formatDateDisplay(tx.date).toLowerCase().includes(query) ||
+            tx.status.toLowerCase().includes(query) ||
+            Math.abs(tx.amount).toString().includes(query);
+          if (!matchQuery) return false;
+        }
+
+        // Date Range Filter
+        if (dateFrom && tx.date < dateFrom) return false;
+        if (dateTo && tx.date > dateTo) return false;
+
+        // Category Filter
+        if (catFilter !== "Semua") {
+          if (catFilter === "Uang Masuk") {
+            if (tx.amount <= 0 && tx.category !== "Uang Masuk") return false;
+          } else if (catFilter === "Uang Keluar") {
+            if (tx.rawType !== "expense" && tx.category !== "Uang Keluar") return false;
+          } else if (catFilter === "Transfer") {
+            if (tx.rawType !== "transfer" && !tx.category.toLowerCase().includes("transfer")) return false;
+          }
+        }
+
+        return true;
+      });
       
       if (filtered.length === 0) {
         listEl.innerHTML = `<p style="text-align:center;color:var(--text-light);padding:14px;font-size:0.85rem;">Tidak ada transaksi ditemukan.</p>`;
@@ -2645,11 +3176,17 @@ function loadUserTab(tab) {
       });
     };
 
-    document.getElementById("user-tx-search").oninput = renderTxList;
+    const sInp = document.getElementById("user-tx-search");
+    const dFromInp = document.getElementById("user-tx-date-from");
+    const dToInp = document.getElementById("user-tx-date-to");
+    const catInp = document.getElementById("user-tx-cat-filter");
+
+    if (sInp) sInp.oninput = renderTxList;
+    if (dFromInp) dFromInp.onchange = renderTxList;
+    if (dToInp) dToInp.onchange = renderTxList;
+    if (catInp) catInp.onchange = renderTxList;
+
     renderTxList();
-    
-    document.getElementById("add-exp-user-popup-btn").onclick = () => openUserLaporKasPopup();
-    document.getElementById("user-transfer-kas-btn").onclick = () => openUserWalletTransferPopup(() => loadUserTab("kas"));
     lucide.createIcons();
   } else if (tab === "jadwal") {
     const offers = state.assignmentOffers.filter(o => o.status === "Tersedia" || (o.status === "Pending Approval" && o.staff.includes(username)));
@@ -2731,8 +3268,7 @@ function loadUserTab(tab) {
     const hasActiveTask = (myActiveTasks.length > 0);
     
     container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; margin-top:10px;">
-        <span style="font-size:0.95rem; font-weight:800;">Absensi Harian Tim</span>
+      <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:16px; margin-top:10px;">
         <button id="start-new-absen-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem;">
           <i data-lucide="plus"></i> Mulai Absensi Baru
         </button>
@@ -2921,8 +3457,7 @@ function loadUserTab(tab) {
 } else if (tab === "insiden") {
     const myIncidents = state.reports.incidents.filter(i => i.username === username);
     container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <span style="font-size:0.85rem; font-weight:700; color:var(--text-muted);">Laporan Kejadian</span>
+      <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:16px;">
         <button id="add-inc-user-popup-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem;"><i data-lucide="plus"></i> Tambah Laporan</button>
       </div>
 
@@ -3204,6 +3739,9 @@ function renderAdminPortal(subView) {
           <div class="admin-nav-item ${activeSubView === 'manifest' ? 'active' : ''}" data-target="manifest">
             <i data-lucide="clipboard-list"></i><span>Manifest Grup</span>
           </div>
+          <div class="admin-nav-item ${activeSubView === 'manifest-jamaah' ? 'active' : ''}" data-target="manifest-jamaah">
+            <i data-lucide="users"></i><span>Manifest Jamaah</span>
+          </div>
           <div class="admin-nav-item ${activeSubView === 'roomlist' ? 'active' : ''}" data-target="roomlist">
             <i data-lucide="hotel"></i><span>Roomlist Template</span>
           </div>
@@ -3303,6 +3841,9 @@ function renderAdminPortal(subView) {
   } else if (activeSubView === "manifest") {
     viewTitle.textContent = "Manifest Grup";
     renderAdminManifest();
+  } else if (activeSubView === "manifest-jamaah") {
+    viewTitle.textContent = "Manifest Jamaah";
+    renderAdminManifestJamaah();
   } else if (activeSubView === "roomlist") {
     viewTitle.textContent = "Roomlist Template";
     renderAdminRoomlist();
@@ -4595,19 +5136,22 @@ function renderTaskCardsAdmin() {
   `;
 
   const getFilteredAssignments = () => {
-    const q = document.getElementById("admin-task-search-input").value.toLowerCase().trim();
-    const pubVal = document.getElementById("admin-task-pub-filter").value;
-    const quotaVal = document.getElementById("admin-task-quota-filter").value;
+    const qInp = document.getElementById("admin-task-search-input");
+    const q = qInp ? qInp.value.toLowerCase().trim() : "";
+    const pubVal = document.getElementById("admin-task-pub-filter") ? document.getElementById("admin-task-pub-filter").value : "all";
+    const quotaVal = document.getElementById("admin-task-quota-filter") ? document.getElementById("admin-task-quota-filter").value : "all";
     
     let filtered = state.assignments;
     if (q) {
-      filtered = filtered.filter(t => 
-        t.type.toLowerCase().includes(q) || 
-        t.groupName.toLowerCase().includes(q) || 
-        (t.details.customTaskName || '').toLowerCase().includes(q) ||
-        t.staff.some(s => s.toLowerCase().includes(q)) || 
-        (state.users.find(u => u.username === t.staff[0])?.name || '').toLowerCase().includes(q)
-      );
+      filtered = filtered.filter(t => {
+        const typeStr = (t.type || t.title || '').toLowerCase();
+        const groupStr = (t.groupName || '').toLowerCase();
+        const customNameStr = (t.details && t.details.customTaskName ? t.details.customTaskName : '').toLowerCase();
+        const staffList = (t.staff || []).map(s => String(s).toLowerCase());
+        const staffNamesStr = (t.staff || []).map(s => (state.users.find(u => u.username === s)?.name || '').toLowerCase()).join(' ');
+        
+        return typeStr.includes(q) || groupStr.includes(q) || customNameStr.includes(q) || staffList.some(s => s.includes(q)) || staffNamesStr.includes(q);
+      });
     }
     if (pubVal === "published") {
       filtered = filtered.filter(t => t.published !== false);
@@ -4638,8 +5182,9 @@ function renderTaskCardsAdmin() {
       // Group the filtered assignments by groupName
       const grouped = {};
       filteredTasks.forEach(t => {
-        if (!grouped[t.groupName]) grouped[t.groupName] = [];
-        grouped[t.groupName].push(t);
+        const gN = t.groupName || 'Umum';
+        if (!grouped[gN]) grouped[gN] = [];
+        grouped[gN].push(t);
       });
       
       const filteredGroups = Object.keys(grouped);
@@ -4679,31 +5224,35 @@ function renderTaskCardsAdmin() {
         
         const bodyEl = accordionRow.querySelector(".grid-2col");
         bodyEl.innerHTML = groupTasks.map(t => {
-          const staffNames = t.staff.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
+          const staffList = t.staff || [];
+          const staffNames = staffList.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
           const isPub = (t.published !== false);
           const reqStaff = t.requiredStaff || 1;
-          const currentStaffCount = t.staff ? t.staff.length : 0;
+          const currentStaffCount = staffList.length;
           const isFulfilled = (currentStaffCount >= reqStaff);
           const staffingStatusHtml = isFulfilled 
             ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (${currentStaffCount}/${reqStaff})</span>` 
             : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (${currentStaffCount}/${reqStaff})</span>`;
           
+          const taskHeading = (t.type || t.title || 'Penugasan Lapangan') + (t.details && t.details.customTaskName ? ` (${t.details.customTaskName})` : '');
+          const regionStr = t.region ? ` (Wilayah: ${t.region})` : '';
+
           return `
             <div class="assignment-card" style="border-left-color: ${isPub ? 'var(--primary-gold)' : '#94a3b8'}; background:#fff; padding:16px; margin-bottom:0;">
               <div class="assignment-header" style="border-bottom: 1px solid #f1f3f5; padding-bottom: 8px; margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-                <strong>${t.type} ${t.details.customTaskName ? `(${t.details.customTaskName})` : ''}</strong>
+                <strong>${taskHeading}</strong>
                 <div style="display:flex; gap:6px; align-items:center;">
                   ${staffingStatusHtml}
                   <span class="badge ${isPub ? 'badge-success' : 'badge-warning'}">${isPub ? 'Published' : 'Unpublished'}</span>
                 </div>
               </div>
               <div class="structured-card-grid">
-                <div class="structured-card-row"><span class="structured-card-label">Grup:</span><span class="structured-card-value"><strong>${t.groupName}</strong></span></div>
-                <div class="structured-card-row"><span class="structured-card-label">Waktu:</span><span class="structured-card-value">${formatDateDisplay(t.date)} | ${t.time} Saudi (Wilayah: ${t.region})</span></div>
+                <div class="structured-card-row"><span class="structured-card-label">Grup:</span><span class="structured-card-value"><strong>${t.groupName || '-'}</strong></span></div>
+                <div class="structured-card-row"><span class="structured-card-label">Waktu:</span><span class="structured-card-value">${formatDateDisplay(t.date)} | ${t.time || '-'} Saudi${regionStr}</span></div>
                 <div class="structured-card-row"><span class="structured-card-label">Petugas:</span><span class="structured-card-value"><em>${staffNames || 'Belum diplot'}</em></span></div>
-                <div class="structured-card-row"><span class="structured-card-label">Status:</span><span class="structured-card-value"><span class="badge badge-gold">${t.status}</span></span></div>
+                <div class="structured-card-row"><span class="structured-card-label">Status:</span><span class="structured-card-value"><span class="badge badge-gold">${t.status || 'Aktif'}</span></span></div>
               </div>
-              <div style="display:flex; justify-content:flex-end; margin-top:14px; border-top:1px solid #f1f3f5; padding-top:10px;">
+              <div style="display:flex; justify-flex:flex-end; margin-top:14px; border-top:1px solid #f1f3f5; padding-top:10px;">
                 <button class="btn btn-secondary view-task-admin-detail-btn" data-id="${t.id}" style="width:auto; padding:4px 8px; font-size:0.75rem;"><i data-lucide="eye" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Lihat Rincian</button>
               </div>
             </div>
@@ -4750,29 +5299,33 @@ function renderTaskCardsAdmin() {
       }
       
       listEl.innerHTML = filtered.map(t => {
-        const staffNames = t.staff.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
+        const staffList = t.staff || [];
+        const staffNames = staffList.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
         const isPub = (t.published !== false);
         const reqStaff = t.requiredStaff || 1;
-        const currentStaffCount = t.staff ? t.staff.length : 0;
+        const currentStaffCount = staffList.length;
         const isFulfilled = (currentStaffCount >= reqStaff);
         const staffingStatusHtml = isFulfilled 
-          ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (&nbsp;${currentStaffCount}/${reqStaff})</span>` 
-          : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (&nbsp;${currentStaffCount}/${reqStaff})</span>`;
+          ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (${currentStaffCount}/${reqStaff})</span>` 
+          : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (${currentStaffCount}/${reqStaff})</span>`;
         
+        const taskHeading = (t.type || t.title || 'Penugasan Lapangan') + (t.details && t.details.customTaskName ? ` (${t.details.customTaskName})` : '');
+        const regionStr = t.region ? ` (Wilayah: ${t.region})` : '';
+
         return `
           <div class="assignment-card" style="border-left-color: ${isPub ? 'var(--primary-gold)' : '#94a3b8'}; background:#fff; padding:16px; margin-bottom:0;">
             <div class="assignment-header" style="border-bottom: 1px solid #f1f3f5; padding-bottom: 8px; margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-              <strong>${t.type} ${t.details.customTaskName ? `(${t.details.customTaskName})` : ''}</strong>
+              <strong>${taskHeading}</strong>
               <div style="display:flex; gap:6px; align-items:center;">
                 ${staffingStatusHtml}
                 <span class="badge ${isPub ? 'badge-success' : 'badge-warning'}">${isPub ? 'Published' : 'Unpublished'}</span>
               </div>
             </div>
             <div class="structured-card-grid">
-              <div class="structured-card-row"><span class="structured-card-label">Grup:</span><span class="structured-card-value"><strong>${t.groupName}</strong></span></div>
-              <div class="structured-card-row"><span class="structured-card-label">Waktu:</span><span class="structured-card-value">${formatDateDisplay(t.date)} | ${t.time} Saudi (Wilayah: ${t.region})</span></div>
+              <div class="structured-card-row"><span class="structured-card-label">Grup:</span><span class="structured-card-value"><strong>${t.groupName || '-'}</strong></span></div>
+              <div class="structured-card-row"><span class="structured-card-label">Waktu:</span><span class="structured-card-value">${formatDateDisplay(t.date)} | ${t.time || '-'} Saudi${regionStr}</span></div>
               <div class="structured-card-row"><span class="structured-card-label">Petugas:</span><span class="structured-card-value"><em>${staffNames || 'Belum diplot'}</em></span></div>
-              <div class="structured-card-row"><span class="structured-card-label">Status:</span><span class="structured-card-value"><span class="badge badge-gold">${t.status}</span></span></div>
+              <div class="structured-card-row"><span class="structured-card-label">Status:</span><span class="structured-card-value"><span class="badge badge-gold">${t.status || 'Aktif'}</span></span></div>
             </div>
             <div style="display:flex; justify-content:flex-end; margin-top:14px; border-top:1px solid #f1f3f5; padding-top:10px;">
               <button class="btn btn-secondary view-task-admin-detail-btn" data-id="${t.id}" style="width:auto; padding:4px 8px; font-size:0.75rem;"><i data-lucide="eye" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Lihat Rincian</button>
@@ -4902,7 +5455,9 @@ function openPenjadwalanFormPopup(editId = null) {
     const groupIti = state.itineraries.find(i => i.groupName === groupName);
     if (groupIti && groupIti.activities) {
       groupIti.activities.forEach(a => {
-        kegiatanSelect.innerHTML += `<option value="${a.agenda}">${a.agenda} (${formatDateDisplay(a.date)})</option>`;
+        const titleText = a.title || a.agenda || 'Kegiatan';
+        const dateText = a.date ? ` (${formatDateDisplay(a.date)})` : '';
+        kegiatanSelect.innerHTML += `<option value="${titleText}">${titleText}${dateText}</option>`;
       });
     }
   };
@@ -4910,13 +5465,15 @@ function openPenjadwalanFormPopup(editId = null) {
   kegiatanSelect.onchange = () => {
     const agenda = kegiatanSelect.value;
     const groupName = gInput.value;
-    const requiredStaff = parseInt(document.getElementById("task-required-staff").value) || 1;
     const groupIti = state.itineraries.find(i => i.groupName === groupName);
-    if (groupIti) {
-      const act = groupIti.activities.find(a => a.agenda === agenda);
+    if (groupIti && groupIti.activities) {
+      const act = groupIti.activities.find(a => (a.title === agenda || a.agenda === agenda));
       if (act) {
-        document.getElementById("task-date").value = act.date;
-        document.getElementById("task-time").value = act.time;
+        if (act.date) document.getElementById("task-date").value = act.date;
+        if (act.time) {
+          const tClean = act.time.replace(/[^0-9:]/g, '');
+          if (tClean) document.getElementById("task-time").value = tClean;
+        }
       }
     }
   };
@@ -5608,16 +6165,12 @@ function openAdminPendingDeleteDetailPopup(reqId) {
   
   document.getElementById("detail-approve-del-btn").onclick = () => {
     if (exp) {
-      state.financial.wallets[exp.username] += exp.amount;
-      const expIdx = state.financial.expenses.findIndex(x => x.id === exp.id);
-      if (expIdx !== -1) {
-        state.financial.expenses.splice(expIdx, 1);
-      }
+      voidFinancialTransaction(exp.id, req.reason || "Disetujui dari Permintaan Hapus Tim");
     }
     req.status = "Approved";
     saveState();
     closeModal();
-    showToast("Transaksi berhasil dihapus!");
+    showToast("Transaksi berhasil dibatalkan (VOID)!");
     renderAdminFinancial();
   };
   
@@ -5627,6 +6180,130 @@ function openAdminPendingDeleteDetailPopup(reqId) {
     closeModal();
     showToast("Permintaan hapus ditolak.", "error");
     renderAdminFinancial();
+  };
+}
+
+function voidFinancialTransaction(txIdOrExpenseId, reason, adminUser = "") {
+  if (!reason || reason.trim() === "") {
+    showToast("Alasan pembatalan (void) wajib diisi!", "error");
+    return false;
+  }
+
+  const currentUserObj = state.currentUser || {};
+  const voidedBy = adminUser || currentUserObj.name || currentUserObj.username || "Admin";
+  const { gregorianStr, timeStr } = getSaudiDateTime();
+  const voidedAt = `${gregorianStr} ${timeStr} Saudi`;
+  const cleanReason = reason.trim();
+
+  // Find transaction and/or expense
+  let tx = state.financial.transactions.find(t => t.id === txIdOrExpenseId);
+  let exp = state.financial.expenses.find(e => e.id === txIdOrExpenseId);
+
+  if (tx && !exp) {
+    exp = state.financial.expenses.find(e => e.id === tx.refExpenseId || (e.amount === tx.amount && e.username === tx.sender && tx.description.includes(e.description)));
+  }
+
+  let voidedAny = false;
+
+  // Process Expense Void
+  if (exp && exp.status !== "VOID" && exp.status !== "Dibatalkan") {
+    const prevStatus = exp.status;
+    exp.status = "VOID";
+    exp.voidedAt = voidedAt;
+    exp.voidedBy = voidedBy;
+    exp.voidReason = cleanReason;
+
+    // Refund expense to user wallet if it was previously approved or pending
+    if (prevStatus !== "Ditolak") {
+      state.financial.wallets[exp.username] = (state.financial.wallets[exp.username] || 0) + exp.amount;
+    }
+    voidedAny = true;
+  }
+
+  // Process Transaction Log Void
+  if (tx && tx.status !== "VOID" && tx.status !== "Dibatalkan") {
+    const prevStatus = tx.status;
+    tx.status = "VOID";
+    tx.voidedAt = voidedAt;
+    tx.voidedBy = voidedBy;
+    tx.voidReason = cleanReason;
+
+    // Reverse financial balance impact based on transaction type
+    if (prevStatus === "Approved" || prevStatus === "Disetujui" || prevStatus === "Completed" || prevStatus === "Pending Confirmation") {
+      if (tx.type === "Top-Up") {
+        state.financial.mainBalance = Math.max(0, state.financial.mainBalance - tx.amount);
+      } else if (tx.type === "Transfer Kas" || tx.type === "Transfer") {
+        if (tx.sender === "Dompet Utama") {
+          state.financial.mainBalance += tx.amount;
+          if (tx.recipient && state.financial.wallets[tx.recipient] !== undefined) {
+            state.financial.wallets[tx.recipient] -= tx.amount;
+          }
+        } else if (tx.recipient === "Dompet Utama") {
+          state.financial.mainBalance = Math.max(0, state.financial.mainBalance - tx.amount);
+          if (tx.sender && state.financial.wallets[tx.sender] !== undefined) {
+            state.financial.wallets[tx.sender] += tx.amount;
+          }
+        }
+      }
+    }
+    voidedAny = true;
+  }
+
+  // Resolve associated delete requests
+  if (exp) {
+    state.financial.deleteRequests.forEach(req => {
+      if (req.expenseId === exp.id && req.status === "Pending") {
+        req.status = "Approved";
+      }
+    });
+  }
+
+  saveState();
+  return voidedAny;
+}
+
+function openVoidTransactionModal(txIdOrExpenseId, onComplete) {
+  const popupHtml = `
+    <form id="admin-void-tx-form">
+      <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:12px; margin-bottom:16px; font-size:0.85rem; color:#991b1b;">
+        <strong>⚠️ Peringatan Pembatalan Transaksi (Void):</strong><br>
+        Tindakan ini akan membatalkan transaksi, membalikkan dampak saldo secara otomatis, dan mencatat alasan pembatalan ke dalam audit trail keuangan. Data transaksi tidak akan dihapus.
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" style="font-weight:800;">Alasan Pembatalan (Wajib Diisi)</label>
+        <textarea id="admin-void-reason" class="form-textarea" rows="3" placeholder="Masukkan alasan pembatalan..." required></textarea>
+      </div>
+      
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 14px;">Batal</button>
+        <button type="submit" class="btn btn-danger" style="width:auto; padding:6px 14px; font-weight:800;">
+          <i data-lucide="ban" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> KONFIRMASI VOID TRANSAKSI
+        </button>
+      </div>
+    </form>
+  `;
+  
+  openModal("Batalkan Transaksi (Void)", popupHtml);
+  lucide.createIcons();
+  
+  document.getElementById("admin-void-tx-form").onsubmit = (e) => {
+    e.preventDefault();
+    const reason = document.getElementById("admin-void-reason").value.trim();
+    if (!reason) {
+      showToast("Alasan pembatalan wajib diisi!", "error");
+      return;
+    }
+    
+    const success = voidFinancialTransaction(txIdOrExpenseId, reason);
+    if (success) {
+      closeModal();
+      showToast("Transaksi berhasil dibatalkan (VOID)!");
+      if (onComplete) onComplete();
+      renderAdminFinancial();
+    } else {
+      showToast("Gagal membatalkan transaksi", "error");
+    }
   };
 }
 
@@ -6253,164 +6930,6 @@ function renderAdminFinancial() {
       closeModal();
     };
   };
-  
-  // Approve exp
-  document.querySelectorAll(".approve-exp-btn").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-id");
-      const exp = state.financial.expenses.find(e => e.id === id);
-      if (exp) {
-        exp.status = "Disetujui";
-        state.financial.transactions.push({
-          id: `tx-${Date.now()}`, type: "Pengeluaran", sender: exp.username, recipient: "Vendor", amount: exp.amount, date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'), description: `[APPROVED] ${exp.description}`, status: "Approved"
-        });
-        saveState();
-        showToast("Laporan pengeluaran disetujui!");
-        renderAdminFinancial();
-      }
-    };
-  });
-  
-  document.querySelectorAll(".reject-exp-btn").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-id");
-      const exp = state.financial.expenses.find(e => e.id === id);
-      if (exp) {
-        exp.status = "Ditolak";
-        state.financial.wallets[exp.username] += exp.amount;
-        saveState();
-        showToast("Laporan pengeluaran ditolak.", "error");
-        renderAdminFinancial();
-      }
-    };
-  });
-  
-  // Delete reqs
-  document.querySelectorAll(".approve-delete-req-btn").forEach(btn => {
-    btn.onclick = () => {
-      const reqId = btn.getAttribute("data-id");
-      const expId = btn.getAttribute("data-exp-id");
-      const expIdx = state.financial.expenses.findIndex(x => x.id === expId);
-      if (expIdx !== -1) {
-        const exp = state.financial.expenses[expIdx];
-        state.financial.wallets[exp.username] += exp.amount;
-        state.financial.expenses.splice(expIdx, 1);
-      }
-      const reqIdx = state.financial.deleteRequests.findIndex(r => r.id === reqId);
-      if (reqIdx !== -1) state.financial.deleteRequests[reqIdx].status = "Approved";
-      saveState();
-      showToast("Laporan pengeluaran berhasil dihapus.");
-      renderAdminFinancial();
-    };
-  });
-  
-
-  // Row clicks for pending expenses details
-  document.querySelectorAll(".pending-exp-row").forEach(row => {
-    row.onclick = (event) => {
-      if (event.target.closest("button") || event.target.closest("i")) return;
-      const id = row.getAttribute("data-id");
-      openAdminPendingExpenseDetailPopup(id);
-    };
-  });
-  
-  // Row clicks for pending delete requests details
-  document.querySelectorAll(".pending-delete-row").forEach(row => {
-    row.onclick = (event) => {
-      if (event.target.closest("button") || event.target.closest("i")) return;
-      const id = row.getAttribute("data-id");
-      openAdminPendingDeleteDetailPopup(id);
-    };
-  });
-
-
-  // Edit & Delete logs
-  document.querySelectorAll(".tx-row").forEach(row => {
-    row.onclick = () => {
-      const idx = parseInt(row.getAttribute("data-idx"));
-      const tx = state.financial.transactions[idx];
-      if (!tx) return;
-      
-      const exp = state.financial.expenses.find(e => e.id === tx.refExpenseId || (e.amount === tx.amount && e.username === tx.sender && tx.description.includes(e.description)));
-      let itemsHtml = '';
-      let receiptHtml = '';
-      if (exp) {
-        if (exp.items && exp.items.length > 0) {
-          itemsHtml = `
-            <div style="margin-top:10px; margin-bottom:10px;">
-              <strong style="font-size:0.8rem; color:var(--text-muted);">Rincian Item:</strong>
-              <table class="data-table" style="font-size:0.75rem; margin-top:4px; width:100%;">
-                <tbody>
-                  ${exp.items.map(item => `
-                    <tr>
-                      <td>${item.category || item.name}</td>
-                      <td style="text-align:center;">${item.qty} pcs</td>
-                      <td style="text-align:right;">SAR ${item.price}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          `;
-        }
-        if (exp.receipt) {
-          const isImg = exp.receipt.startsWith('data:image') || exp.receipt.endsWith('.jpg') || exp.receipt.endsWith('.png') || exp.receipt.endsWith('.jpeg');
-          receiptHtml = `
-            <div style="margin-top:10px; margin-bottom:10px; text-align:center;">
-              <strong style="font-size:0.8rem; color:var(--text-muted);">Bukti Struk:</strong>
-              <div style="margin-top:6px;">
-                ${isImg 
-                  ? `<img src="${exp.receipt}" style="max-width:100%; max-height:200px; border-radius:4px; object-fit:contain; border:1px solid #e2e8f0;">`
-                  : `<a href="${exp.receipt}" target="_blank" class="btn btn-secondary" style="width:auto; padding:4px 8px; font-size:0.75rem;"><i data-lucide="file-text" style="width:12px; height:12px; vertical-align:middle; margin-right:4px;"></i> Lihat File Struk</a>`
-                }
-              </div>
-            </div>
-          `;
-        }
-      }
-
-      const detailHtml = `
-        <div style="font-size:0.9rem; line-height:1.6; margin-bottom:16px;">
-          <p><strong>Tanggal:</strong> ${formatDateDisplay(tx.date)}</p>
-          <p><strong>Tipe:</strong> ${tx.type}</p>
-          <p><strong>Pengirim:</strong> ${tx.sender === 'Dompet Utama' ? 'Admin' : (state.users.find(u => u.username === tx.sender)?.name || tx.sender)} | <strong>Penerima:</strong> ${tx.recipient === 'Dompet Utama' ? 'Admin' : (state.users.find(u => u.username === tx.recipient)?.name || tx.recipient)}</p>
-          <p><strong>Jumlah:</strong> SAR ${tx.amount.toLocaleString('id-ID')}</p>
-          <p><strong>Keterangan:</strong> ${tx.description || '-'}</p>
-          ${itemsHtml}
-          ${receiptHtml}
-        </div>
-        <form id="admin-edit-tx-form-popup">
-          <div class="form-group"><label class="form-label">Deskripsi Baru</label><input type="text" id="et-desc" class="form-input" value="${tx.description || ''}" required></div>
-          <div class="form-group"><label class="form-label">Ubah Jumlah (SAR)</label><input type="number" id="et-amount" class="form-input" value="${tx.amount}" required></div>
-          <div style="display:flex; gap:10px;">
-            <button type="submit" class="btn btn-gold">Simpan Perubahan</button>
-            <button type="button" id="admin-delete-tx-btn" class="btn btn-danger">Hapus Transaksi</button>
-          </div>
-        </form>
-      `;
-      openModal("Detail Transaksi", detailHtml);
-      
-      document.getElementById("admin-edit-tx-form-popup").onsubmit = (e) => {
-        e.preventDefault();
-        tx.description = document.getElementById("et-desc").value.trim();
-        tx.amount = parseInt(document.getElementById("et-amount").value);
-        saveState();
-        closeModal();
-        showToast("Transaksi diperbarui.");
-        renderAdminFinancial();
-      };
-      
-      document.getElementById("admin-delete-tx-btn").onclick = () => {
-        if (confirm("Hapus transaksi dari log?")) {
-          state.financial.transactions.splice(idx, 1);
-          saveState();
-          closeModal();
-          showToast("Transaksi dihapus.");
-          renderAdminFinancial();
-        }
-      };
-    };
-  });
 }
 
 // --- ADMIN SUB-VIEW: LAPORAN ---
@@ -7528,6 +8047,549 @@ function renderManifestList(searchQuery = "") {
     };
   });
 }
+
+// --- ADMIN SUB-VIEW: MANIFEST JAMAAH (TERHUBUNG DENGAN GRUP) ---
+function renderAdminManifestJamaah() {
+  const container = document.getElementById("admin-subview-content");
+  if (!container) return;
+  
+  const groupNames = state.groups.map(g => g.name);
+  
+  container.innerHTML = `
+    <div style="background:#ffffff; border-radius:12px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); margin-bottom:20px; border:1px solid #cbd5e1;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+        <div style="flex:1; min-width:280px; position:relative;">
+          <label class="form-label" style="font-weight:800; font-size:0.85rem; color:#1e293b; margin-bottom:6px; display:block;">Pilih Rombongan Grup Keberangkatan</label>
+          <input type="text" id="jamaah-group-search" class="form-input" placeholder="Cari / Ketik Rombongan Grup..." style="width:100%;">
+          <div id="jamaah-group-suggestions" class="suggestion-list hidden"></div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-end;">
+          <button id="add-jamaah-popup-btn" class="btn btn-gold" style="width:auto; padding:10px 16px; font-size:0.85rem; display:none;">
+            <i data-lucide="user-plus"></i> Tambah Jamaah
+          </button>
+          <button id="print-jamaah-manifest-btn" class="btn btn-secondary" style="width:auto; padding:10px 16px; font-size:0.85rem; display:none;">
+            <i data-lucide="printer"></i> Cetak Manifest
+          </button>
+        </div>
+      </div>
+      <div id="selected-group-summary-banner" style="display:none; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; font-size:0.85rem; color:#334155;">
+      </div>
+    </div>
+    
+    <div id="jamaah-manifest-table-container">
+      <div style="text-align:center; padding:40px 20px; color:#94a3b8; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">
+        <i data-lucide="users" style="width:48px; height:48px; color:#cbd5e1; margin-bottom:12px; stroke-width:1.5;"></i>
+        <h4 style="font-weight:800; color:#475569; margin-bottom:4px;">Belum Ada Grup Dipilih</h4>
+        <p style="font-size:0.85rem; margin:0;">Silakan pilih atau cari rombongan grup keberangkatan di atas untuk menampilkan Manifest Jamaah terhubung.</p>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  const groupInput = document.getElementById("jamaah-group-search");
+  const addBtn = document.getElementById("add-jamaah-popup-btn");
+  const printBtn = document.getElementById("print-jamaah-manifest-btn");
+  const summaryBanner = document.getElementById("selected-group-summary-banner");
+  const tableContainer = document.getElementById("jamaah-manifest-table-container");
+  
+  let currentSelectedGroup = "";
+  
+  const renderGroupJamaahTable = (groupName) => {
+    currentSelectedGroup = groupName;
+    const groupObj = state.groups.find(g => g.name === groupName);
+    
+    if (!groupObj) {
+      addBtn.style.display = "none";
+      printBtn.style.display = "none";
+      summaryBanner.style.display = "none";
+      tableContainer.innerHTML = `
+        <div style="text-align:center; padding:40px 20px; color:#94a3b8; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">
+          <p style="font-size:0.85rem; margin:0;">Grup "${groupName}" tidak ditemukan.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    addBtn.style.display = "inline-flex";
+    printBtn.style.display = "inline-flex";
+    summaryBanner.style.display = "block";
+    
+    const tlStr = (groupObj.leaders && groupObj.leaders.length > 0) ? groupObj.leaders.join(', ') : "Belum ditentukan";
+    const muthStr = groupObj.mutawwif || "Belum ditentukan";
+    const totalPaxVal = groupObj.packages ? groupObj.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : 0;
+    
+    summaryBanner.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+          <strong style="color:#0f172a; font-size:0.95rem;">${groupObj.name}</strong>
+          <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+            Rute: ${groupObj.rute || '-'} &bull; Tgl: ${groupObj.dateStart || '-'} s/d ${groupObj.dateEnd || '-'}
+          </div>
+        </div>
+        <div style="display:flex; gap:16px; font-size:0.8rem; flex-wrap:wrap;">
+          <div><span style="color:#64748b;">Tour Leader:</span> <strong>${tlStr}</strong></div>
+          <div><span style="color:#64748b;">Muthowwif:</span> <strong>${muthStr}</strong></div>
+          <div><span style="color:#64748b;">Total Target Pax:</span> <strong>${totalPaxVal} Jamaah</strong></div>
+        </div>
+      </div>
+    `;
+    
+    const roomsForGroup = state.rooms.filter(r => r.groupName === groupName);
+    
+    let jamaahList = [];
+    roomsForGroup.forEach(r => {
+      if (r.guests && Array.isArray(r.guests)) {
+        r.guests.forEach(g => {
+          const uCode = g.uniqueCode || ("JIBB-" + String(g.guestNo || "1").padStart(4, "0"));
+          jamaahList.push({
+            guestNo: g.guestNo || "1",
+            uniqueCode: uCode,
+            name: g.name || "-",
+            remark: g.remark || "Laki-laki",
+            roomNumber: r.roomNumber,
+            hotelName: r.hotelName,
+            roomId: r.id
+          });
+        });
+      }
+    });
+    
+    if (jamaahList.length === 0) {
+      tableContainer.innerHTML = `
+        <div style="text-align:center; padding:36px 20px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">
+          <p style="color:#64748b; font-size:0.88rem; margin-bottom:12px;">Belum ada data jamaah terdaftar di roomlist rombongan grup ini.</p>
+          <button class="btn btn-gold" id="table-add-first-jamaah-btn" style="width:auto; padding:6px 14px; font-size:0.8rem;">+ Tambah Jamaah Pertama</button>
+        </div>
+      `;
+      const firstBtn = document.getElementById("table-add-first-jamaah-btn");
+      if (firstBtn) firstBtn.onclick = () => openAddJamaahPopup(groupName, () => renderGroupJamaahTable(groupName));
+      return;
+    }
+    
+    let tableHtml = `
+      <div style="background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+        <div style="padding:12px 16px; background:#f1f5f9; border-bottom:1px solid #cbd5e1; display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:0.88rem; color:#1e293b;">Daftar Manifest Jamaah Terdaftar (${jamaahList.length} Jamaah)</strong>
+          <span style="font-size:0.75rem; color:#64748b;">Terhubung dengan Database Roomlist & Manifest Grup</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+            <thead>
+              <tr style="background:#f8fafc; color:#475569; text-align:left; border-bottom:1px solid #e2e8f0;">
+                <th style="padding:10px 12px; width:60px;">No</th>
+                <th style="padding:10px 12px; width:110px;">ID Kode Unik</th>
+                <th style="padding:10px 12px;">Nama Lengkap Jamaah</th>
+                <th style="padding:10px 12px;">Jenis Kelamin</th>
+                <th style="padding:10px 12px;">No. Kamar</th>
+                <th style="padding:10px 12px;">Hotel Layanan</th>
+                <th style="padding:10px 12px; text-align:center; width:100px;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${jamaahList.map((j) => {
+                const genderTag = (j.remark && j.remark.toLowerCase().includes("perempuan")) 
+                  ? `<span class="badge" style="background:#fce7f3; color:#be185d; font-size:0.72rem; padding:2px 8px; border-radius:10px;">Perempuan</span>`
+                  : `<span class="badge" style="background:#e0f2fe; color:#0369a1; font-size:0.72rem; padding:2px 8px; border-radius:10px;">Laki-laki</span>`;
+                
+                return `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:10px 12px; font-weight:700;"><code>${j.guestNo}</code></td>
+                    <td style="padding:10px 12px;"><span style="background:#eff6ff; color:#0070f3; font-weight:900; font-size:0.78rem; padding:3px 8px; border-radius:6px; border:1px solid #bfdbfe;">${j.uniqueCode}</span></td>
+                    <td style="padding:10px 12px; font-weight:800; color:#0f172a;">${j.name}</td>
+                    <td style="padding:10px 12px;">${genderTag}</td>
+                    <td style="padding:10px 12px; font-weight:700; color:#334155;">Kamar ${j.roomNumber}</td>
+                    <td style="padding:10px 12px; color:#475569;">${j.hotelName}</td>
+                    <td style="padding:10px 12px; text-align:center;">
+                      <button class="btn btn-gold detail-jamaah-btn" data-unique="${j.uniqueCode}" data-roomid="${j.roomId}" data-guestno="${j.guestNo}" style="padding:4px 12px; font-size:0.75rem; width:auto; font-weight:800;" title="Lihat Detail Jamaah"><i data-lucide="eye"></i> Detail</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    
+    tableContainer.innerHTML = tableHtml;
+    lucide.createIcons();
+    
+    tableContainer.querySelectorAll(".detail-jamaah-btn").forEach(btn => {
+      btn.onclick = () => {
+        const uCode = btn.getAttribute("data-unique");
+        const rId = btn.getAttribute("data-roomid");
+        const gNo = btn.getAttribute("data-guestno");
+        openJamaahDetailPopup(uCode, rId, gNo, () => renderGroupJamaahTable(groupName));
+      };
+    });
+  };
+  
+  initSuggestionInput("jamaah-group-search", "jamaah-group-suggestions", groupNames, (selectedName) => {
+    renderGroupJamaahTable(selectedName);
+  });
+  
+  addBtn.onclick = () => {
+    if (currentSelectedGroup) {
+      openAddJamaahPopup(currentSelectedGroup, () => renderGroupJamaahTable(currentSelectedGroup));
+    }
+  };
+  
+  printBtn.onclick = () => {
+    if (currentSelectedGroup) {
+      window.print();
+    }
+  };
+  
+  const urlParams = window.location.hash.split("?")[1];
+  if (urlParams && urlParams.startsWith("group=")) {
+    const grp = decodeURIComponent(urlParams.replace("group=", ""));
+    groupInput.value = grp;
+    renderGroupJamaahTable(grp);
+  } else if (groupNames.length > 0) {
+    groupInput.value = groupNames[0];
+    renderGroupJamaahTable(groupNames[0]);
+  }
+}
+
+function openAddJamaahPopup(groupName, onComplete) {
+  const groupObj = state.groups.find(g => g.name === groupName);
+  const hotels = groupObj ? groupObj.hotels : [];
+  const hotelOptions = hotels.map(h => `<option value="${h}">${h}</option>`).join('');
+  
+  const popupHtml = `
+    <form id="add-jamaah-form-popup">
+      <div class="form-group">
+        <label class="form-label">No. Urut / ID Jamaah</label>
+        <input type="text" id="aj-num" class="form-input" placeholder="mis. 1, 2, atau X8582843" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Lengkap Jamaah</label>
+        <input type="text" id="aj-name" class="form-input" placeholder="Nama Jamaah" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Jenis Kelamin / Remark</label>
+        <select id="aj-remark" class="form-select" required>
+          <option value="Laki-laki">Laki-laki</option>
+          <option value="Perempuan">Perempuan</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hotel Akomodasi</label>
+        <select id="aj-hotel" class="form-select" required>
+          ${hotelOptions || '<option value="Hotel Madinah">Hotel Madinah</option><option value="Hotel Makkah">Hotel Makkah</option>'}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nomor Kamar</label>
+        <input type="text" id="aj-room" class="form-input" placeholder="mis. 1007 atau 2105" required>
+      </div>
+      <button type="submit" class="btn btn-gold" style="margin-top:16px;">+ TAMBAH JAMAAH KE MANIFEST</button>
+    </form>
+  `;
+  
+  openModal(`Tambah Jamaah - ${groupName}`, popupHtml);
+  
+  document.getElementById("add-jamaah-form-popup").onsubmit = (e) => {
+    e.preventDefault();
+    const guestNo = document.getElementById("aj-num").value.trim();
+    const name = document.getElementById("aj-name").value.trim();
+    const remark = document.getElementById("aj-remark").value;
+    const hotelName = document.getElementById("aj-hotel").value;
+    const roomNumber = document.getElementById("aj-room").value.trim();
+    
+    let roomObj = state.rooms.find(r => r.groupName === groupName && r.hotelName === hotelName && r.roomNumber === roomNumber);
+    if (!roomObj) {
+      roomObj = {
+        id: `rm-${Date.now()}-${Math.random()}`,
+        groupName: groupName,
+        hotelName: hotelName,
+        roomlistNumber: "1",
+        roomNumber: roomNumber,
+        typeBed: "Quad",
+        guests: []
+      };
+      state.rooms.push(roomObj);
+    }
+    
+    roomObj.guests.push({ guestNo, name, remark });
+    saveState();
+    closeModal();
+    showToast("Jamaah berhasil ditambahkan!");
+    if (onComplete) onComplete();
+  };
+}
+
+function openEditJamaahPopup(roomId, guestNo, onComplete) {
+  const roomObj = state.rooms.find(r => r.id === roomId);
+  if (!roomObj || !roomObj.guests) return;
+  
+  const g = roomObj.guests.find(x => x.guestNo === guestNo);
+  if (!g) return;
+  
+  const popupHtml = `
+    <form id="edit-jamaah-form-popup">
+      <div class="form-group">
+        <label class="form-label">No. Urut / ID Jamaah</label>
+        <input type="text" id="ej-num" class="form-input" value="${g.guestNo}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Lengkap Jamaah</label>
+        <input type="text" id="ej-name" class="form-input" value="${g.name}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Jenis Kelamin / Remark</label>
+        <select id="ej-remark" class="form-select" required>
+          <option value="Laki-laki" ${g.remark === 'Laki-laki' ? 'selected' : ''}>Laki-laki</option>
+          <option value="Perempuan" ${g.remark === 'Perempuan' ? 'selected' : ''}>Perempuan</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nomor Kamar</label>
+        <input type="text" id="ej-room" class="form-input" value="${roomObj.roomNumber}" required>
+      </div>
+      <button type="submit" class="btn btn-gold" style="margin-top:16px;">SIMPAN PERUBAHAN JAMAAH</button>
+    </form>
+  `;
+  
+  openModal(`Edit Jamaah - ${g.name}`, popupHtml);
+  
+  document.getElementById("edit-jamaah-form-popup").onsubmit = (e) => {
+    e.preventDefault();
+    g.guestNo = document.getElementById("ej-num").value.trim();
+    g.name = document.getElementById("ej-name").value.trim();
+    g.remark = document.getElementById("ej-remark").value;
+    roomObj.roomNumber = document.getElementById("ej-room").value.trim();
+    
+    saveState();
+    closeModal();
+    showToast("Data jamaah berhasil diperbarui!");
+    if (onComplete) onComplete();
+  };
+}
+
+function openJamaahDetailPopup(uniqueCode, roomId, guestNo, onRefresh) {
+  const data = findJamaahData(uniqueCode || guestNo);
+  if (!data) {
+    showToast("Data detail jamaah tidak ditemukan.", "error");
+    return;
+  }
+  
+  const popupHtml = `
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      
+      <!-- Top Banner: Avatar, Name, Unique Code, Gender, Passport, Visa, Package Badge -->
+      <div style="background:#f8fafc; border-radius:14px; padding:16px; border:1px solid #e2e8f0; display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <div style="width:54px; height:54px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#64748b; font-size:1.6rem; border:2px solid #c5a850;">
+          <i data-lucide="user" style="width:28px; height:28px; color:#1e293b;"></i>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+            <div>
+              <strong style="font-size:1.05rem; color:#0f172a; display:block;">${data.name}</strong>
+              <span style="font-size:0.78rem; font-weight:900; color:#0070f3; background:#eff6ff; padding:2px 8px; border-radius:6px; border:1px solid #bfdbfe;">${data.uniqueCode}</span>
+            </div>
+            <span class="badge badge-info" style="background:#0070f3; color:#ffffff; font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:800;">${data.package}</span>
+          </div>
+          <div style="font-size:0.8rem; color:#475569; margin-top:6px;">
+            ${data.gender} &bull; ${data.bus} &bull; Paspor: <strong style="color:#1e293b;">${data.passport}</strong> &bull; Visa: <strong style="color:#1e293b;">${data.visa}</strong>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Body Grid: Live QR Code & Hotel Allocations Across Cities -->
+      <div style="display:grid; grid-template-columns: 140px 1fr; gap:14px; align-items:center;">
+        
+        <!-- Live QR Code Card -->
+        <div style="background:#ffffff; border:2px solid #c5a850; border-radius:12px; padding:10px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <div id="detail-qrcode-canvas-target" style="width:110px; height:110px; display:flex; align-items:center; justify-content:center;"></div>
+          <div style="font-size:0.65rem; font-weight:900; color:#0f172a; margin-top:6px; letter-spacing:0.02em;">QR ID JAMAAH</div>
+        </div>
+        
+        <!-- Hotel Rooms Across All Cities -->
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <!-- Madinah -->
+          <div style="border-radius:10px; border:1px solid #cbd5e1; overflow:hidden; background:#ffffff;">
+            <div style="background:#c5a850; color:#ffffff; text-align:center; font-size:0.72rem; font-weight:800; padding:4px 8px; text-transform:uppercase;">Hotel Madinah</div>
+            <div style="padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.8rem; font-weight:700; color:#334155;">${data.madinahHotel}</span>
+              <span style="font-size:1.1rem; font-weight:900; color:#0f172a;">Kmr ${data.madinahRoom}</span>
+            </div>
+          </div>
+          <!-- Makkah -->
+          <div style="border-radius:10px; border:1px solid #cbd5e1; overflow:hidden; background:#ffffff;">
+            <div style="background:#c5a850; color:#ffffff; text-align:center; font-size:0.72rem; font-weight:800; padding:4px 8px; text-transform:uppercase;">Hotel Makkah</div>
+            <div style="padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.8rem; font-weight:700; color:#334155;">${data.makkahHotel}</span>
+              <span style="font-size:1.1rem; font-weight:900; color:#0f172a;">Kmr ${data.makkahRoom}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Baggage details -->
+      <div style="background:#f8fafc; border-radius:10px; padding:10px 14px; font-size:0.8rem; border:1px solid #e2e8f0;">
+        <strong style="color:#475569; font-size:0.75rem; display:block; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.02em;">Rincian Barang Bawaan (Bagasi) :</strong>
+        <span style="color:#0f172a; font-weight:800;">${data.luggage}</span>
+      </div>
+
+      <!-- Action Buttons Footer inside Popup -->
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button id="detail-idcard-btn" class="btn btn-gold" style="flex:1; font-size:0.8rem; padding:10px;"><i data-lucide="qr-code"></i> ID Card</button>
+        <button id="detail-edit-btn" class="btn btn-secondary" style="flex:1; font-size:0.8rem; padding:10px;"><i data-lucide="edit"></i> Edit Data</button>
+        <button id="detail-delete-btn" class="btn btn-danger" style="flex:1; font-size:0.8rem; padding:10px;"><i data-lucide="trash-2"></i> Hapus</button>
+        <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:10px 14px;">Tutup</button>
+      </div>
+
+    </div>
+  `;
+  
+  openModal(`Detail Informasi Jamaah - ${data.uniqueCode}`, popupHtml);
+  lucide.createIcons();
+  
+  // Render dynamic QR code inside detail popup
+  setTimeout(() => {
+    const target = document.getElementById("detail-qrcode-canvas-target");
+    if (target) {
+      target.innerHTML = "";
+      if (typeof QRCode !== "undefined") {
+        try {
+          new QRCode(target, {
+            text: data.uniqueCode,
+            width: 105,
+            height: 105,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: 2
+          });
+        } catch(e) {
+          target.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=105x105&data=${encodeURIComponent(data.uniqueCode)}" style="width:105px; height:105px;">`;
+        }
+      } else {
+        target.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=105x105&data=${encodeURIComponent(data.uniqueCode)}" style="width:105px; height:105px;">`;
+      }
+    }
+  }, 100);
+  
+  // Bind Action Buttons inside Popup
+  document.getElementById("detail-idcard-btn").onclick = () => {
+    closeModal();
+    openJamaahIdCardPopup(data.uniqueCode);
+  };
+  
+  document.getElementById("detail-edit-btn").onclick = () => {
+    closeModal();
+    openEditJamaahPopup(roomId, guestNo, onRefresh);
+  };
+  
+  document.getElementById("detail-delete-btn").onclick = () => {
+    if (confirm(`Hapus jamaah ${data.name} (${data.uniqueCode}) dari grup ini?`)) {
+      const roomObj = state.rooms.find(r => r.id === roomId);
+      if (roomObj && roomObj.guests) {
+        roomObj.guests = roomObj.guests.filter(x => x.guestNo !== guestNo);
+        saveState();
+        closeModal();
+        showToast("Jamaah berhasil dihapus.");
+        if (onRefresh) onRefresh();
+      }
+    }
+  };
+}
+
+function openJamaahIdCardPopup(uniqueCode) {
+  const data = findJamaahData(uniqueCode);
+  if (!data) {
+    showToast("Data jamaah tidak ditemukan.", "error");
+    return;
+  }
+  
+  const cardHtml = `
+    <div id="jamaah-id-card-print-target" style="width:100%; max-width:380px; margin:0 auto; background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius:18px; padding:20px; color:#ffffff; font-family:'Mulish', sans-serif; border:2px solid #c5a850; box-shadow:0 10px 25px rgba(0,0,0,0.3); position:relative; overflow:hidden;">
+      
+      <div style="position:absolute; top:-30px; right:-30px; width:120px; height:120px; background:rgba(197,168,80,0.12); border-radius:50%; pointer-events:none;"></div>
+      
+      <!-- Card Header -->
+      <div style="text-align:center; border-bottom:1px solid rgba(197,168,80,0.4); padding-bottom:12px; margin-bottom:14px;">
+        <div style="font-size:0.7rem; font-weight:800; color:#c5a850; text-transform:uppercase; letter-spacing:0.12em;">KARTU IDENTITAS JAMAAH UMROH</div>
+        <div style="font-size:1.15rem; font-weight:900; color:#ffffff; font-family:'Martel', serif; margin-top:2px;">jejak imani</div>
+        <div style="font-size:0.65rem; color:#94a3b8;">SAUDI HANDLING OPERATIONS & MANAGEMENT</div>
+      </div>
+      
+      <!-- Card Body -->
+      <div style="display:flex; gap:14px; align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase;">Nama Jamaah</div>
+          <div style="font-size:1rem; font-weight:900; color:#ffffff; margin-bottom:8px; line-height:1.2;">${data.name}</div>
+          
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:0.75rem; color:#cbd5e1;">
+            <div><span style="color:#94a3b8; font-size:0.65rem; display:block;">Kode Unik</span><strong style="color:#c5a850; font-size:0.85rem;">${data.uniqueCode}</strong></div>
+            <div><span style="color:#94a3b8; font-size:0.65rem; display:block;">Jenis Kelamin</span><strong>${data.gender}</strong></div>
+            <div><span style="color:#94a3b8; font-size:0.65rem; display:block;">Paket</span><strong>${data.package}</strong></div>
+            <div><span style="color:#94a3b8; font-size:0.65rem; display:block;">Bus</span><strong>${data.bus}</strong></div>
+          </div>
+        </div>
+        
+        <!-- Dynamic QR Code Container -->
+        <div style="background:#ffffff; padding:8px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:2px solid #c5a850; width:100px; min-width:100px;">
+          <div id="qrcode-canvas-target" style="width:90px; height:90px; display:flex; align-items:center; justify-content:center;"></div>
+          <div style="font-size:0.55rem; color:#0f172a; font-weight:800; margin-top:4px; text-align:center;">SCAN ME</div>
+        </div>
+      </div>
+      
+      <!-- Hotel Summary -->
+      <div style="margin-top:14px; background:rgba(255,255,255,0.06); border-radius:10px; padding:10px; font-size:0.72rem; border:1px solid rgba(255,255,255,0.1);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>📍 Madinah: <strong style="color:#ffffff;">${data.madinahHotel}</strong></span>
+          <span style="color:#c5a850; font-weight:800;">Kmr ${data.madinahRoom}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>📍 Makkah: <strong style="color:#ffffff;">${data.makkahHotel}</strong></span>
+          <span style="color:#c5a850; font-weight:800;">Kmr ${data.makkahRoom}</span>
+        </div>
+      </div>
+      
+      <!-- Card Footer -->
+      <div style="margin-top:10px; font-size:0.68rem; color:#94a3b8; text-align:center;">
+        Paspor: <strong style="color:#e2e8f0;">${data.passport}</strong> &bull; Visa: <strong style="color:#e2e8f0;">${data.visa}</strong>
+      </div>
+    </div>
+    
+    <div style="display:flex; gap:10px; margin-top:16px;">
+      <button id="print-single-idcard-btn" class="btn btn-gold" style="flex:1;"><i data-lucide="printer"></i> Cetak ID Card</button>
+      <button class="btn btn-secondary" onclick="closeModal()" style="width:auto;">Tutup</button>
+    </div>
+  `;
+  
+  openModal(`Kartu Identitas Jamaah - ${data.uniqueCode}`, cardHtml);
+  lucide.createIcons();
+  
+  setTimeout(() => {
+    const target = document.getElementById("qrcode-canvas-target");
+    if (target) {
+      target.innerHTML = "";
+      if (typeof QRCode !== "undefined") {
+        try {
+          new QRCode(target, {
+            text: data.uniqueCode,
+            width: 88,
+            height: 88,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: 2
+          });
+        } catch(e) {
+          target.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(data.uniqueCode)}" style="width:88px; height:88px;">`;
+        }
+      } else {
+        target.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(data.uniqueCode)}" style="width:88px; height:88px;">`;
+      }
+    }
+  }, 100);
+  
+  const pBtn = document.getElementById("print-single-idcard-btn");
+  if (pBtn) pBtn.onclick = () => window.print();
+}
+
 function renderAdminRoomlist() {
   const container = document.getElementById("admin-subview-content");
   
@@ -7612,11 +8674,14 @@ function renderFilteredAdminRoomlists(groupName, hotelName) {
               
               let remarkIconHtml = '-';
               if (hasRemarks) {
-                const firstRem = r.guests.find(g => g.remark && g.remark !== "none")?.remark;
+                const gRem = r.guests.find(g => g.remark && g.remark !== "none");
+                const firstRem = gRem?.remark;
+                const remText = gRem?.remarkText;
+                const titleAttr = remText ? `${firstRem}: ${remText}` : firstRem;
                 if (firstRem === 'warning') {
-                  remarkIconHtml = '<span style="color:#d97706; font-weight:bold;">⚠️</span>';
+                  remarkIconHtml = `<span style="color:#d97706; font-weight:bold;" title="${titleAttr}">⚠️ ${remText ? `(${remText})` : ''}</span>`;
                 } else {
-                  remarkIconHtml = `<span style="background:${getHexColor(firstRem)}; width:12px; height:12px; border-radius:50%; display:inline-block;" title="${firstRem}"></span>`;
+                  remarkIconHtml = `<span style="background:${getHexColor(firstRem)}; width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:4px;" title="${titleAttr}"></span> <span style="font-size:0.75rem; color:#475569; font-weight:700;">${remText || firstRem}</span>`;
                 }
               }
               
@@ -7657,13 +8722,14 @@ function renderFilteredAdminRoomlists(groupName, hotelName) {
           <p><strong>Roomlist No:</strong> ${room.roomlistNumber} | <strong>Bed:</strong> ${room.typeBed}</p>
           <p><strong>Nomor Kamar:</strong> <span style="color:var(--primary-gold); font-weight:800;">${room.roomNumber}</span></p>
           
-          <h5 style="margin-top:20px; margin-bottom:8px; font-weight:800;">Daftar Tamu & Remark</h5>
+          <h5 style="margin-top:20px; margin-bottom:8px; font-weight:800;">Daftar Tamu & Indikator Remark</h5>
           <div style="display:flex; flex-direction:column; gap:6px;">
             ${room.guests.map(g => {
               let remarkIndicator = "";
-              if (g.remark === "warning") remarkIndicator = "⚠️ Warning";
+              const remDesc = g.remarkText ? ` (${g.remarkText})` : "";
+              if (g.remark === "warning") remarkIndicator = `⚠️ Warning${remDesc}`;
               else if (g.remark && g.remark !== "none") {
-                remarkIndicator = `<span style="background:${getHexColor(g.remark)}; width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:4px;"></span> ${g.remark}`;
+                remarkIndicator = `<span style="background:${getHexColor(g.remark)}; width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:4px;"></span> <strong>${g.remark}</strong>${remDesc}`;
               }
               return `<div><code>${g.guestNo}</code> ${g.name} ${remarkIndicator ? `| ${remarkIndicator}` : ''}</div>`;
             }).join('')}
@@ -7720,7 +8786,7 @@ function openEditRoomlistRowPopup(roomObj, onComplete) {
   
   const guestsContainer = document.getElementById("erl-guests-rows");
   
-  const addGuestRow = (num = "", name = "", rem = "none") => {
+  const addGuestRow = (num = "", name = "", rem = "none", remText = "") => {
     const rowId = `erl-g-${Date.now()}-${Math.random()}`;
     const div = document.createElement("div");
     div.className = "nested-form-card erl-guest-item-row";
@@ -7753,11 +8819,12 @@ function openEditRoomlistRowPopup(roomObj, onComplete) {
         <input type="text" class="form-input g-name" placeholder="Nama Lengkap" value="${name}" required>
       </div>
       <div style="margin-top:8px;">
-        <label class="form-label" style="font-size:0.75rem;">Indikator Remark (Warna/Warning)</label>
+        <label class="form-label" style="font-size:0.75rem; font-weight:700;">Indikator Remark & Keterangan Arti Warna</label>
         <input type="hidden" class="g-rem" value="${rem}">
-        <div class="color-picker-row" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+        <div class="color-picker-row" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px; margin-bottom:6px;">
           ${dotsHtml}
         </div>
+        <input type="text" class="form-input g-rem-text" placeholder="Keterangan / Arti Warna (mis. Kursi Roda, Infan, Catatan Medis)..." value="${remText || ''}" style="font-size:0.8rem; padding:4px 8px; margin-top:4px;">
       </div>
     `;
     guestsContainer.appendChild(div);
@@ -7773,7 +8840,7 @@ function openEditRoomlistRowPopup(roomObj, onComplete) {
     });
   };
   
-  roomObj.guests.forEach(g => addGuestRow(g.guestNo, g.name, g.remark));
+  roomObj.guests.forEach(g => addGuestRow(g.guestNo, g.name, g.remark, g.remarkText || ''));
   document.getElementById("erl-add-guest-btn").onclick = () => addGuestRow();
   
   document.getElementById("edit-rl-row-form").onsubmit = (e) => {
@@ -7786,7 +8853,8 @@ function openEditRoomlistRowPopup(roomObj, onComplete) {
     roomObj.guests = Array.from(rows).map(row => ({
       guestNo: row.querySelector(".g-num").value,
       name: row.querySelector(".g-name").value.trim(),
-      remark: row.querySelector(".g-rem").value
+      remark: row.querySelector(".g-rem").value,
+      remarkText: row.querySelector(".g-rem-text") ? row.querySelector(".g-rem-text").value.trim() : ""
     }));
     
     saveState();
@@ -7904,11 +8972,12 @@ function openRoomlistFormPopup(prefillGroup = "", prefillHotel = "", onComplete)
           <input type="text" class="form-input g-name" placeholder="Nama Jamaah" required>
         </div>
         <div style="margin-top:8px;">
-          <label class="form-label" style="font-size:0.75rem;">Indikator Remark</label>
+          <label class="form-label" style="font-size:0.75rem; font-weight:700;">Indikator Remark & Keterangan Arti Warna</label>
           <input type="hidden" class="g-rem" value="none">
-          <div class="color-picker-row" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+          <div class="color-picker-row" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px; margin-bottom:6px;">
             ${dotsHtml}
           </div>
+          <input type="text" class="form-input g-rem-text" placeholder="Isi Keterangan / Arti Warna (mis. Kursi Roda, Infan, Catatan Medis)..." style="font-size:0.8rem; padding:4px 8px; margin-top:4px;">
         </div>
       `;
       growContainer.appendChild(gdiv);
@@ -7946,7 +9015,8 @@ function openRoomlistFormPopup(prefillGroup = "", prefillHotel = "", onComplete)
       const guests = Array.from(guestRows).map(gr => ({
         guestNo: gr.querySelector(".g-num").value,
         name: gr.querySelector(".g-name").value.trim(),
-        remark: gr.querySelector(".g-rem").value
+        remark: gr.querySelector(".g-rem").value,
+        remarkText: gr.querySelector(".g-rem-text") ? gr.querySelector(".g-rem-text").value.trim() : ""
       }));
       
       state.rooms.push({ id: `rm-${Date.now()}-${Math.random()}`, groupName, hotelName, roomlistNumber, roomNumber, typeBed, guests });
@@ -7959,6 +9029,18 @@ function openRoomlistFormPopup(prefillGroup = "", prefillHotel = "", onComplete)
   };
 }
 // --- ADMIN SUB-VIEW: DOKUMEN ---
+function cleanDocName(name, groupName) {
+  if (!name) return "Dokumen Tanpa Nama";
+  let clean = name;
+  if (groupName && groupName !== "Umum") {
+    const escapedGroup = groupName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    clean = clean.replace(new RegExp(`\\s*[-–—:]?\\s*${escapedGroup}`, 'gi'), '');
+    clean = clean.replace(new RegExp(`${escapedGroup}\\s*[-–—:]?\\s*`, 'gi'), '');
+  }
+  clean = clean.trim();
+  return clean || name;
+}
+
 function renderAdminDokumen() {
   const container = document.getElementById("admin-subview-content");
   
@@ -7966,9 +9048,19 @@ function renderAdminDokumen() {
   if (adminDocGroupFilter !== "") {
     visibleDocs = visibleDocs.filter(d => d.groupName === adminDocGroupFilter || d.groupName === "Umum");
   }
+
+  // Group documents by groupName
+  const groupedDocs = {};
+  visibleDocs.forEach(d => {
+    const gN = d.groupName || "Umum";
+    if (!groupedDocs[gN]) groupedDocs[gN] = [];
+    groupedDocs[gN].push(d);
+  });
+
+  const sortedGroups = Object.keys(groupedDocs);
   
   container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:16px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:12px; flex-grow:1; max-width:400px; position:relative;">
         <label style="font-weight:700; font-size:0.85rem; flex-shrink:0;">Filter Grup:</label>
         <input type="text" id="doc-grup-filter-search" class="form-input" value="${adminDocGroupFilter || ''}" placeholder="Ketik nama grup...">
@@ -7977,31 +9069,67 @@ function renderAdminDokumen() {
       <button id="add-doc-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus-circle"></i> Tambah Dokumen Baru</button>
     </div>
     
-    <div class="table-card">
-      <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nama Dokumen</th>
-              <th>Relasi Grup</th>
-              <th>Nama File</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${visibleDocs.map((d, idx) => `
-              <tr>
-                <td><strong>${d.name}</strong></td>
-                <td style="font-size:0.8rem; max-width:200px;">${d.groupName}</td>
-                <td><code>${d.file}</code></td>
-                <td>
-                  <button class="btn btn-danger delete-doc-btn" data-id="${d.id}" style="width:auto; padding:4px 8px; font-size:0.75rem;">Hapus</button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
+    <div id="admin-doc-accordion-container" style="display:flex; flex-direction:column; gap:12px;">
+      ${sortedGroups.length === 0 ? `
+        <p style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:24px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Tidak ada berkas dokumen ditemukan.</p>
+      ` : sortedGroups.map((gName, idx) => {
+        const docList = groupedDocs[gName];
+        const headerId = `doc-acc-header-${idx}`;
+        const bodyId = `doc-acc-body-${idx}`;
+        const iconId = `doc-acc-icon-${idx}`;
+
+        return `
+          <div style="border:1px solid #e2e8f0; border-radius:12px; background:#fff; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+            <div id="${headerId}" style="padding:14px 18px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; border-bottom:1px solid #e2e8f0; transition:all 0.2s;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <i data-lucide="folder-open" style="width:18px; height:18px; color:#c5a850;"></i>
+                <span style="font-weight:800; font-size:0.92rem; color:#0f172a;">${gName}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="badge badge-gold" style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:800;">${docList.length} Berkas</span>
+                <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transition:transform 0.2s;"></i>
+              </div>
+            </div>
+            
+            <div id="${bodyId}" class="doc-accordion-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table class="data-table" style="margin:0; width:100%;">
+                  <thead>
+                    <tr style="background:#fafafa;">
+                      <th style="padding-left:18px;">Nama Dokumen</th>
+                      <th>Kategori</th>
+                      <th style="text-align:right; padding-right:18px;">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${docList.map(d => {
+                      const displayName = cleanDocName(d.name, d.groupName);
+                      return `
+                        <tr>
+                          <td style="padding-left:18px;">
+                            <div style="font-weight:800; font-size:0.88rem; color:#0f172a;">${displayName}</div>
+                          </td>
+                          <td>${getDocCategoryBadge(d.category || 'Dokumen')}</td>
+                          <td style="text-align:right; padding-right:18px;">
+                            <div style="display:inline-flex; gap:6px; justify-content:flex-end;">
+                              <button class="btn btn-gold preview-doc-admin-btn" data-id="${d.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:4px;">
+                                <i data-lucide="eye" style="width:13px; height:13px;"></i> Preview
+                              </button>
+                              <button class="btn btn-danger delete-doc-btn" data-id="${d.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; display:inline-flex; align-items:center; gap:4px;">
+                                <i data-lucide="trash-2" style="width:13px; height:13px;"></i> Hapus
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
   
@@ -8012,48 +9140,48 @@ function renderAdminDokumen() {
     renderAdminDokumen();
   });
 
-  document.getElementById("doc-grup-filter-search").oninput = (e) => {
-    if (e.target.value === "") {
-      adminDocGroupFilter = "";
-      renderAdminDokumen();
-    }
-  };
-  
-  document.getElementById("add-doc-popup-btn").onclick = () => {
-    const popupHtml = `
-      <form id="doc-submit-form-popup">
-        <div class="form-group" style="position:relative;">
-          <label class="form-label">Relasi Grup</label>
-          <input type="text" id="ad-group-search" class="form-input" placeholder="Ketik nama grup (atau 'Umum')..." required>
-          <div id="ad-group-suggestions" class="suggestion-list hidden"></div>
-        </div>
-        <div class="form-group"><label class="form-label">Nama Dokumen</label><input type="text" id="ad-name" class="form-input" required></div>
-        <div class="form-group"><label class="form-label">Pilih Berkas Dokumen</label><input type="file" id="ad-file" class="form-input" required></div>
-        <button type="submit" class="btn btn-primary">UNGGAH DOKUMEN</button>
-      </form>
-    `;
-    openModal("Arsipkan File Baru (Pop Up)", popupHtml);
-    
-    initSuggestionInput("ad-group-search", "ad-group-suggestions", ["Umum", ...state.groups.map(g => g.name)]);
-    
-    document.getElementById("doc-submit-form-popup").onsubmit = (e) => {
-      e.preventDefault();
-      const groupName = document.getElementById("ad-group-search").value;
-      const name = document.getElementById("ad-name").value.trim();
-      const fileInput = document.getElementById("ad-file").files[0];
-      
-      state.documents.push({
-        id: `doc-${Date.now()}`, groupName, name, file: fileInput ? fileInput.name : "upload.pdf"
-      });
-      saveState();
-      closeModal();
-      showToast("Dokumen diarsipkan!");
-      renderAdminDokumen();
+  const filterInp = document.getElementById("doc-grup-filter-search");
+  if (filterInp) {
+    filterInp.oninput = (e) => {
+      if (e.target.value === "") {
+        adminDocGroupFilter = "";
+        renderAdminDokumen();
+      }
     };
-  };
-  
+  }
+
+  // Bind Accordion Toggles
+  sortedGroups.forEach((gName, idx) => {
+    const headerEl = document.getElementById(`doc-acc-header-${idx}`);
+    const bodyEl = document.getElementById(`doc-acc-body-${idx}`);
+    const iconEl = document.getElementById(`doc-acc-icon-${idx}`);
+    if (headerEl && bodyEl && iconEl) {
+      headerEl.onclick = () => {
+        bodyEl.classList.toggle("hidden");
+        const isHidden = bodyEl.classList.contains("hidden");
+        iconEl.style.transform = isHidden ? "rotate(0deg)" : "rotate(180deg)";
+      };
+    }
+  });
+
+  // Bind Preview Buttons
+  document.querySelectorAll(".preview-doc-admin-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const doc = state.documents.find(d => d.id === id);
+      if (doc) {
+        openDocPreviewModal(doc);
+      } else {
+        showToast("Dokumen tidak ditemukan", "error");
+      }
+    };
+  });
+
+  // Bind Delete Buttons
   document.querySelectorAll(".delete-doc-btn").forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
       const id = btn.getAttribute("data-id");
       if (confirm("Hapus dokumen dari arsip?")) {
         const idx = state.documents.findIndex(d => d.id === id);
@@ -8066,6 +9194,53 @@ function renderAdminDokumen() {
       }
     };
   });
+  
+  document.getElementById("add-doc-popup-btn").onclick = () => {
+    const popupHtml = `
+      <form id="doc-submit-form-popup">
+        <div class="form-group" style="position:relative;">
+          <label class="form-label">Relasi Grup</label>
+          <input type="text" id="ad-group-search" class="form-input" placeholder="Ketik nama grup (atau 'Umum')..." required>
+          <div id="ad-group-suggestions" class="suggestion-list hidden"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kategori Dokumen</label>
+          <select id="ad-category" class="form-select" required>
+            <option value="Profiling Jamaah">Profiling Jamaah</option>
+            <option value="Visa">Visa</option>
+            <option value="Paspor">Paspor</option>
+            <option value="E-Ticket">E-Ticket</option>
+            <option value="Bus List">Bus List</option>
+            <option value="Paket Info">Paket Info</option>
+            <option value="Itinerary">Itinerary</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Nama Dokumen</label><input type="text" id="ad-name" class="form-input" placeholder="Mis. Manifest Paspor & Scan" required></div>
+        <div class="form-group"><label class="form-label">Pilih Berkas Dokumen</label><input type="file" id="ad-file" class="form-input" required></div>
+        <button type="submit" class="btn btn-primary">UNGGAH DOKUMEN</button>
+      </form>
+    `;
+    openModal("Arsipkan File Baru (Pop Up)", popupHtml);
+    
+    initSuggestionInput("ad-group-search", "ad-group-suggestions", ["Umum", ...state.groups.map(g => g.name)]);
+    
+    document.getElementById("doc-submit-form-popup").onsubmit = (e) => {
+      e.preventDefault();
+      const groupName = document.getElementById("ad-group-search").value;
+      const category = document.getElementById("ad-category").value;
+      const name = document.getElementById("ad-name").value.trim();
+      const fileInput = document.getElementById("ad-file").files[0];
+      
+      state.documents.push({
+        id: `doc-${Date.now()}`, groupName, category, name, file: fileInput ? fileInput.name : "upload.pdf"
+      });
+      saveState();
+      closeModal();
+      showToast("Dokumen diarsipkan!");
+      renderAdminDokumen();
+    };
+  };
 }
 function renderAdminAset() {
   const container = document.getElementById("admin-subview-content");
@@ -8442,17 +9617,12 @@ function renderUserApplyTugas() {
   `;
 
   container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <h3 class="user-section-title" style="margin:0;">Apply Penugasan Tim</h3>
-      <button class="btn btn-secondary" onclick="window.location.hash='#user/dashboard'" style="width:auto; padding:4px 8px; font-size:0.75rem; font-weight:700;">Kembali</button>
-    </div>
-    
     <!-- Filter bar (Search & Quota only) -->
     <div class="admin-card" style="margin-bottom:16px; padding:12px; width:100%; box-sizing:border-box;">
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
         <input type="text" id="user-apply-search" class="form-input" placeholder="Cari penugasan..." style="flex:1; min-width:180px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
         <select id="user-apply-quota-filter" class="form-select" style="width:180px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
-          <option value="all">Semua Keterpenuhan</option>
+          <option value="all">Semua</option>
           <option value="fulfilled">Terpenuhi</option>
           <option value="unfulfilled">Belum Terpenuhi</option>
         </select>
