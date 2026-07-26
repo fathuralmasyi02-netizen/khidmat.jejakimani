@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khidmat-ji-cache-v13';
+const CACHE_NAME = 'khidmat-ji-cache-v39';
 const ASSETS_TO_CACHE = [
   './index.html',
   './style.css',
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (e) => {
         fetch(e.request).then((networkResponse) => {
           if (networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(e.request, networkResponse);
+              cache.put(e.request, networkResponse.clone());
             });
           }
         }).catch(() => {});
