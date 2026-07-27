@@ -366,6 +366,8 @@ function ensureStateCompat() {
   state.assignmentOffers = [];
 }
 
+let isFirebaseRemoteLoaded = false;
+
 function loadState() {
   const local = localStorage.getItem("jejak_imani_v2_db");
   if (local) {
@@ -379,7 +381,7 @@ function loadState() {
     }
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-    saveState();
+    // Do NOT call saveState() here on new device startup to prevent overwriting cloud DB
   }
   
   ensureStateCompat();
@@ -413,8 +415,10 @@ function loadState() {
     
     firebaseDb.ref('jejak_imani_v2_db').on('value', (snapshot) => {
       const data = snapshot.val();
+      isFirebaseRemoteLoaded = true;
       console.log("Firebase database on('value') listener triggered. Data received:", data);
-      if (data) {
+      
+      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
         // Shallow clone local state (excluding currentUser) for comparison
         const localToCompare = {};
         for (let k in state) {
@@ -459,14 +463,17 @@ function loadState() {
           modalContainer.classList.remove("hidden");
         }
       } else {
-        console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with state...");
-        const stateToSave = {};
-        for (let k in state) {
-          if (k !== 'currentUser') {
-            stateToSave[k] = state[k];
+        console.log("Firebase database node 'jejak_imani_v2_db' is empty on cloud. Checking local state before initializing...");
+        const localData = localStorage.getItem("jejak_imani_v2_db");
+        if (!localData) {
+          const stateToSave = {};
+          for (let k in DEFAULT_STATE) {
+            if (k !== 'currentUser') {
+              stateToSave[k] = DEFAULT_STATE[k];
+            }
           }
+          firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
         }
-        firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
       }
     }, (error) => {
       console.error("Firebase read/write database listener failed:", error);
@@ -482,7 +489,7 @@ function saveState() {
     localStorage.removeItem("jejak_imani_session");
   }
   
-  if (firebaseDb) {
+  if (firebaseDb && isFirebaseRemoteLoaded) {
     const stateToSave = {};
     for (let k in state) {
       if (k !== 'currentUser') {
