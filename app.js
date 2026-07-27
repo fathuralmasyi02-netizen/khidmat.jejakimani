@@ -24,7 +24,17 @@ const DEFAULT_STATE = {
     { username: "handling", password: "handling123", role: "user", name: "Ahmad Khidmat", whatsapp: "+96650111222", region: "Bandara Jeddah", pendingApproval: false }
   ],
   groups: [],
-  itineraries: [],
+  itineraries: [
+    {
+      groupName: "Umroh Ruby Onyx 6 Juli 2026 Makkah Awal (9 Hari)",
+      activities: [
+        { date: "2026-07-06", time: "14:30", city: "Jeddah", agenda: "Mendarat T1 Jeddah & Distribusi Mealbox Albaik", remarks: "Penyambutan oleh Tim Handling Bandara" },
+        { date: "2026-07-06", time: "17:00", city: "Makkah", agenda: "Check In Anjum Hotel Makkah & Pelaksanaan Umroh Pertama", remarks: "Bimbingan oleh Ustadz Pembimbing" },
+        { date: "2026-07-08", time: "07:00", city: "Makkah", agenda: "Ziyarah Kota Makkah (Jabal Tsur, Arafah, Mina)", remarks: "Persiapan Bus Rawahel" },
+        { date: "2026-07-10", time: "09:00", city: "Madinah", agenda: "Transfer Bus ke Madinah & Check In Nozol Royal Inn", remarks: "Perjalanan +- 5 Jam via Highway" }
+      ]
+    }
+  ],
   assignments: [],
   assignmentOffers: [],
   rooms: [],
@@ -365,28 +375,91 @@ function ensureStateCompat() {
     });
   }
 
-  // Clear seeded itinerary and assignment data
-  state.itineraries = [];
-  state.assignments = [];
-  state.assignmentOffers = [];
+  // Keep user itineraries, assignments, and assignment offers intact
 }
 
 let isFirebaseRemoteLoaded = false;
+
+function mergeStates(remote, local) {
+  if (!remote || typeof remote !== 'object') return local || {};
+  if (!local || typeof local !== 'object') return remote || {};
+
+  const merged = { ...remote };
+
+  const mergeArray = (remoteArr, localArr, keyFn) => {
+    const rArr = Array.isArray(remoteArr) ? remoteArr : [];
+    const lArr = Array.isArray(localArr) ? localArr : [];
+    const map = new Map();
+
+    rArr.forEach(item => {
+      if (item && typeof item === 'object') {
+        const k = keyFn(item);
+        if (k) map.set(k, item);
+      }
+    });
+
+    lArr.forEach(item => {
+      if (item && typeof item === 'object') {
+        const k = keyFn(item);
+        if (k && !map.has(k)) {
+          map.set(k, item);
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  };
+
+  merged.users = mergeArray(remote.users, local.users, u => u.username || u.id);
+  merged.groups = mergeArray(remote.groups, local.groups, g => g.name);
+  merged.itineraries = mergeArray(remote.itineraries, local.itineraries, i => i.groupName);
+  merged.assignments = mergeArray(remote.assignments, local.assignments, a => a.id);
+  merged.assignmentOffers = mergeArray(remote.assignmentOffers, local.assignmentOffers, o => o.id);
+  merged.vendors = mergeArray(remote.vendors, local.vendors, v => v.id || v.name);
+  merged.bookings = mergeArray(remote.bookings, local.bookings, b => b.id);
+  merged.rooms = mergeArray(remote.rooms, local.rooms, r => r.id);
+
+  if (remote.financial || local.financial) {
+    const rf = remote.financial || {};
+    const lf = local.financial || {};
+    merged.financial = {
+      mainBalance: rf.mainBalance ?? lf.mainBalance ?? 0,
+      wallets: { ...(rf.wallets || {}), ...(lf.wallets || {}) },
+      expenses: mergeArray(rf.expenses, lf.expenses, e => e.id),
+      deleteRequests: mergeArray(rf.deleteRequests, lf.deleteRequests, d => d.id),
+      transactions: mergeArray(rf.transactions, lf.transactions, t => t.id)
+    };
+  }
+
+  if (remote.reports || local.reports) {
+    const rr = remote.reports || {};
+    const lr = local.reports || {};
+    merged.reports = {
+      attendance: mergeArray(rr.attendance, lr.attendance, a => a.id || JSON.stringify(a)),
+      incidents: mergeArray(rr.incidents, lr.incidents, i => i.id || JSON.stringify(i))
+    };
+  }
+
+  return merged;
+}
 
 function loadState() {
   const local = localStorage.getItem("jejak_imani_v2_db");
   if (local) {
     try {
-      state = JSON.parse(local);
-      if (!state || typeof state !== "object") {
+      const parsedLocal = JSON.parse(local);
+      if (parsedLocal && typeof parsedLocal === "object") {
+        state = mergeStates(state, parsedLocal);
+      } else if (!state || typeof state !== "object") {
         state = JSON.parse(JSON.stringify(DEFAULT_STATE));
       }
     } catch (e) {
-      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      if (!state || typeof state !== "object") {
+        state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      }
     }
-  } else {
+  } else if (!state || typeof state !== "object") {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-    // Do NOT call saveState() here on new device startup to prevent overwriting cloud DB
   }
   
   ensureStateCompat();
@@ -450,7 +523,7 @@ function loadState() {
         
         console.log("Received data is different. Merging and re-routing view.");
         const localCurrentUser = state.currentUser;
-        state = data;
+        state = mergeStates(data, state);
         state.currentUser = localCurrentUser;
         ensureStateCompat();
         
