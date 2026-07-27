@@ -513,6 +513,49 @@ function addNotification(type, message, metadata = {}) {
 
 loadState();
 
+function downloadDatabaseBackup() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+  const downloadAnchor = document.createElement('a');
+  const dateStr = getSaudiDateTime().gregorianStr.replace(/\//g, '-');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `Backup_Khidmat_JejakImani_${dateStr}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  showToast("File backup JSON berhasil diunduh!");
+}
+
+function restoreDatabaseBackup() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const importedState = JSON.parse(evt.target.result);
+        if (importedState && typeof importedState === 'object') {
+          const localUser = state.currentUser;
+          state = importedState;
+          state.currentUser = localUser;
+          ensureStateCompat();
+          saveState();
+          showToast("Data backup berhasil dipulihkan & disinkronkan ke cloud!");
+          router();
+        } else {
+          showToast("Format file backup JSON tidak valid!", "error");
+        }
+      } catch (err) {
+        showToast("Gagal membaca file backup JSON: " + err.message, "error");
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
 
 // Helper to display dates as DD/MM/YYYY
 
@@ -3845,9 +3888,15 @@ function renderAdminPortal(subView) {
             </button>
             <h2 class="admin-page-title" id="admin-view-title">Dashboard</h2>
           </div>
-          <div class="admin-topbar-right" style="display:flex; align-items:center; gap:12px;">
-            <button class="btn btn-secondary" onclick="window.location.reload();" title="Reload Web" style="width:auto; padding:6px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px; background:#f8fafc; border-color:#cbd5e1;">
-              <i data-lucide="rotate-cw" style="width: 16px; height: 16px;"></i> Refresh
+          <div class="admin-topbar-right" style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-secondary" onclick="downloadDatabaseBackup();" title="Unduh Backup Database JSON" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
+              <i data-lucide="download" style="width: 15px; height: 15px;"></i> Backup Data
+            </button>
+            <button class="btn btn-secondary" onclick="restoreDatabaseBackup();" title="Pulihkan Backup Database JSON" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
+              <i data-lucide="upload" style="width: 15px; height: 15px;"></i> Restore Data
+            </button>
+            <button class="btn btn-secondary" onclick="window.location.reload();" title="Reload Web" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
+              <i data-lucide="rotate-cw" style="width: 15px; height: 15px;"></i> Refresh
             </button>
             <div class="admin-datetime">
               <span>📅 ${gregorianLongStr} / ${hijriStr}</span>
