@@ -881,6 +881,9 @@ function renderUserPortal(subView) {
         </div>
         <div class="user-actions" style="display:flex; align-items:center; gap:8px;">
           <span class="db-status-dot" style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:#ef4444; transition: all 0.3s ease;" title="Status Database"></span>
+          <button class="user-action-btn" id="user-reload-btn" title="Reload Web" onclick="window.location.reload();">
+            <i data-lucide="rotate-cw" style="width: 18px; height: 18px;"></i>
+          </button>
           <button class="user-action-btn" id="user-notif-btn" title="Notifikasi">
             <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
             ${hasUnread ? '<span class="badge-dot-green"></span>' : ''}
@@ -3842,7 +3845,10 @@ function renderAdminPortal(subView) {
             </button>
             <h2 class="admin-page-title" id="admin-view-title">Dashboard</h2>
           </div>
-          <div class="admin-topbar-right">
+          <div class="admin-topbar-right" style="display:flex; align-items:center; gap:12px;">
+            <button class="btn btn-secondary" onclick="window.location.reload();" title="Reload Web" style="width:auto; padding:6px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px; background:#f8fafc; border-color:#cbd5e1;">
+              <i data-lucide="rotate-cw" style="width: 16px; height: 16px;"></i> Refresh
+            </button>
             <div class="admin-datetime">
               <span>📅 ${gregorianLongStr} / ${hijriStr}</span>
               <span class="admin-clock">Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
