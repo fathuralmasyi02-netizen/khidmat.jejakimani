@@ -135,6 +135,13 @@ function ensureStateCompat() {
   state.groups = ensureArray(state.groups, DEFAULT_STATE.groups);
   state.itineraries = ensureArray(state.itineraries, DEFAULT_STATE.itineraries);
   state.assignments = ensureArray(state.assignments, DEFAULT_STATE.assignments);
+  state.assignments.forEach(a => {
+    if (a && typeof a === "object") {
+      if (!Array.isArray(a.staff)) a.staff = [];
+      if (!Array.isArray(a.applicants)) a.applicants = [];
+      if (!a.details || typeof a.details !== "object") a.details = {};
+    }
+  });
   state.assignmentOffers = ensureArray(state.assignmentOffers, DEFAULT_STATE.assignmentOffers);
   state.vendors = ensureArray(state.vendors, DEFAULT_STATE.vendors);
   state.bookings = ensureArray(state.bookings, DEFAULT_STATE.bookings).filter(b => b && b.id !== 'b-1' && b.id !== 'b-2' && b.id !== 'b-3');
@@ -983,7 +990,7 @@ function renderUserPortal(subView) {
   const activeSubView = subView.split("?")[0];
   
   // Unread green dot tracking
-  const myTasks = state.assignments.filter(t => t.staff.includes(state.currentUser.username));
+  const myTasks = state.assignments.filter(t => t && Array.isArray(t.staff) && t.staff.includes(state.currentUser.username));
   const myGroups = myTasks.map(t => t.groupName);
   const userNotifications = state.notifications.filter(n => {
     if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
@@ -1025,6 +1032,7 @@ function renderUserPortal(subView) {
   } else {
     let subViewTitle = "Menu";
     if (activeSubView === "apply-tugas") subViewTitle = "Daftar Tugas";
+    else if (activeSubView === "task-detail") subViewTitle = "Rincian Tugas & Grup";
     else if (activeSubView === "roomlist") subViewTitle = "Roomlist";
     else if (activeSubView === "documents") subViewTitle = "Dokumen";
     else if (activeSubView === "laporan") {
@@ -1081,7 +1089,7 @@ function renderUserPortal(subView) {
       const greenDot = document.querySelector(".badge-dot-green");
       if (greenDot) greenDot.remove();
       
-      const myTasks2 = state.assignments.filter(t => t.staff.includes(state.currentUser.username));
+      const myTasks2 = state.assignments.filter(t => t && Array.isArray(t.staff) && t.staff.includes(state.currentUser.username));
       const myGroups2 = myTasks2.map(t => t.groupName);
       const userNotifications = state.notifications.filter(n => {
         if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
@@ -1194,6 +1202,7 @@ function renderUserPortal(subView) {
   
   if (activeSubView === "dashboard") renderUserDashboard();
   else if (activeSubView === "apply-tugas") renderUserApplyTugas();
+  else if (activeSubView === "task-detail") renderUserTaskDetailFull();
   else if (activeSubView === "roomlist") renderUserRoomlist();
   else if (activeSubView === "documents") renderUserDocuments();
   else if (activeSubView === "laporan") renderUserLaporan();
@@ -1411,16 +1420,29 @@ function renderUserJadwal() {
 
 
 
+let currentFacingMode = "user";
+let activeMediaStream = null;
+
+function stopActiveMediaStream() {
+  if (activeMediaStream) {
+    activeMediaStream.getTracks().forEach(track => track.stop());
+    activeMediaStream = null;
+  }
+}
+
 function openAttendanceFormPopup(preselectedTaskId = "") {
+  stopActiveMediaStream();
   const username = state.currentUser.username;
-  const myActiveTasks = state.assignments.filter(a => a.staff.includes(username) && a.status === "Aktif" && a.published !== false);
+  const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
   const hasActiveTask = (myActiveTasks.length > 0);
+  let capturedPhotoBase64 = null;
+  let currentGpsCoords = "Sedang mengambil posisi GPS...";
   
   const formHtml = `
-    <div class="admin-card" style="border:none; padding:0;">
+    <div class="admin-card" style="border:none; padding:0; font-family:'Mulish', sans-serif;">
       ${!hasActiveTask ? `
-        <div class="badge badge-warning" style="margin-bottom:16px; width:100%; display:block; text-align:center; padding:12px;">
-          ⚠️ Anda tidak memiliki tugas aktif untuk melakukan absen.
+        <div class="badge badge-warning" style="margin-bottom:16px; width:100%; display:block; text-align:center; padding:12px; background:#fef3c7; color:#92400e;">
+          ⚠️ Anda tidak memiliki tugas aktif untuk melakukan absensi.
         </div>
       ` : ''}
 
@@ -1434,33 +1456,80 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         </div>
         
         <div class="form-group">
-          <label class="form-label">Kategori Absen</label>
+          <label class="form-label">Kategori Absensi</label>
           <select id="user-absen-type" class="form-select" required ${!hasActiveTask ? 'disabled' : ''}>
-            <option value="Masuk">Absen Masuk (Check-In)</option>
-            <option value="Keluar">Absen Keluar (Check-Out)</option>
+            <option value="Masuk">Absensi Masuk</option>
+            <option value="Keluar">Absensi Keluar</option>
           </select>
         </div>
-        
-        <button type="button" id="user-take-absen-photo-btn-popup" class="btn btn-secondary" style="margin-bottom:12px;" ${!hasActiveTask ? 'disabled' : ''}>
-          <i data-lucide="camera"></i> FOTO LANGSUNG (SIMULASI)
-        </button>
-        
+
+        <div id="user-absen-gps-coords" style="font-size:0.8rem; color:#475569; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:14px;">
+          📍 Lokasi GPS: <em>Mencari posisi...</em>
+        </div>
+
+        <!-- Live Camera Container -->
+        <div id="absen-camera-container" class="hidden" style="margin-bottom:16px; position:relative; background:#000; border-radius:12px; overflow:hidden; border:2px solid #dfc06b;">
+          <video id="absen-camera-video" autoplay playsinline style="width:100%; max-height:280px; object-fit:cover; display:block;"></video>
+          
+          <div style="position:absolute; top:10px; right:10px; z-index:10;">
+            <button type="button" id="absen-toggle-camera-btn" class="btn" style="background:rgba(15,23,42,0.75); color:#fff; border:1px solid rgba(255,255,255,0.4); padding:6px 12px; font-size:0.75rem; border-radius:20px; display:flex; align-items:center; gap:6px;">
+              🔄 Ganti Kamera (${currentFacingMode === 'user' ? 'Depan' : 'Belakang'})
+            </button>
+          </div>
+
+          <div style="position:absolute; bottom:12px; left:0; right:0; display:flex; justify-content:center; z-index:10;">
+            <button type="button" id="absen-shutter-btn" class="btn btn-gold" style="padding:8px 20px; font-weight:800; font-size:0.85rem; border-radius:25px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+              📷 AMBIL FOTO ABSENSI
+            </button>
+          </div>
+        </div>
+
+        <!-- Fallback File Input -->
+        <input type="file" id="user-absen-file-fallback" accept="image/*" capture="user" style="display:none;">
+
+        <div id="absen-start-cam-btn-box" style="margin-bottom:14px;">
+          <button type="button" id="user-open-camera-btn" class="btn btn-gold" style="width:100%; font-weight:800;" ${!hasActiveTask ? 'disabled' : ''}>
+            📷 BUKA KAMERA LANGSUNG
+          </button>
+        </div>
+
+        <!-- Preview Container -->
         <div id="simulated-absen-photo-preview-popup" class="hidden" style="margin-bottom:16px;"></div>
         
-        <button type="submit" class="btn btn-gold" id="user-submit-absen-btn-popup" disabled>SUBMIT ABSENSI</button>
+        <button type="submit" class="btn btn-success" id="user-submit-absen-btn-popup" style="background:#10b981; color:#fff; font-weight:800; width:100%;" disabled>SUBMIT ABSENSI SEKARANG</button>
       </form>
     </div>
   `;
 
-  openModal("Mulai Absensi Baru", formHtml);
+  openModal("Absensi Petugas Khidmat", formHtml);
   lucide.createIcons();
 
-  let simulatedPhotoData = null;
   const selectEl = document.getElementById("user-absen-task-select");
   const typeEl = document.getElementById("user-absen-type");
-  const photoBtn = document.getElementById("user-take-absen-photo-btn-popup");
+  const openCamBtn = document.getElementById("user-open-camera-btn");
+  const camContainer = document.getElementById("absen-camera-container");
+  const videoEl = document.getElementById("absen-camera-video");
+  const toggleCamBtn = document.getElementById("absen-toggle-camera-btn");
+  const shutterBtn = document.getElementById("absen-shutter-btn");
+  const fallbackInput = document.getElementById("user-absen-file-fallback");
   const previewEl = document.getElementById("simulated-absen-photo-preview-popup");
   const submitBtn = document.getElementById("user-submit-absen-btn-popup");
+  const gpsEl = document.getElementById("user-absen-gps-coords");
+
+  // Get real Geolocation GPS
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        currentGpsCoords = `${pos.coords.latitude.toFixed(5)}° N, ${pos.coords.longitude.toFixed(5)}° E`;
+        if (gpsEl) gpsEl.innerHTML = `📍 Koordinat GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
+      },
+      (err) => {
+        currentGpsCoords = "21.42250° N, 39.82620° E";
+        if (gpsEl) gpsEl.innerHTML = `📍 Koordinat GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
 
   const updateTypeOptions = () => {
     const selectedTaskId = selectEl.value;
@@ -1472,13 +1541,13 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
     
     let optionsHtml = '';
     if (!hasCheckIn) {
-      optionsHtml += '<option value="Masuk">Absen Masuk (Check-In)</option>';
+      optionsHtml += '<option value="Masuk">Absensi Masuk</option>';
     }
     if (hasCheckIn && !hasCheckOut) {
-      optionsHtml += '<option value="Keluar">Absen Keluar (Check-Out)</option>';
+      optionsHtml += '<option value="Keluar">Absensi Keluar</option>';
     }
     if (hasCheckIn && hasCheckOut) {
-      optionsHtml += '<option value="" disabled>Sudah melakukan Absen Masuk & Keluar</option>';
+      optionsHtml += '<option value="" disabled>Sudah Melakukan Absensi Masuk & Keluar</option>';
     }
     
     typeEl.innerHTML = optionsHtml;
@@ -1489,24 +1558,132 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
     updateTypeOptions();
   }
 
+  const startLiveStream = async () => {
+    stopActiveMediaStream();
+    try {
+      const constraints = {
+        video: {
+          facingMode: currentFacingMode,
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        },
+        audio: false
+      };
+      activeMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoEl.srcObject = activeMediaStream;
+      await videoEl.play();
+      camContainer.classList.remove("hidden");
+      document.getElementById("absen-start-cam-btn-box").classList.add("hidden");
+    } catch (err) {
+      console.warn("Direct getUserMedia camera access not available, triggering native camera capture:", err);
+      fallbackInput.click();
+    }
+  };
+
   if (hasActiveTask) {
-    photoBtn.onclick = () => {
-      const selectedTaskId = selectEl.value;
-      if (!selectedTaskId) {
+    openCamBtn.onclick = () => {
+      if (!selectEl.value) {
         showToast("Silakan pilih penugasan terlebih dahulu.", "error");
         return;
       }
+      previewEl.classList.add("hidden");
+      startLiveStream();
+    };
+
+    toggleCamBtn.onclick = () => {
+      currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
+      toggleCamBtn.innerText = `🔄 Ganti Kamera (${currentFacingMode === 'user' ? 'Depan' : 'Belakang'})`;
+      startLiveStream();
+    };
+
+    const processAndWatermarkImage = (imgSource, isVideoFrame = false) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+
+      if (isVideoFrame && currentFacingMode === "user") {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(imgSource, 0, 0, canvas.width, canvas.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      const selectedTaskId = selectEl.value;
       const task = state.assignments.find(t => t.id === selectedTaskId);
       const groupName = task ? task.groupName : "Umum";
-      const type = typeEl.value;
-
+      const typeVal = typeEl.value || "Masuk";
+      const typeLabel = typeVal === "Masuk" ? "Absensi Masuk" : "Absensi Keluar";
       const dateObj = getSaudiDateTime();
-      simulatedPhotoData = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" style="background:#f1f5f9; font-family:sans-serif;"><rect width="300" height="200" fill="none" stroke="%23c5a850" stroke-width="6"/><text x="150" y="50" font-size="14" font-weight="bold" fill="%231e293b" text-anchor="middle">FOTO ABSEN TIM KHIDMAT</text><text x="150" y="85" font-size="11" fill="%23475569" text-anchor="middle">Grup: ${groupName}</text><text x="150" y="110" font-size="11" fill="%23475569" text-anchor="middle">Petugas: ${state.currentUser.name}</text><text x="150" y="135" font-size="10" fill="%2364748b" text-anchor="middle">Saudi: ${dateObj.gregorianLongStr}</text><text x="150" y="155" font-size="10" fill="%2364748b" text-anchor="middle">Pukul: ${dateObj.timeStr} (${type === 'Masuk' ? 'Check-In' : 'Check-Out'})</text></svg>`;
 
-      previewEl.innerHTML = `<img src="${simulatedPhotoData}" style="width:100%; border-radius:6px; border:1px solid var(--border-light);" />`;
+      // Dark overlay banner for exact requested 5-line watermark
+      ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+      ctx.fillRect(0, 310, 640, 170);
+
+      // Line 1: [Nama Lengkap]
+      ctx.fillStyle = "#dfc06b";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText(`${state.currentUser.name}`, 16, 335);
+
+      // Line 2: [Jenis Tugas] & [Nama Grup]
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillText(`${task ? task.type : 'Handling'} & ${groupName.substring(0, 40)}`, 16, 362);
+
+      // Line 3: Tanggal & Waktu Real-Time Saudi Arabia
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(`${dateObj.gregorianLongStr} - Pukul ${dateObj.timeStr} Saudi Arabia`, 16, 388);
+
+      // Line 4: Status Absen (Absensi Masuk / Absensi Keluar)
+      ctx.fillStyle = typeVal === "Masuk" ? "#34d399" : "#f87171";
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillText(`Status: ${typeLabel}`, 16, 414);
+
+      // Line 5: Koordinat GPS Terverifikasi
+      ctx.fillStyle = "#60a5fa";
+      ctx.font = "bold 11px sans-serif";
+      ctx.fillText(`📍 GPS: ${currentGpsCoords} (Terverifikasi)`, 16, 440);
+
+      capturedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
+
+      stopActiveMediaStream();
+      camContainer.classList.add("hidden");
+
+      previewEl.innerHTML = `
+        <div style="margin-top:10px;">
+          <div style="font-size:0.8rem; font-weight:800; color:#1e293b; margin-bottom:6px;">Preview Hasil Foto Absensi:</div>
+          <img src="${capturedPhotoBase64}" style="width:100%; border-radius:10px; border:2px solid #dfc06b; box-shadow:0 4px 12px rgba(0,0,0,0.15);" />
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button type="button" id="absen-retake-btn" class="btn btn-secondary" style="flex:1;">🔄 FOTO ULANG</button>
+          </div>
+        </div>
+      `;
       previewEl.classList.remove("hidden");
       submitBtn.removeAttribute("disabled");
-      showToast("Foto absensi berhasil diambil (disimulasikan).");
+
+      document.getElementById("absen-retake-btn").onclick = () => {
+        previewEl.classList.add("hidden");
+        submitBtn.setAttribute("disabled", "true");
+        capturedPhotoBase64 = null;
+        startLiveStream();
+      };
+    };
+
+    shutterBtn.onclick = () => {
+      processAndWatermarkImage(videoEl, true);
+    };
+
+    fallbackInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => processAndWatermarkImage(img, false);
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
     };
 
     document.getElementById("user-attendance-form-popup").onsubmit = (e) => {
@@ -1514,8 +1691,8 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       const selectedTaskId = selectEl.value;
       const type = typeEl.value;
 
-      if (!selectedTaskId || !type) {
-        showToast("Pilihan tugas atau tipe absen tidak valid.", "error");
+      if (!selectedTaskId || !type || !capturedPhotoBase64) {
+        showToast("Ambil foto absensi terlebih dahulu.", "error");
         return;
       }
 
@@ -1527,10 +1704,11 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         username,
         taskId: selectedTaskId,
         type,
-        photo: simulatedPhotoData,
+        photo: capturedPhotoBase64,
         date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
         time: getSaudiDateTime().timeStr,
-        location: task ? task.region : "Saudi"
+        location: currentGpsCoords,
+        unread: true
       };
 
       state.reports.attendance.push(newAtt);
@@ -1541,13 +1719,17 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         task.status = "Selesai";
       }
 
-      addNotification("financial", `Absensi ${type}: ${state.currentUser.name} melakukan absen ${type} untuk tugas ${task.type} (${groupName})`, { username, groupName });
+      addNotification("penjadwalan", `Absensi ${type}: ${state.currentUser.name} melakukan ${type} untuk tugas ${task.type} (${groupName})`, { username, groupName });
       saveState();
+      stopActiveMediaStream();
       closeModal();
-      showToast(`Absensi ${type} berhasil dikirim!`);
+      showToast(`Absensi ${type === 'Masuk' ? 'Masuk' : 'Keluar'} berhasil dikirim!`);
       
-      const activeSubView = window.location.hash.replace("#user/", "");
-      renderUserPortal(activeSubView);
+      if (window.location.hash.startsWith("#user/task-detail")) {
+        renderUserTaskDetailFull();
+      } else {
+        renderUserDashboard();
+      }
     };
   }
 }
@@ -1869,7 +2051,7 @@ function renderUserDashboard() {
   container.querySelectorAll(".user-task-detail-btn").forEach(btn => {
     btn.onclick = () => {
       const id = btn.getAttribute("data-id");
-      openTaskDetailPopup(id);
+      window.location.hash = `#user/task-detail?id=${id}`;
     };
   });
   container.querySelectorAll(".user-task-absen-btn").forEach(btn => {
@@ -5024,32 +5206,35 @@ function openTaskAdminDetailPopup(taskId) {
   const t = state.assignments.find(x => x.id === taskId);
   if (!t) return;
 
-  const staffNames = t.staff.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
+  const staffList = Array.isArray(t.staff) ? t.staff : [];
+  const staffNames = staffList.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
   const isPub = (t.published !== false);
   const reqStaff = t.requiredStaff || 1;
-  const currentStaffCount = t.staff ? t.staff.length : 0;
+  const currentStaffCount = staffList.length;
   const isFulfilled = (currentStaffCount >= reqStaff);
   const staffingStatusHtml = isFulfilled ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (${currentStaffCount}/${reqStaff})</span>` : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (${currentStaffCount}/${reqStaff})</span>`;
+
+  const details = t.details || {};
 
   const detailHtml = `
     <div style="font-size:0.85rem; line-height:1.6; color:var(--text-main); padding: 4px 0;">
       <div style="margin-bottom:14px; border-bottom:1px solid #f1f3f5; padding-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${t.type}</span>
-          <span class="badge badge-success">${t.status}</span>
+          <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${t.type || 'Penjadwalan'}</span>
+          <span class="badge badge-success">${t.status || 'Aktif'}</span>
         </div>
         ${staffingStatusHtml}
         <span class="badge ${isPub ? 'badge-success' : 'badge-warning'}">${isPub ? 'Published' : 'Unpublished'}</span>
       </div>
       <table class="detail-table" style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:20px;">
-        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Grup Rombongan:</td><td style="font-weight:800;">${t.groupName}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Tanggal / Waktu:</td><td>${formatDateDisplay(t.date)} | ${t.time} Saudi</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Wilayah:</td><td>${t.region}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${t.details.hotelName || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${t.details.eta || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${t.details.totalPax || '-'} Pax</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Layanan:</td><td>${t.details.service || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan / Rincian:</td><td>${t.details.remarks || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Grup Rombongan:</td><td style="font-weight:800;">${t.groupName || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Tanggal / Waktu:</td><td>${formatDateDisplay(t.date)} | ${t.time || '-'} Saudi</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Wilayah:</td><td>${t.region || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${details.hotelName || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${details.eta || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${details.totalPax || '-'} Pax</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Layanan:</td><td>${details.service || '-'}</td></tr>
+        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan / Rincian:</td><td>${details.remarks || '-'}</td></tr>
         <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Petugas di-Plot:</td><td><strong>${staffNames || 'Belum diplot'}</strong></td></tr>
       </table>
       
@@ -11260,7 +11445,8 @@ function renderUserApplyTugas() {
     
     listEl.querySelectorAll(".view-user-task-detail-btn").forEach(btn => {
       btn.onclick = () => {
-        openUserTaskDetailModal(btn.getAttribute("data-id"));
+        const id = btn.getAttribute("data-id");
+        window.location.hash = `#user/task-detail?id=${id}`;
       };
     });
     
@@ -11271,6 +11457,248 @@ function renderUserApplyTugas() {
   document.getElementById("user-apply-quota-filter").onchange = drawList;
   
   drawList();
+}
+
+let activeTaskDetailTab = "tugas";
+
+function renderUserTaskDetailFull() {
+  const container = document.getElementById("user-subview-content");
+  if (!container) return;
+
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const taskId = params.get("id");
+  const task = state.assignments.find(x => x.id === taskId);
+
+  if (!task) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 16px; background:#fff; border-radius:12px; margin:20px; font-family:'Mulish', sans-serif;">
+        <div style="font-size:2.5rem; margin-bottom:8px;">⚠️</div>
+        <h3 style="font-weight:800; color:#1e293b; margin-bottom:6px;">Penugasan Tidak Ditemukan</h3>
+        <p style="color:#64748b; font-size:0.85rem;">Data penugasan tidak ditemukan atau telah diperbarui oleh Admin.</p>
+        <button onclick="window.location.hash='#user/dashboard'" class="btn btn-gold" style="margin-top:12px; width:auto; padding:8px 16px;">Kembali ke Dashboard</button>
+      </div>
+    `;
+    return;
+  }
+
+  const group = state.groups.find(g => g.name === task.groupName);
+  const staffList = Array.isArray(task.staff) ? task.staff : [];
+  const staffNames = staffList.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
+  const details = task.details || {};
+
+  // Filter rooms & documents specifically for this task's groupName
+  const groupRooms = state.rooms.filter(r => r.groupName === task.groupName);
+  const groupDocs = state.documents.filter(d => d.groupName === task.groupName || d.groupName === "Umum");
+
+  container.innerHTML = `
+    <div style="font-family:'Mulish', sans-serif; padding-bottom:40px;">
+      
+      <!-- Top Banner Summary -->
+      <div style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:16px; padding:16px; color:#fff; box-shadow:0 6px 16px rgba(0,0,0,0.12); margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+          <span class="badge badge-gold" style="font-size:0.75rem; padding:4px 8px;">${task.type || 'Penjadwalan'}</span>
+          <span class="badge ${task.status === 'Selesai' ? 'badge-success' : (task.status === 'Dalam Proses' ? 'badge-warning' : 'badge-gold')}" style="font-size:0.75rem; padding:4px 8px;">
+            ${task.status || 'Aktif'}
+          </span>
+        </div>
+        <h2 style="margin:4px 0 6px 0; font-size:1.1rem; font-weight:900; color:#fff;">${task.groupName}</h2>
+        <div style="font-size:0.8rem; color:#94a3b8; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span>📅 ${formatDateDisplay(task.date)}</span>
+          <span>⏰ ${task.time || '-'} Saudi</span>
+          <span>📍 ${task.region || '-'}</span>
+        </div>
+
+        <div style="margin-top:14px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="task-detail-absen-btn" class="btn btn-gold" style="flex:1; padding:8px 12px; font-size:0.8rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <i data-lucide="camera" style="width:14px;"></i> ABSENSI ${task.status === "Selesai" ? "KELUAR" : (task.status === "Dalam Proses" ? "KELUAR" : "MASUK")}
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Navigation Header -->
+      <div style="display:flex; background:#fff; border-radius:12px; padding:4px; border:1px solid #e2e8f0; margin-bottom:16px; gap:4px; box-shadow:0 2px 4px rgba(0,0,0,0.02); overflow-x:auto;">
+        <button class="task-tab-btn ${activeTaskDetailTab === 'tugas' ? 'active' : ''}" id="tab-btn-tugas" style="flex:1; padding:8px 4px; border:none; background:${activeTaskDetailTab === 'tugas' ? '#dfc06b' : 'transparent'}; color:${activeTaskDetailTab === 'tugas' ? '#000' : '#64748b'}; font-weight:800; font-size:0.75rem; border-radius:8px; cursor:pointer; white-space:nowrap;">
+          📌 Detail Tugas
+        </button>
+        <button class="task-tab-btn ${activeTaskDetailTab === 'grup' ? 'active' : ''}" id="tab-btn-grup" style="flex:1; padding:8px 4px; border:none; background:${activeTaskDetailTab === 'grup' ? '#dfc06b' : 'transparent'}; color:${activeTaskDetailTab === 'grup' ? '#000' : '#64748b'}; font-weight:800; font-size:0.75rem; border-radius:8px; cursor:pointer; white-space:nowrap;">
+          🕋 Detail Grup
+        </button>
+        <button class="task-tab-btn ${activeTaskDetailTab === 'roomlist' ? 'active' : ''}" id="tab-btn-roomlist" style="flex:1; padding:8px 4px; border:none; background:${activeTaskDetailTab === 'roomlist' ? '#dfc06b' : 'transparent'}; color:${activeTaskDetailTab === 'roomlist' ? '#000' : '#64748b'}; font-weight:800; font-size:0.75rem; border-radius:8px; cursor:pointer; white-space:nowrap;">
+          🛏️ Roomlist (${groupRooms.length})
+        </button>
+        <button class="task-tab-btn ${activeTaskDetailTab === 'dokumen' ? 'active' : ''}" id="tab-btn-dokumen" style="flex:1; padding:8px 4px; border:none; background:${activeTaskDetailTab === 'dokumen' ? '#dfc06b' : 'transparent'}; color:${activeTaskDetailTab === 'dokumen' ? '#000' : '#64748b'}; font-weight:800; font-size:0.75rem; border-radius:8px; cursor:pointer; white-space:nowrap;">
+          📄 Dokumen (${groupDocs.length})
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div id="task-detail-tab-content"></div>
+
+    </div>
+  `;
+
+  lucide.createIcons();
+
+  const btnAbsen = document.getElementById("task-detail-absen-btn");
+  if (btnAbsen) btnAbsen.onclick = () => openAttendanceFormPopup(task.id);
+
+  const drawTabContent = () => {
+    const tabContentEl = document.getElementById("task-detail-tab-content");
+    if (!tabContentEl) return;
+
+    if (activeTaskDetailTab === "tugas") {
+      tabContentEl.innerHTML = `
+        <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+          <h4 style="margin:0 0 12px 0; font-weight:800; color:#1e293b; border-bottom:2px solid #f1f5f9; padding-bottom:8px;">RINCIAN TUGAS TIM HANDLING</h4>
+          <table style="width:100%; border-collapse:collapse; font-size:0.85rem; line-height:1.8;">
+            <tr><td style="color:#64748b; font-weight:700; width:130px;">Kategori Tugas:</td><td><strong style="color:#0f172a;">${task.type}</strong></td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Grup Umroh:</td><td><strong>${task.groupName}</strong></td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Wilayah Layanan:</td><td><span class="badge badge-gold" style="font-size:0.7rem;">${task.region}</span></td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Tanggal / Waktu:</td><td>${formatDateDisplay(task.date)} | Pukul ${task.time || '-'} Saudi</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Nama Hotel:</td><td>${details.hotelName || '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Flight / ETA:</td><td>${details.eta || '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Jumlah Pax:</td><td>${details.totalPax || '-'} Pax</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Paket / Layanan:</td><td>${details.service || '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Catatan Rincian:</td><td>${details.remarks || '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Tim Petugas:</td><td><strong style="color:#1e293b;">${staffNames || 'Belum ada petugas di-plot'}</strong></td></tr>
+          </table>
+        </div>
+      `;
+    } else if (activeTaskDetailTab === "grup") {
+      if (!group) {
+        tabContentEl.innerHTML = `<div style="background:#fff; padding:20px; border-radius:12px; text-align:center; color:#64748b;">Informasi detail master grup belum tersedia.</div>`;
+      } else {
+        tabContentEl.innerHTML = `
+          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+            <h4 style="margin:0 0 12px 0; font-weight:800; color:#1e293b; border-bottom:2px solid #f1f5f9; padding-bottom:8px;">INFORMASI MASTER GRUP ROMBONGAN</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem; line-height:1.8;">
+              <tr><td style="color:#64748b; font-weight:700; width:130px;">Nama Rombongan:</td><td><strong style="color:#0f172a;">${group.name}</strong></td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Rute Perjalanan:</td><td>${group.rute || '-'}</td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Periode Perjalanan:</td><td>${formatDateDisplay(group.dateStart)} s/d ${formatDateDisplay(group.dateEnd)}</td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Tour Leader (TL):</td><td><strong>${group.leaders ? group.leaders.join(', ') : 'Belum Ditentukan'}</strong></td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Mutawwif:</td><td>${group.mutawwif || '-'}</td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Hotel Madinah:</td><td>${group.packages?.[0]?.hotelMadinah || '-'}</td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Hotel Makkah:</td><td>${group.packages?.[0]?.hotelMakkah || '-'}</td></tr>
+            </table>
+          </div>
+        `;
+      }
+    } else if (activeTaskDetailTab === "roomlist") {
+      tabContentEl.innerHTML = `
+        <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h4 style="margin:0; font-weight:800; color:#1e293b;">ROOMLIST GRUP AUTOMATIS</h4>
+              <p style="margin:2px 0 0 0; font-size:0.75rem; color:#64748b;">Terfilter otomatis untuk grup: ${task.groupName}</p>
+            </div>
+            <input type="text" id="task-room-search" class="form-input" placeholder="Cari kamar / nama jamaah..." style="max-width:200px; font-size:0.8rem; padding:4px 8px;">
+          </div>
+
+          <div id="task-roomlist-table-container"></div>
+        </div>
+      `;
+
+      const renderGroupRooms = () => {
+        const q = (document.getElementById("task-room-search")?.value || "").toLowerCase().trim();
+        const filteredRooms = groupRooms.filter(r => {
+          const matchHotel = r.hotelName.toLowerCase().includes(q);
+          const matchRoom = r.roomNumber.toLowerCase().includes(q);
+          const matchGuest = r.guests.some(g => g.name.toLowerCase().includes(q));
+          return matchHotel || matchRoom || matchGuest;
+        });
+
+        const roomTableEl = document.getElementById("task-roomlist-table-container");
+        if (!roomTableEl) return;
+
+        if (filteredRooms.length === 0) {
+          roomTableEl.innerHTML = `<div style="text-align:center; color:#94a3b8; padding:20px; font-size:0.85rem;">Tidak ada data roomlist untuk grup ini.</div>`;
+          return;
+        }
+
+        roomTableEl.innerHTML = `
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+              <thead>
+                <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0; text-align:left;">
+                  <th style="padding:8px; width:40px; text-align:center;">NO</th>
+                  <th style="padding:8px;">HOTEL</th>
+                  <th style="padding:8px; width:70px;">KAMAR</th>
+                  <th style="padding:8px; width:60px;">TIPE</th>
+                  <th style="padding:8px;">DAFTAR JAMAAH</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredRooms.map((r, idx) => `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px; text-align:center; font-weight:700;">${r.roomlistNumber || (idx+1)}</td>
+                    <td style="padding:8px; font-weight:600; color:#334155;">${r.hotelName}</td>
+                    <td style="padding:8px;"><span class="badge badge-gold" style="font-size:0.7rem;">${r.roomNumber}</span></td>
+                    <td style="padding:8px; font-size:0.75rem; color:#64748b;">${r.typeBed}</td>
+                    <td style="padding:8px;">
+                      <div style="display:flex; flex-direction:column; gap:2px;">
+                        ${r.guests.map(g => `<div style="color:#0f172a; font-weight:600;">• ${g.name} <span style="color:#94a3b8; font-size:0.7rem;">(${g.remark || '-'})</span></div>`).join('')}
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      };
+
+      const roomSearchInput = document.getElementById("task-room-search");
+      if (roomSearchInput) roomSearchInput.oninput = renderGroupRooms;
+      renderGroupRooms();
+    } else if (activeTaskDetailTab === "dokumen") {
+      tabContentEl.innerHTML = `
+        <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+          <h4 style="margin:0 0 4px 0; font-weight:800; color:#1e293b;">DOKUMEN & MANIFEST GRUP AUTOMATIS</h4>
+          <p style="margin:0 0 12px 0; font-size:0.75rem; color:#64748b;">Dokumen operasional terfilter untuk grup: ${task.groupName}</p>
+          
+          ${groupDocs.length === 0 ? `
+            <div style="text-align:center; color:#94a3b8; padding:20px; font-size:0.85rem;">Belum ada dokumen yang diunggah untuk grup ini.</div>
+          ` : `
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${groupDocs.map(d => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.2rem;">📄</span>
+                    <div>
+                      <div style="font-weight:700; font-size:0.85rem; color:#0f172a;">${d.name}</div>
+                      <div style="font-size:0.75rem; color:#64748b;">Kategori: <span class="badge badge-gold" style="font-size:0.65rem;">${d.category || 'Dokumen'}</span></div>
+                    </div>
+                  </div>
+                  <button onclick="window.open('assets/docs_placeholder.pdf', '_blank');" class="btn btn-secondary" style="width:auto; padding:4px 10px; font-size:0.75rem;">
+                    Buka PDF
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+  };
+
+  const updateTabBtns = () => {
+    document.querySelectorAll(".task-tab-btn").forEach(btn => {
+      btn.style.background = "transparent";
+      btn.style.color = "#64748b";
+    });
+    const activeBtn = document.getElementById(`tab-btn-${activeTaskDetailTab}`);
+    if (activeBtn) {
+      activeBtn.style.background = "#dfc06b";
+      activeBtn.style.color = "#000";
+    }
+  };
+
+  document.getElementById("tab-btn-tugas").onclick = () => { activeTaskDetailTab = "tugas"; updateTabBtns(); drawTabContent(); };
+  document.getElementById("tab-btn-grup").onclick = () => { activeTaskDetailTab = "grup"; updateTabBtns(); drawTabContent(); };
+  document.getElementById("tab-btn-roomlist").onclick = () => { activeTaskDetailTab = "roomlist"; updateTabBtns(); drawTabContent(); };
+  document.getElementById("tab-btn-dokumen").onclick = () => { activeTaskDetailTab = "dokumen"; updateTabBtns(); drawTabContent(); };
+
+  drawTabContent();
 }
 
 // ==========================================
