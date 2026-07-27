@@ -42,7 +42,12 @@ const DEFAULT_STATE = {
     attendance: [],
     incidents: []
   },
-  vendors: [],
+  vendors: [
+    { id: "v-1", type: "Konsumsi / Catering", name: "Albaik Catering Saudi", contact: "+966501234567", location: "Jeddah / Makkah", notes: "Pemesanan Snack & Mealbox Kedatangan / Kepulangan", products: [{ name: "Mealbox Albaik", price: 25 }, { name: "Snack Box City Tour", price: 15 }] },
+    { id: "v-2", type: "Hotel / Akomodasi", name: "Nozol Royal Inn Madinah", contact: "+966507654321", location: "Madinah", notes: "Hotel Transit & Jamaah Madinah", products: [{ name: "Kamar Quad", price: 450 }, { name: "Kamar Triple", price: 500 }] },
+    { id: "v-3", type: "Hotel / Akomodasi", name: "Anjum Hotel Makkah", contact: "+966508889999", location: "Makkah", notes: "Hotel Utama Jamaah Makkah", products: [{ name: "Kamar Quad", price: 650 }, { name: "Kamar Triple", price: 700 }] },
+    { id: "v-4", type: "Transportasi / Bus", name: "Rawahel Transport Saudi", contact: "+966501112233", location: "Saudi Arabia", notes: "Armada Bus Ziyarah & Transfer Airport", products: [{ name: "Bus Mercy 2026 (49 Seat)", price: 1200 }] }
+  ],
   bookings: [],
   assets: [
     { id: "ast-1", name: "Walkie Talkie Motorola", status: "Tersedia", qty: 10, location: "Gudang Makkah" },
@@ -122,7 +127,7 @@ function ensureStateCompat() {
   state.assignments = ensureArray(state.assignments, DEFAULT_STATE.assignments);
   state.assignmentOffers = ensureArray(state.assignmentOffers, DEFAULT_STATE.assignmentOffers);
   state.vendors = ensureArray(state.vendors, DEFAULT_STATE.vendors);
-  state.bookings = ensureArray(state.bookings, DEFAULT_STATE.bookings);
+  state.bookings = ensureArray(state.bookings, DEFAULT_STATE.bookings).filter(b => b && b.id !== 'b-1' && b.id !== 'b-2' && b.id !== 'b-3');
   
   if (!state.reports || typeof state.reports !== "object") {
     state.reports = { attendance: [], incidents: [] };
@@ -710,6 +715,13 @@ const APP_CONTAINER = document.getElementById("app");
 function router() {
   loadState();
   const hash = window.location.hash || "#login";
+  
+  if (hash.startsWith("#vendor-view")) {
+    renderPublicVendorPortal();
+    lucide.createIcons();
+    updateDbStatusUI();
+    return;
+  }
   
   if (!state.currentUser && hash !== "#login" && hash !== "#register") {
     window.location.hash = "#login";
@@ -4904,14 +4916,33 @@ function openItineraryFormPopup(editIdx = null) {
         state.itineraries.push({ groupName, activities });
       }
     }
+
+    // Auto-register group in state.groups if not present
+    const existingGroup = state.groups.find(g => g.name && g.name.toLowerCase() === groupName.toLowerCase());
+    if (!existingGroup) {
+      const dateStart = activities[0] ? activities[0].date : getSaudiDateTime().gregorianStr.split('/').reverse().join('-');
+      const dateEnd = activities[activities.length - 1] ? activities[activities.length - 1].date : dateStart;
+      state.groups.push({
+        name: groupName,
+        dateStart,
+        dateEnd,
+        pax: "30 Pax",
+        bus: "1 Bus",
+        hotelMadinah: "Nozol Royal Inn",
+        hotelMakkah: "Anjum Hotel",
+        rute: "Jeddah - Madinah - Makkah",
+        leaders: ["Ustadz H. Haris"]
+      });
+    }
     
     if (activities.length > 0 && activities[0].date) {
       state.itiCalActiveDate = activities[0].date;
     }
     
+    adminItiViewMode = "grup";
     saveState();
     closeModal();
-    showToast("Itinerary grup berhasil disimpan.");
+    showToast(`Itinerary grup "${groupName}" berhasil disimpan!`);
     renderAdminItinerary();
   };
 }
@@ -8499,9 +8530,15 @@ function loadVendorTab(tab) {
           <td><code>${v.contact}</code></td>
           <td>${v.notes || '-'}</td>
           <td>
-            <div class="action-btn-group">
-              <button class="action-icon-btn edit-vendor-btn" data-id="${v.id}"><i data-lucide="edit" style="width:14px;"></i></button>
-              <button class="action-icon-btn delete-vendor-btn" data-id="${v.id}"><i data-lucide="trash" style="width:14px; color:#ef4444;"></i></button>
+            <div class="action-btn-group" style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-gold copy-vendor-link-btn" data-id="${v.id}" data-name="${v.name}" style="width:auto; padding:4px 8px; font-size:0.75rem;" title="Salin Link Schedule Vendor">
+                <i data-lucide="link" style="width:12px;"></i> Link Portal
+              </button>
+              <button class="btn btn-secondary wa-vendor-link-btn" data-id="${v.id}" data-contact="${v.contact}" data-name="${v.name}" style="width:auto; padding:4px 8px; font-size:0.75rem; color:#10b981; border-color:#a7f3d0; box-shadow:none;" title="Kirim Link via WA Vendor">
+                <i data-lucide="message-circle" style="width:12px;"></i> Share WA
+              </button>
+              <button class="action-icon-btn edit-vendor-btn" data-id="${v.id}" title="Edit Master Vendor"><i data-lucide="edit" style="width:14px;"></i></button>
+              <button class="action-icon-btn delete-vendor-btn" data-id="${v.id}" title="Hapus Vendor"><i data-lucide="trash" style="width:14px; color:#ef4444;"></i></button>
             </div>
           </td>
         </tr>
@@ -8512,6 +8549,39 @@ function loadVendorTab(tab) {
     };
     
     const bindVendorActions = () => {
+      document.querySelectorAll(".copy-vendor-link-btn").forEach(btn => {
+        btn.onclick = () => {
+          const vId = btn.getAttribute("data-id");
+          const vName = btn.getAttribute("data-name");
+          const origin = window.location.origin + window.location.pathname;
+          const vendorUrl = `${origin}#vendor-view?id=${vId}`;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(vendorUrl);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = vendorUrl;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          showToast(`Link Portal Jadwal Vendor "${vName}" berhasil disalin!`);
+        };
+      });
+
+      document.querySelectorAll(".wa-vendor-link-btn").forEach(btn => {
+        btn.onclick = () => {
+          const vId = btn.getAttribute("data-id");
+          const vName = btn.getAttribute("data-name");
+          const rawContact = btn.getAttribute("data-contact") || "";
+          const origin = window.location.origin + window.location.pathname;
+          const vendorUrl = `${origin}#vendor-view?id=${vId}`;
+          const cleanPhone = rawContact.replace(/[^0-9]/g, '');
+          const msg = encodeURIComponent(`Assalamu'alaikum Warahmatullah,\n\nYth. Manajemen ${vName},\nBerikut kami kirimkan link Halaman Jadwal Pemesanan (Booking Schedule) dari Tim Khidmat Jejak Imani Saudi Arabia:\n\n🔗 ${vendorUrl}\n\nMohon dapat diperiksa dan dikonfirmasi. Terima kasih.`);
+          window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+        };
+      });
+
       document.querySelectorAll(".edit-vendor-btn").forEach(btn => {
         btn.onclick = () => openVendorFormPopup(btn.getAttribute("data-id"));
       });
@@ -11128,5 +11198,167 @@ function renderUserApplyTugas() {
   document.getElementById("user-apply-quota-filter").onchange = drawList;
   
   drawList();
+}
+
+// ==========================================
+// PUBLIC VENDOR SCHEDULE PORTAL PAGE
+// ==========================================
+
+function renderPublicVendorPortal() {
+  const hash = window.location.hash;
+  const params = new URLSearchParams(hash.split("?")[1] || "");
+  const vendorId = params.get("id");
+
+  const vendor = state.vendors.find(v => v.id === vendorId);
+
+  if (!vendor) {
+    APP_CONTAINER.innerHTML = `
+      <div style="max-width:600px; margin:50px auto; padding:30px; text-align:center; background:#fff; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,0.08); font-family:'Mulish', sans-serif;">
+        <div style="font-size:3rem; margin-bottom:12px;">⚠️</div>
+        <h2 style="font-weight:900; color:#1e293b; margin-bottom:8px;">Halaman Vendor Tidak Ditemukan</h2>
+        <p style="color:#64748b; font-size:0.9rem;">Link halaman jadwal pemesanan vendor ini tidak valid atau telah dihapus.</p>
+        <button onclick="window.location.hash='#login'" class="btn btn-gold" style="margin-top:16px; width:auto; padding:8px 16px;">Halaman Utama</button>
+      </div>
+    `;
+    return;
+  }
+
+  // Filter all bookings for this vendor
+  const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
+  const totalOrders = vendorBookings.length;
+
+  APP_CONTAINER.innerHTML = `
+    <div style="min-height:100vh; background:#f8fafc; font-family:'Mulish', sans-serif; padding:20px 12px 60px 12px; box-sizing:border-box;">
+      <div style="max-width:950px; margin:0 auto;">
+        
+        <!-- Header Banner -->
+        <div style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:16px; padding:24px; color:#fff; box-shadow:0 10px 25px rgba(0,0,0,0.15); margin-bottom:20px; position:relative; overflow:hidden;">
+          <div style="position:absolute; right:-20px; top:-20px; opacity:0.08; font-size:10rem; pointer-events:none;">🕋</div>
+          
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <img src="assets/logo.png" style="height:48px; object-fit:contain;" alt="Jejak Imani Logo" onerror="this.style.display='none';">
+              <div>
+                <div style="font-size:0.75rem; color:#dfc06b; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">PORTAL MITRA VENDOR & SUPPLIER</div>
+                <div style="font-size:0.9rem; font-weight:700; color:#cbd5e1;">PT. JEJAK IMANI BERKAH BERSAMA</div>
+              </div>
+            </div>
+            
+            <div style="display:flex; gap:8px;">
+              <button onclick="window.print();" class="btn btn-gold" style="width:auto; padding:8px 14px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                <i data-lucide="printer" style="width:16px;"></i> Cetak Jadwal (PDF)
+              </button>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:16px; margin-top:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <span style="background:#dfc06b; color:#000; font-weight:900; font-size:0.7rem; padding:3px 8px; border-radius:4px; text-transform:uppercase;">${vendor.type}</span>
+              <h1 style="margin:6px 0 2px 0; font-size:1.5rem; font-weight:900; color:#fff;">${vendor.name}</h1>
+              <div style="font-size:0.85rem; color:#94a3b8;">📞 ${vendor.contact || '-'} | 📍 ${vendor.location || 'Saudi Arabia'}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; color:#94a3b8;">Status Portal</div>
+              <div style="display:inline-flex; align-items:center; gap:6px; color:#10b981; font-weight:800; font-size:0.85rem;">
+                <span style="width:8px; height:8px; background:#10b981; border-radius:50%; display:inline-block; box-shadow:0 0 8px #10b981;"></span> Dihubungkan Real-Time
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary KPIs -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:20px;">
+          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Total Pemesanan (PO)</div>
+            <div style="font-size:1.6rem; font-weight:900; color:#1e293b; margin-top:4px;">${totalOrders} Ord</div>
+          </div>
+          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Status Aktif</div>
+            <div style="font-size:1.6rem; font-weight:900; color:#10b981; margin-top:4px;">${vendorBookings.filter(b => b.status !== 'Selesai').length} Aktif</div>
+          </div>
+          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Peta Lokasi Layanan</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#b45309; margin-top:4px;">${vendor.location || 'Saudi Arabia'}</div>
+          </div>
+        </div>
+
+        <!-- Bookings Schedule Table -->
+        <div style="background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,0.04); padding:20px; margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0; font-size:1.1rem; font-weight:900; color:#0f172a;">Jadwal & Rincian Pemesanan (Booking Schedule)</h3>
+              <p style="margin:2px 0 0 0; font-size:0.8rem; color:#64748b;">Daftar jadwal pemesanan layanan dari Tim Khidmat Jejak Imani</p>
+            </div>
+            <input type="text" id="pv-search" class="form-input" placeholder="Cari nama grup atau tanggal..." style="max-width:260px; font-size:0.85rem;">
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;" id="pv-table">
+              <thead>
+                <tr style="background:#f8fafc; text-align:left; border-bottom:2px solid #e2e8f0;">
+                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:40px;">NO</th>
+                  <th style="padding:10px; border-bottom:2px solid #e2e8f0;">NAMA GRUP UMROH</th>
+                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:160px;">PERIODE LAYANAN</th>
+                  <th style="padding:10px; border-bottom:2px solid #e2e8f0;">CATATAN & RINCIAN PESANAN</th>
+                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:120px; text-align:center;">STATUS</th>
+                </tr>
+              </thead>
+              <tbody id="pv-tbody">
+                ${vendorBookings.length === 0 ? `
+                  <tr><td colspan="5" style="text-align:center; padding:24px; color:#94a3b8;">Belum ada jadwal pemesanan untuk vendor ini.</td></tr>
+                ` : vendorBookings.map((b, idx) => `
+                  <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:10px; text-align:center; font-weight:700;">${idx + 1}</td>
+                    <td style="padding:10px;"><strong style="color:#0f172a;">${b.groupName}</strong></td>
+                    <td style="padding:10px; font-weight:600; color:#334155;">${formatDateDisplay(b.dateStart)} s/d ${formatDateDisplay(b.dateEnd)}</td>
+                    <td style="padding:10px; color:#475569;">${b.notes || '-'}</td>
+                    <td style="padding:10px; text-align:center;">
+                      <span class="badge ${b.status === 'Dikonfirmasi' ? 'badge-success' : 'badge-gold'}" style="font-size:0.75rem;">${b.status || 'Dikonfirmasi'}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Footer Notice & WA Admin Link -->
+        <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:12px; padding:16px; text-align:center; font-size:0.85rem; color:#78350f;">
+          <div style="font-weight:800; margin-bottom:4px;">Ada Pertanyaan atau Perubahan Jadwal?</div>
+          <div>Silakan hubungi Tim Handling & Finance Jejak Imani Saudi Arabia via WhatsApp.</div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  lucide.createIcons();
+
+  // Search handler inside public vendor schedule portal
+  const pvSearch = document.getElementById("pv-search");
+  if (pvSearch) {
+    pvSearch.oninput = () => {
+      const q = pvSearch.value.toLowerCase().trim();
+      const filtered = vendorBookings.filter(b => b.groupName.toLowerCase().includes(q) || (b.notes && b.notes.toLowerCase().includes(q)) || (b.dateStart && b.dateStart.includes(q)));
+      const tbody = document.getElementById("pv-tbody");
+      if (tbody) {
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color:#94a3b8;">Tidak ditemukan jadwal pemesanan yang cocok.</td></tr>`;
+        } else {
+          tbody.innerHTML = filtered.map((b, idx) => `
+            <tr style="border-bottom:1px solid #f1f5f9;">
+              <td style="padding:10px; text-align:center; font-weight:700;">${idx + 1}</td>
+              <td style="padding:10px;"><strong style="color:#0f172a;">${b.groupName}</strong></td>
+              <td style="padding:10px; font-weight:600; color:#334155;">${formatDateDisplay(b.dateStart)} s/d ${formatDateDisplay(b.dateEnd)}</td>
+              <td style="padding:10px; color:#475569;">${b.notes || '-'}</td>
+              <td style="padding:10px; text-align:center;">
+                <span class="badge ${b.status === 'Dikonfirmasi' ? 'badge-success' : 'badge-gold'}" style="font-size:0.75rem;">${b.status || 'Dikonfirmasi'}</span>
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+    };
+  }
 }
 
