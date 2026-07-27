@@ -1743,7 +1743,7 @@ function renderUserDashboard() {
   const myWalletBal = state.financial.wallets[username] || 0;
   const pendingCount = state.financial.expenses.filter(e => e.username === username && e.status === "Pending").length;
   
-  const myActiveTasks = state.assignments.filter(a => a.staff.includes(username) && a.status === "Aktif" && a.published !== false);
+  const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
   const myAppliedOffers = state.assignments.filter(t => t.published !== false && t.applicants && t.applicants.includes(username));
   const pendingInflows = state.financial.transactions.filter(tx => tx.recipient === username && tx.status === "Pending Confirmation");
   
@@ -3641,59 +3641,75 @@ function loadUserTab(tab) {
     lucide.createIcons();
     
   } else if (tab === "absensi") {
-    const myActiveTasks = state.assignments.filter(a => a.staff.includes(username) && a.status === "Aktif" && a.published !== false);
+    const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
     const myAbsences = state.reports.attendance.filter(a => a.username === username);
     const hasActiveTask = (myActiveTasks.length > 0);
     
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:16px; margin-top:10px;">
-        <button id="start-new-absen-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem;">
-          <i data-lucide="plus"></i> Mulai Absensi Baru
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; margin-top:10px; flex-wrap:wrap; gap:8px;">
+        <h3 class="user-section-title" style="margin:0;">Riwayat Absensi Anda</h3>
+        <button id="start-new-absen-btn" class="btn btn-gold" style="width:auto; padding:6px 14px; font-size:0.8rem; font-weight:800;">
+          <i data-lucide="camera" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Mulai Absensi Baru
         </button>
       </div>
 
-      <div class="form-group" style="margin-top:20px;">
-        <input type="text" id="user-absen-search" class="form-input" placeholder="Cari Riwayat Absensi (tipe, tanggal, lokasi)...">
+      <div class="form-group" style="margin-top:10px; margin-bottom:14px;">
+        <input type="text" id="user-absen-search" class="form-input" placeholder="Cari riwayat (kategori, tanggal, lokasi)...">
       </div>
       
-      <h3 class="user-section-title">Riwayat Absensi Anda</h3>
       <div class="activity-list" id="user-absen-history-list"></div>
     `;
     
     lucide.createIcons();
     
     const renderAbsenceHistory = () => {
-      const query = document.getElementById("user-absen-search").value.toLowerCase().trim();
+      const query = (document.getElementById("user-absen-search")?.value || "").toLowerCase().trim();
       const listEl = document.getElementById("user-absen-history-list");
+      if (!listEl) return;
+
       const filtered = myAbsences.slice().reverse().filter(a => {
         const task = state.assignments.find(t => t.id === a.taskId);
         const taskType = task ? task.type.toLowerCase() : "umum";
+        const groupName = task ? task.groupName.toLowerCase() : "";
         const dateStr = formatDateDisplay(a.date).toLowerCase();
-        const coordsStr = a.coords.toLowerCase();
-        return taskType.includes(query) || dateStr.includes(query) || coordsStr.includes(query);
+        const locationStr = (a.location || a.coords || "").toLowerCase();
+        const typeStr = (a.type || "").toLowerCase();
+        return taskType.includes(query) || groupName.includes(query) || dateStr.includes(query) || locationStr.includes(query) || typeStr.includes(query);
       });
       
       if (filtered.length === 0) {
-        listEl.innerHTML = `<p style="text-align:center;color:var(--text-light);padding:14px;font-size:0.85rem;">Tidak ada riwayat absensi ditemukan.</p>`;
+        listEl.innerHTML = `<div style="text-align:center; color:var(--text-light); padding:24px; background:#fff; border-radius:12px; border:1px solid #e2e8f0; font-size:0.85rem;">Belum ada riwayat absensi tercatat.</div>`;
         return;
       }
       
       listEl.innerHTML = filtered.map(a => {
         const task = state.assignments.find(t => t.id === a.taskId);
+        const typeLabel = a.type === "Masuk" ? "Absensi Masuk" : "Absensi Keluar";
+        const badgeBg = a.type === "Masuk" ? "#d1fae5" : "#fee2e2";
+        const badgeColor = a.type === "Masuk" ? "#065f46" : "#991b1b";
+
         return `
-          <div class="activity-item" style="border-bottom:var(--border-light); padding:10px 0;">
+          <div class="activity-item" style="border:1px solid #e2e8f0; background:#fff; border-radius:10px; padding:12px; margin-bottom:10px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
             <div class="activity-body">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>Absen ${a.type}</strong>
-                <span class="badge badge-success">${formatDateDisplay(a.date)}</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span class="badge" style="background:${badgeBg}; color:${badgeColor}; font-weight:800; font-size:0.75rem; padding:3px 8px;">${typeLabel}</span>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:600;">📅 ${formatDateDisplay(a.date)} | Pukul ${a.time} Saudi</span>
               </div>
-              <div style="font-size:0.8rem; margin:4px 0;">
-                Tugas: ${task ? task.type : 'Umum'}<br>
-                📍 Lokasi: <code>${a.coords}</code> pada ${a.time} Saudi
+              <div style="font-size:0.85rem; color:#1e293b; font-weight:700; margin-bottom:2px;">
+                ${task ? task.type : 'Penjadwalan Tim'}
               </div>
-              <div style="display:flex; gap:10px; margin-top:8px;">
-                <button class="btn btn-secondary view-absen-photo-btn" data-photo-time="${a.time}" data-photo-date="${formatDateDisplay(a.date)}" data-photo-coords="${a.coords}" style="width:auto; padding:4px 8px; font-size:0.7rem;">Preview Foto</button>
+              <div style="font-size:0.8rem; color:#475569; margin-bottom:8px;">
+                Grup: <strong>${task ? task.groupName : 'Umum'}</strong><br>
+                <span style="font-size:0.75rem; color:#64748b;">📍 ${a.location || a.coords || 'Saudi Arabia'}</span>
               </div>
+
+              ${a.photo ? `
+                <div style="display:flex; justify-content:flex-end;">
+                  <button class="btn btn-secondary view-absen-photo-btn" data-id="${a.id}" style="width:auto; padding:5px 12px; font-size:0.75rem; border-radius:6px; font-weight:700; border:1px solid #cbd5e1;">
+                    🔍 Lihat Foto Absensi & Watermark
+                  </button>
+                </div>
+              ` : ''}
             </div>
           </div>
         `;
@@ -3701,138 +3717,31 @@ function loadUserTab(tab) {
       
       listEl.querySelectorAll(".view-absen-photo-btn").forEach(btn => {
         btn.onclick = () => {
-          const time = btn.getAttribute("data-photo-time");
-          const date = btn.getAttribute("data-photo-date");
-          const coords = btn.getAttribute("data-photo-coords");
+          const absId = btn.getAttribute("data-id");
+          const absRecord = myAbsences.find(x => x.id === absId);
+          if (!absRecord || !absRecord.photo) return;
           
           const photoHtml = `
-            <div class="photo-frame-container" style="margin-bottom:16px;">
-              <img src="data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22240%22 style=%22background:%23ccd0d6;%22><text x=%2250%%22 y=%2250%%22 font-family=%22sans-serif%22 font-size=%2216%22 fill=%22%23555%22 text-anchor=%22middle%22>📸 FOTO ABSENSI VERIFIKASI</text></svg>" class="photo-frame-image">
-              <div class="photo-frame-overlay">
-                <div class="photo-frame-title">tim khidmat - jejak imani</div>
-                <div>📅 Tanggal: ${date}</div>
-                <div>⏰ Waktu: ${time} Waktu Saudi</div>
-                <div>📍 GPS: ${coords}</div>
+            <div style="text-align:center; padding:4px 0;">
+              <img src="${absRecord.photo}" style="width:100%; border-radius:10px; border:2px solid #dfc06b; box-shadow:0 6px 16px rgba(0,0,0,0.15); margin-bottom:12px;">
+              <div style="display:flex; justify-content:center;">
+                <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
               </div>
             </div>
           `;
-          openModal("Foto Absensi Terbingkai", photoHtml);
+          openModal("Foto Absensi & Stempel Watermark", photoHtml);
         };
       });
     };
     
-    document.getElementById("user-absen-search").oninput = renderAbsenceHistory;
+    const searchInput = document.getElementById("user-absen-search");
+    if (searchInput) searchInput.oninput = renderAbsenceHistory;
     renderAbsenceHistory();
     
     document.getElementById("start-new-absen-btn").onclick = () => {
-      const formHtml = `
-        <div class="admin-card" style="border:none; padding:0;">
-          ${!hasActiveTask ? `
-            <div class="badge badge-warning" style="margin-bottom:16px; width:100%; display:block; text-align:center; padding:12px;">
-              ⚠️ Anda tidak memiliki tugas aktif untuk melakukan absen.
-            </div>
-          ` : ''}
-
-          <form id="user-attendance-form-popup">
-            <div class="form-group">
-              <label class="form-label">Pilih Penugasan Aktif Anda</label>
-              <select id="user-absen-task-select" class="form-select" required ${!hasActiveTask ? 'disabled' : ''}>
-                <option value="">-- Pilih Penugasan --</option>
-                ${myActiveTasks.map(t => `<option value="${t.id}">${t.type} (${(t.groupName || "").substring(0, 30)}...)</option>`).join('')}
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label">Kategori Absen</label>
-              <select id="user-absen-type" class="form-select" required ${!hasActiveTask ? 'disabled' : ''}>
-                <option value="Masuk">Absen Masuk (Check-In)</option>
-                <option value="Keluar">Absen Keluar (Check-Out)</option>
-              </select>
-            </div>
-            
-            <button type="button" id="user-take-absen-photo-btn-popup" class="btn btn-secondary" style="margin-bottom:12px;" ${!hasActiveTask ? 'disabled' : ''}>
-              <i data-lucide="camera"></i> FOTO LANGSUNG (SIMULASI)
-            </button>
-            
-            <div id="simulated-absen-photo-preview-popup" class="hidden" style="margin-bottom:16px;"></div>
-            
-            <button type="submit" class="btn btn-gold" id="user-submit-absen-btn-popup" disabled>SUBMIT ABSENSI</button>
-          </form>
-        </div>
-      `;
-
-      openModal("Mulai Absensi Baru", formHtml);
-      lucide.createIcons();
-
-      let simulatedPhotoData = null;
-
-      if (hasActiveTask) {
-        document.getElementById("user-take-absen-photo-btn-popup").onclick = () => {
-          const selectedTaskId = document.getElementById("user-absen-task-select").value;
-          if (!selectedTaskId) {
-            showToast("Silakan pilih penugasan terlebih dahulu.", "error");
-            return;
-          }
-          
-          const task = state.assignments.find(t => t.id === selectedTaskId);
-          const region = task ? task.region : "Saudi Arabia";
-          
-          const { gregorianStr, timeStr } = getSaudiDateTime();
-          const coords = `21.4225, 39.8262 (${region})`;
-          
-          const previewEl = document.getElementById("simulated-absen-photo-preview-popup");
-          previewEl.innerHTML = `
-            <div class="photo-frame-container">
-              <img src="data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22240%22 style=%22background:%23d0d0d8;%22><text x=%2250%%22 y=%2250%%22 font-family=%22sans-serif%22 font-size=%2216%22 fill=%22%23555%22 text-anchor=%22middle%22>📷 KAMERA AKTIF (Selfie Mockup)</text></svg>" class="photo-frame-image">
-              <div class="photo-frame-overlay">
-                <div class="photo-frame-title">tim khidmat - jejak imani</div>
-                <div>📅 Tanggal: ${gregorianStr}</div>
-                <div>⏰ Waktu: ${timeStr} Waktu Saudi</div>
-                <div>📍 GPS: ${coords}</div>
-              </div>
-            </div>
-          `;
-          previewEl.classList.remove("hidden");
-          
-          simulatedPhotoData = { time: timeStr, date: gregorianStr, coords };
-          document.getElementById("user-submit-absen-btn-popup").removeAttribute("disabled");
-          showToast("Foto selfie terbingkai berhasil diambil!");
-        };
-
-        document.getElementById("user-attendance-form-popup").onsubmit = (e) => {
-          e.preventDefault();
-          
-          if (!simulatedPhotoData) {
-            showToast("Silakan ambil foto absensi terlebih dahulu.", "error");
-            return;
-          }
-
-          const taskId = document.getElementById("user-absen-task-select").value;
-          const type = document.getElementById("user-absen-type").value;
-          
-          const newAtt = {
-            id: `att-${Date.now()}`,
-            taskId,
-            username,
-            date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
-            time: simulatedPhotoData.time || getSaudiDateTime().timeStr,
-            type,
-            coords: simulatedPhotoData.coords || "N/A",
-            photo: "selfie_petugas_frame.jpg"
-          };
-          
-          state.reports.attendance.push(newAtt);
-          saveState();
-          
-          addNotification("penjadwalan", `Absensi: ${state.currentUser.name} melakukan absen ${type} pada tugas ${taskId}`);
-          closeModal();
-          showToast(`Absen ${type} berhasil dikirim!`);
-          loadUserTab("absensi");
-        };
-      }
+      openAttendanceFormPopup();
     };
-  
-} else if (tab === "insiden") {
+  } else if (tab === "insiden") {
     const myIncidents = state.reports.incidents.filter(i => i.username === username);
     container.innerHTML = `
       <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:16px;">
@@ -11350,7 +11259,6 @@ function renderUserApplyTugas() {
             <div><strong>${dayNameFormatted} | ${t.time} Saudi</strong> (Wilayah: ${t.region})</div>
           </div>
           <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f3f5; padding-top:8px; margin-top:4px; width:100%;">
-            <button class="btn btn-secondary view-user-task-detail-btn" data-id="${t.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px; border:1px solid #cbd5e1; color:#475569; background:#fff;"><i data-lucide="eye" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Detail</button>
             ${actionBtnHtml}
           </div>
         </div>
