@@ -135,9 +135,21 @@ function ensureStateCompat() {
   }
   if (typeof state.financial.mainBalance !== "number") state.financial.mainBalance = 0;
   if (!state.financial.wallets || typeof state.financial.wallets !== "object") state.financial.wallets = {};
-  state.financial.expenses = ensureArray(state.financial.expenses);
-  state.financial.deleteRequests = ensureArray(state.financial.deleteRequests);
-  state.financial.transactions = ensureArray(state.financial.transactions);
+  const dedupeById = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    const seen = new Set();
+    return arr.filter(x => {
+      if (!x || typeof x !== "object") return false;
+      const key = x.id || JSON.stringify(x);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  
+  state.financial.expenses = dedupeById(ensureArray(state.financial.expenses));
+  state.financial.deleteRequests = dedupeById(ensureArray(state.financial.deleteRequests));
+  state.financial.transactions = dedupeById(ensureArray(state.financial.transactions));
   
   state.notifications = ensureArray(state.notifications);
   
@@ -433,6 +445,9 @@ function loadState() {
         state.currentUser = localCurrentUser;
         ensureStateCompat();
         
+        // Immediately persist updated remote state to localStorage
+        localStorage.setItem("jejak_imani_v2_db", JSON.stringify(state));
+        
         // Preserve active modal if open
         const modalContainer = document.getElementById("modal-container");
         const isModalOpen = modalContainer && !modalContainer.classList.contains("hidden");
@@ -444,11 +459,11 @@ function loadState() {
           modalContainer.classList.remove("hidden");
         }
       } else {
-        console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with DEFAULT_STATE...");
+        console.log("Firebase database node 'jejak_imani_v2_db' is empty. Initializing with state...");
         const stateToSave = {};
-        for (let k in DEFAULT_STATE) {
+        for (let k in state) {
           if (k !== 'currentUser') {
-            stateToSave[k] = DEFAULT_STATE[k];
+            stateToSave[k] = state[k];
           }
         }
         firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
@@ -474,7 +489,7 @@ function saveState() {
         stateToSave[k] = state[k];
       }
     }
-    firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
+    firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
   }
 }
 
@@ -2660,9 +2675,20 @@ function renderUserLaporan() {
 
 
 function openUserLaporKasPopup(prefilledGroup = "") {
-  const username = state.currentUser.username;
-  const activeTasks = state.assignments.filter(a => a.staff.includes(username) && a.status === "Aktif");
-  const activityOptions = activeTasks.map(t => `<option value="${t.type}">${t.type} (${(t.groupName || "").substring(0, 20)}...)</option>`).join('');
+  const username = state.currentUser ? state.currentUser.username : "";
+  const activeTasks = state.assignments.filter(a => a && a.staff && a.staff.includes(username));
+  let activityOptions = activeTasks.map(t => `<option value="${t.type}">${t.type} (${(t.groupName || "").substring(0, 20)}...)</option>`).join('');
+  
+  if (!activityOptions) {
+    activityOptions = `
+      <option value="Handling Jamaah">Handling Jamaah</option>
+      <option value="Fee Handling">Fee Handling</option>
+      <option value="Tip Bellboy">Tip Bellboy</option>
+      <option value="Transportasi / Bus">Transportasi / Bus</option>
+      <option value="Konsumsi / Catering">Konsumsi / Catering</option>
+      <option value="Lainnya">Lainnya</option>
+    `;
+  }
 
   const popupHtml = `
     <form id="user-submit-exp-form-popup">
@@ -2690,12 +2716,12 @@ function openUserLaporKasPopup(prefilledGroup = "") {
       
       <div class="form-group">
         <label class="form-label">Deskripsi Pengeluaran</label>
-        <textarea id="user-exp-desc-popup" class="form-textarea" rows="3" required></textarea>
+        <textarea id="user-exp-desc-popup" class="form-textarea" rows="3" required placeholder="Tuliskan keterangan detail pengeluaran..."></textarea>
       </div>
       
       <div class="form-group">
-        <label class="form-label">Foto Struk / Nota (Multi-upload)</label>
-        <input type="file" id="user-exp-photo-popup" class="form-input" accept="image/*" multiple required>
+        <label class="form-label">Foto Struk / Nota (Opsional)</label>
+        <input type="file" id="user-exp-photo-popup" class="form-input" accept="image/*,application/pdf" multiple>
       </div>
 
       <h5 style="margin-top:20px; margin-bottom:10px; font-weight:800;">Rincian Item Biaya</h5>
@@ -2724,18 +2750,17 @@ function openUserLaporKasPopup(prefilledGroup = "") {
     if (categoryTypeSelect.value === "operasional") {
       groupContainer.classList.add("hidden");
       groupInput.required = false;
-      groupInput.value = "";
-      
-      // Auto-add and select Operasional option
+      groupInput.value = "Operasional Tim";
+      activitySelect.required = false;
       activitySelect.innerHTML = '<option value="Operasional Tim" selected>Operasional Tim</option>';
     } else {
       groupContainer.classList.remove("hidden");
       groupInput.required = true;
       groupInput.value = prefilledGroup;
+      activitySelect.required = true;
       activitySelect.innerHTML = originalActivityHtml;
     }
   };
-
 
   const itemsContainer = document.getElementById("user-exp-items-container");
   
@@ -2765,6 +2790,9 @@ function openUserLaporKasPopup(prefilledGroup = "") {
             <option value="Fee Handling">Fee Handling</option>
             <option value="Tip Bellboy">Tip Bellboy</option>
             <option value="Zamzam">Zamzam</option>
+            <option value="Handling Jamaah">Handling Jamaah</option>
+            <option value="Transportasi">Transportasi</option>
+            <option value="Konsumsi">Konsumsi</option>
             <option value="Lainnya">Lainnya</option>
           </select>
           <input type="text" class="form-input item-custom-cat hidden" placeholder="Kategori Kustom" style="margin-top:6px;">
@@ -2775,7 +2803,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
         </div>
         <div class="form-group">
           <label class="form-label">Qty</label>
-          <input type="number" class="form-input item-qty" placeholder="QTY" min="1" required>
+          <input type="number" class="form-input item-qty" placeholder="QTY" min="1" value="1" required>
         </div>
       </div>
       <div class="form-group">
@@ -2818,10 +2846,17 @@ function openUserLaporKasPopup(prefilledGroup = "") {
   document.getElementById("user-submit-exp-form-popup").onsubmit = (e) => {
     e.preventDefault();
     const catType = document.getElementById("user-exp-category-type-popup").value;
-    const groupName = catType === "operasional" ? "Operasional Tim" : document.getElementById("user-exp-group-input-popup").value;
+    const groupName = catType === "operasional" ? "Operasional Tim" : document.getElementById("user-exp-group-input-popup").value.trim();
     const activity = catType === "operasional" ? "Operasional Tim" : document.getElementById("user-exp-activity-popup").value;
     const desc = document.getElementById("user-exp-desc-popup").value.trim();
-    const grandTotal = parseInt(document.getElementById("user-exp-grand-total").textContent);
+    
+    calculateExpGrandTotal();
+    const grandTotal = parseInt(document.getElementById("user-exp-grand-total").textContent) || 0;
+    
+    if (grandTotal <= 0) {
+      showToast("Total pengeluaran harus lebih dari 0 SAR! Mohon isi rincian item biaya.", "error");
+      return;
+    }
     
     const itemRows = itemsContainer.querySelectorAll(".exp-item-row-popup");
     const items = Array.from(itemRows).map(row => {
@@ -2835,27 +2870,50 @@ function openUserLaporKasPopup(prefilledGroup = "") {
       };
     });
     
-    const newExp = {
-      id: `exp-${Date.now()}`,
-      username,
-      groupName,
-      wallet: activity,
-      amount: grandTotal,
-      description: desc,
-      date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
-      receipt: "struk_user_multi.jpg",
-      status: "Pending",
-      items
+    const photoInput = document.getElementById("user-exp-photo-popup");
+    
+    const saveAndSubmitExpense = (receiptUrl) => {
+      const newExp = {
+        id: `exp-${Date.now()}`,
+        username,
+        groupName: groupName || "Operasional Tim",
+        wallet: activity || "Operasional Tim",
+        amount: grandTotal,
+        description: desc,
+        date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
+        receipt: receiptUrl || "struk_user_multi.jpg",
+        status: "Pending",
+        items
+      };
+      
+      state.financial.expenses.push(newExp);
+      state.financial.wallets[username] = (state.financial.wallets[username] || 0) - grandTotal;
+      saveState();
+      
+      addNotification("financial", `Laporan Kas: ${state.currentUser ? state.currentUser.name : username} membelanjakan SAR ${grandTotal} (${desc})`, { username, groupName: newExp.groupName });
+      closeModal();
+      showToast("Laporan Kas disubmit!");
+      
+      if (document.getElementById("user-laporan-tab-container")) {
+        loadUserTab("kas");
+      } else {
+        router();
+      }
     };
     
-    state.financial.expenses.push(newExp);
-    state.financial.wallets[username] -= grandTotal;
-    saveState();
-    
-    addNotification("financial", `Laporan Kas: ${state.currentUser.name} membelanjakan SAR ${grandTotal} (${desc})`, { username, groupName });
-    closeModal();
-    showToast("Laporan Kas disubmit!");
-    loadUserTab("kas");
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+      const file = photoInput.files[0];
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        saveAndSubmitExpense(evt.target.result);
+      };
+      reader.onerror = function() {
+        saveAndSubmitExpense("struk_user_multi.jpg");
+      };
+      reader.readAsDataURL(file);
+    } else {
+      saveAndSubmitExpense("struk_user_multi.jpg");
+    }
   };
 }
 
@@ -4754,7 +4812,11 @@ function openItineraryFormPopup(editIdx = null) {
   
   document.getElementById("iti-submit-form-popup").onsubmit = (e) => {
     e.preventDefault();
-    const groupName = document.getElementById("iti-group-name-popup").value;
+    const groupName = document.getElementById("iti-group-name-popup").value.trim();
+    if (!groupName) {
+      showToast("Grup keberangkatan wajib diisi!", "error");
+      return;
+    }
     
     const rows = rowsContainer.querySelectorAll(".iti-activity-item-row-popup");
     const activities = Array.from(rows).map(row => ({
@@ -4763,12 +4825,26 @@ function openItineraryFormPopup(editIdx = null) {
       city: row.querySelector(".row-city").value,
       agenda: row.querySelector(".row-agenda").value,
       remarks: row.querySelector(".row-remarks").value
-    }));
+    })).filter(a => a.date && a.agenda);
+
+    if (activities.length === 0) {
+      showToast("Minimal isi 1 kegiatan itinerary yang lengkap!", "error");
+      return;
+    }
     
     if (isEdit) {
       state.itineraries[editIdx] = { groupName, activities };
     } else {
-      state.itineraries.push({ groupName, activities });
+      const existingIdx = state.itineraries.findIndex(i => i && i.groupName && i.groupName.toLowerCase() === groupName.toLowerCase());
+      if (existingIdx !== -1) {
+        state.itineraries[existingIdx].activities = activities;
+      } else {
+        state.itineraries.push({ groupName, activities });
+      }
+    }
+    
+    if (activities.length > 0 && activities[0].date) {
+      state.itiCalActiveDate = activities[0].date;
     }
     
     saveState();
@@ -6308,6 +6384,913 @@ function openVoidTransactionModal(txIdOrExpenseId, onComplete) {
 }
 
 
+function getTxCategoryType(tx) {
+  if (!tx) return "Uang Keluar";
+  const typeStr = (tx.type || "").toLowerCase();
+  if (typeStr.includes("top-up") || typeStr.includes("topup") || typeStr.includes("masuk") || tx.sender === "Dompet Utama" || tx.sender === "Finance Pusat") {
+    if (tx.recipient !== "Dompet Utama" && tx.sender === "Dompet Utama") return "Uang Masuk";
+    if (tx.sender === "Finance Pusat" || tx.type === "Top-Up") return "Uang Masuk";
+  }
+  if (typeStr.includes("transfer") || (tx.sender !== "Dompet Utama" && tx.recipient !== "Dompet Utama" && tx.recipient !== "Vendor" && tx.sender !== "Finance Pusat" && !typeStr.includes("pengeluaran"))) {
+    return "Transfer";
+  }
+  return "Uang Keluar";
+}
+
+function generateTxCode(tx, index, allTxs) {
+  if (!tx) return "OUT0001";
+  if (tx.code) return tx.code;
+  const cat = getTxCategoryType(tx);
+  let count = 0;
+  for (let i = 0; i <= index; i++) {
+    if (getTxCategoryType(allTxs[i]) === cat) {
+      count++;
+    }
+  }
+  const numStr = String(count).padStart(4, "0");
+  if (cat === "Uang Masuk") return "IN" + numStr;
+  if (cat === "Transfer") return "TF" + numStr;
+  return "OUT" + numStr;
+}
+
+function terbilangAngka(n) {
+  const units = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+  n = Math.abs(Math.floor(n));
+  if (n < 12) return units[n];
+  if (n < 20) return terbilangAngka(n - 10) + " Belas";
+  if (n < 100) return terbilangAngka(Math.floor(n / 10)) + " Puluh " + (units[n % 10] ? units[n % 10] : "");
+  if (n < 200) return "Seratus " + terbilangAngka(n - 100);
+  if (n < 1000) return terbilangAngka(Math.floor(n / 100)) + " Ratus " + (terbilangAngka(n % 100) ? terbilangAngka(n % 100) : "");
+  if (n < 2000) return "Seribu " + terbilangAngka(n - 1000);
+  if (n < 1000000) return terbilangAngka(Math.floor(n / 1000)) + " Ribu " + (terbilangAngka(n % 1000) ? terbilangAngka(n % 1000) : "");
+  if (n < 1000000000) return terbilangAngka(Math.floor(n / 1000000)) + " Juta " + (terbilangAngka(n % 1000000) ? terbilangAngka(n % 1000000) : "");
+  return String(n);
+}
+
+function formatTerbilangSaudiRiyal(amount) {
+  const str = terbilangAngka(amount).replace(/\s+/g, ' ').trim();
+  if (!str) return '"Nol Saudi Riyal"';
+  const capitalized = str.split(' ').map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ');
+  return `"${capitalized} Saudi Riyal"`;
+}
+
+function printOrDownloadKwitansi(tx, txCode) {
+  const formattedDate = formatDateLong(tx.date);
+  const nominalStr = `SAR ${tx.amount.toLocaleString('id-ID')}`;
+  const terbilangStr = formatTerbilangSaudiRiyal(tx.amount);
+  const cleanDesc = tx.description ? tx.description.replace(/^\[APPROVED\]\s*/i, '') : "Dana Operasional Saudi";
+  
+  const kwitansiHtml = `
+    <html>
+      <head>
+        <title>Kwitansi ${txCode}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page {
+              size: A4 landscape;
+              margin: 0;
+            }
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              margin: 0;
+              padding: 0;
+            }
+          }
+          body {
+            font-family: 'Mulish', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .kwitansi-container {
+            width: 297mm;
+            height: 175mm;
+            position: relative;
+            background-image: url('assets/kwitansi_bg.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            box-sizing: border-box;
+            color: #1e293b;
+          }
+          .kwitansi-ref {
+            position: absolute;
+            top: 31%;
+            right: 5%;
+            font-size: 14pt;
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .kwitansi-content {
+            position: absolute;
+            top: 42%;
+            left: 4.5%;
+            width: 90%;
+            font-size: 13pt;
+            line-height: 1.95;
+          }
+          .kwitansi-table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+          .kwitansi-table td {
+            vertical-align: top;
+            padding: 2px 0;
+          }
+          .kwitansi-signatures {
+            position: absolute;
+            bottom: 12%;
+            left: 4.5%;
+            width: 90%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 12.5pt;
+          }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="kwitansi-container">
+          <div class="kwitansi-ref">
+            No. Referensi &nbsp;: ${txCode}
+          </div>
+          <div class="kwitansi-content">
+            <table class="kwitansi-table">
+              <tr>
+                <td style="width: 150px; font-weight: 500;">Tanggal</td>
+                <td style="width: 20px;">:</td>
+                <td style="font-weight: 700;">${formattedDate}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 500;">Nominal</td>
+                <td>:</td>
+                <td style="font-weight: 900; font-size: 14pt;">${nominalStr}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 500;">Terbilang</td>
+                <td>:</td>
+                <td style="font-weight: 600; font-style: italic;">${terbilangStr}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: 500;">Keterangan</td>
+                <td>:</td>
+                <td style="font-weight: 600;">${cleanDesc}</td>
+              </tr>
+            </table>
+          </div>
+          <div class="kwitansi-signatures">
+            <div style="text-align: center; width: 35%;">
+              <div style="font-weight: 500; margin-bottom: 50px;">Diserahkan Oleh</div>
+              <div style="font-weight: 800;">Finance Pusat <span style="color:#1e293b;">jejak imani</span></div>
+            </div>
+            <div style="text-align: center; width: 35%;">
+              <div style="font-weight: 500; margin-bottom: 50px;">Diterima Oleh</div>
+              <div style="font-weight: 800;">Saudi Operational Officer</div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const printWindow = window.open("", "_blank");
+  printWindow.document.write(kwitansiHtml);
+  printWindow.document.close();
+}
+
+function openKwitansiModal(tx, txCode) {
+  const formattedDate = formatDateLong(tx.date);
+  const nominalStr = `SAR ${tx.amount.toLocaleString('id-ID')}`;
+  const terbilangStr = formatTerbilangSaudiRiyal(tx.amount);
+  const cleanDesc = tx.description ? tx.description.replace(/^\[APPROVED\]\s*/i, '') : "Dana Operasional Saudi";
+
+  const modalHtml = `
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <!-- Preview Card -->
+      <div style="position:relative; width:100%; aspect-ratio:16/9; background-image:url('assets/kwitansi_bg.png'); background-size:cover; background-position:center; background-repeat:no-repeat; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid #cbd5e1; overflow:hidden; color:#1e293b; font-family:'Mulish', sans-serif;">
+        
+        <div style="position:absolute; top:31%; right:5%; font-size:0.85rem; font-weight:700; color:#0f172a;">
+          No. Referensi &nbsp;: ${txCode}
+        </div>
+        
+        <div style="position:absolute; top:42%; left:4.5%; width:90%; font-size:0.8rem; line-height:1.75;">
+          <table style="width:100%; border-collapse:collapse;">
+            <tr>
+              <td style="width:100px; font-weight:500;">Tanggal</td>
+              <td style="width:15px;">:</td>
+              <td style="font-weight:700;">${formattedDate}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:500;">Nominal</td>
+              <td>:</td>
+              <td style="font-weight:900; font-size:0.88rem; color:#000;">${nominalStr}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:500;">Terbilang</td>
+              <td>:</td>
+              <td style="font-weight:600; font-style:italic;">${terbilangStr}</td>
+            </tr>
+            <tr>
+              <td style="font-weight:500;">Keterangan</td>
+              <td>:</td>
+              <td style="font-weight:600;">${cleanDesc}</td>
+            </tr>
+          </table>
+        </div>
+        
+        <div style="position:absolute; bottom:9%; left:4.5%; width:90%; display:flex; justify-content:space-between; align-items:flex-end; font-size:0.72rem;">
+          <div style="text-align:center; width:35%;">
+            <div style="font-weight:500; margin-bottom:24px;">Diserahkan Oleh</div>
+            <div style="font-weight:800;">Finance Pusat <strong>jejak imani</strong></div>
+          </div>
+          <div style="text-align:center; width:35%;">
+            <div style="font-weight:500; margin-bottom:24px;">Diterima Oleh</div>
+            <div style="font-weight:800;">Saudi Operational Officer</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display:flex; justify-content:space-between; gap:12px; margin-top:8px;">
+        <button type="button" id="kw-print-btn" class="btn btn-gold" style="flex:1; padding:12px; font-weight:800; font-size:0.88rem; border-radius:10px; display:flex; justify-content:center; align-items:center; gap:8px;">
+          <i data-lucide="printer" style="width:18px; height:18px;"></i> Cetak / Download Kwitansi (PDF)
+        </button>
+        <button type="button" id="kw-share-btn" class="btn btn-secondary" style="width:140px; padding:12px; font-weight:800; font-size:0.88rem; border-radius:10px; display:flex; justify-content:center; align-items:center; gap:8px;">
+          <i data-lucide="share-2" style="width:18px; height:18px;"></i> Bagikan
+        </button>
+      </div>
+    </div>
+  `;
+
+  openModal("Kwitansi Penerimaan Dana", modalHtml);
+  lucide.createIcons();
+
+  document.getElementById("kw-print-btn").onclick = () => {
+    printOrDownloadKwitansi(tx, txCode);
+  };
+
+  document.getElementById("kw-share-btn").onclick = () => {
+    const shareText = `Kwitansi ${txCode} - ${formattedDate}\nNominal: ${nominalStr}\nTerbilang: ${terbilangStr}\nKeterangan: ${cleanDesc}\nPT. Jejak Imani Berkah Bersama`;
+    if (navigator.share) {
+      navigator.share({
+        title: `Kwitansi ${txCode}`,
+        text: shareText,
+        url: window.location.href
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareText);
+      showToast("Ringkasan Kwitansi berhasil disalin ke clipboard!");
+    }
+  };
+}
+
+function formatDateLong(dStr) {
+  if (!dStr) return "-";
+  const parts = dStr.split("-");
+  if (parts.length === 3) {
+    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const day = parseInt(parts[2]) || parts[2];
+    const month = months[parseInt(parts[1]) - 1] || parts[1];
+    const year = parts[0];
+    return `${day} ${month} ${year}`;
+  }
+  return dStr;
+}
+
+// ==========================================
+// PDF PRINT ENGINES FOR THE 5 REPORT TYPES
+// ==========================================
+
+function getReportPdfHeaderHtml() {
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; font-family:'Mulish', sans-serif;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <img src="assets/logo.png" style="height:55px; object-fit:contain;" alt="Logo Jejak Imani" onerror="this.style.display='none'; document.getElementById('alt-report-logo').style.display='flex';">
+        <div id="alt-report-logo" style="display:none; width:48px; height:48px; background:#dfc06b; border-radius:10px; justify-content:center; align-items:center; color:#fff; font-weight:900; font-size:1.3rem;">JI</div>
+      </div>
+      <div style="text-align:right; font-size:0.75rem; color:#334155; max-width:380px; line-height:1.4;">
+        <div style="font-weight:900; color:#000; font-size:0.9rem; margin-bottom:2px; letter-spacing:0.02em;">PT. JEJAK IMANI BERKAH BERSAMA</div>
+        Intermark Indonesia Ruko 9 & 10, Jl. Lkr. Tim. No.9, Rw. Mekar Jaya, BSD, Kota Tangerang Selatan, Banten 15310, Indonesia
+      </div>
+    </div>
+  `;
+}
+
+function printReportApprovalPengajuanDana(data) {
+  const dateLong = formatDateLong(data.apDate);
+  const totalAmount = data.items.reduce((sum, it) => sum + it.total, 0);
+  const fileNameTitle = `${dateLong} - ${data.mainProgram}`;
+
+  const rowsTable1Html = data.items.map((it, i) => `
+    <tr>
+      <td style="padding:8px; border:1px solid #000; text-align:center;">${i + 1}</td>
+      <td style="padding:8px; border:1px solid #000; font-weight:600;">${it.name}</td>
+      <td style="padding:8px; border:1px solid #000; text-align:center;">${it.qty}</td>
+      <td style="padding:8px; border:1px solid #000; text-align:right;">SAR ${it.price.toLocaleString('id-ID')}</td>
+      <td style="padding:8px; border:1px solid #000; text-align:right; font-weight:700;">SAR ${it.total.toLocaleString('id-ID')}</td>
+    </tr>
+  `).join('');
+
+  const rowsTable2Html = data.items.map((it, i) => `
+    <tr>
+      <td style="padding:8px; border:1px solid #000; text-align:center;">${i + 1}</td>
+      <td style="padding:8px; border:1px solid #000; text-align:center;">${formatDateLong(it.duedate)}</td>
+      <td style="padding:8px; border:1px solid #000; text-align:right; font-weight:700;">SAR ${it.total.toLocaleString('id-ID')}</td>
+      <td style="padding:8px; border:1px solid #000; font-weight:600;">${it.name}</td>
+      <td style="padding:8px; border:1px solid #000; font-weight:700; color:#b45309;">${it.destination}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    <html>
+      <head>
+        <title>${fileNameTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page { size: A4 portrait; margin: 12mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: 'Mulish', sans-serif; margin: 0; padding: 20px; background:#fff; color:#000; position:relative; }
+          .watermark-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-image:url('assets/watermark.jpg'); background-size:cover; background-position:center; opacity:0.12; z-index:-1; pointer-events:none; }
+          table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+          th { padding:8px; border:1px solid #000; background:#f1f5f9; text-transform:uppercase; font-weight:800; }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="watermark-bg"></div>
+        ${getReportPdfHeaderHtml()}
+        <div style="text-align:center; margin-bottom:20px;">
+          <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase; letter-spacing:0.03em;">FORM APPROVAL PENGAJUAN DANA</h2>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+        </div>
+
+        <div style="font-size:0.9rem; line-height:1.85; margin-bottom:16px;">
+          <div><strong>Tanggal Pengajuan</strong> : ${dateLong}</div>
+          <div><strong>Divisi</strong> : Saudi Operasional</div>
+          <div><strong>Program</strong> : ${data.mainProgram}</div>
+        </div>
+
+        <table style="margin-bottom:16px;">
+          <thead>
+            <tr>
+              <th rowspan="2" style="width:40px;">NO</th>
+              <th rowspan="2">PROGRAM</th>
+              <th colspan="3">TOTAL HARGA</th>
+            </tr>
+            <tr>
+              <th style="width:110px;">SATUAN UNIT/PAX</th>
+              <th style="width:130px;">HARGA SATUAN</th>
+              <th style="width:130px;">JUMLAH</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsTable1Html}
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td colspan="4" style="padding:8px; border:1px solid #000; text-align:center;">TOTAL</td>
+              <td style="padding:8px; border:1px solid #000; text-align:right;">SAR ${totalAmount.toLocaleString('id-ID')}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Signatures Grid -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; text-align:center; font-size:0.8rem; margin:28px 0;">
+          <div style="width:23%;">
+            <div>Diusulkan Oleh,</div>
+            <div style="height:55px;"></div>
+            <div style="font-weight:800; text-decoration:underline;">Fathur Rahman Al Masyi, S.Kep., Ns</div>
+          </div>
+          <div style="width:23%;">
+            <div>Manager</div>
+            <div style="height:55px; display:flex; justify-content:center; align-items:center; font-family:cursive; font-size:1.3rem; color:#1e293b;">Rioteza</div>
+            <div style="font-weight:800; text-decoration:underline;">Rioteza Satria Ramadhan</div>
+          </div>
+          <div style="width:23%;">
+            <div>Vice President</div>
+            <div style="height:55px;"></div>
+            <div style="font-weight:800; text-decoration:underline;">Bustomi, S.E</div>
+          </div>
+          <div style="width:23%;">
+            <div>Vice President</div>
+            <div style="height:55px;"></div>
+            <div style="font-weight:800; text-decoration:underline;">Hendra Yudhistira Wyrawan, S.E</div>
+          </div>
+        </div>
+
+        <table style="margin-top:16px;">
+          <thead>
+            <tr>
+              <th style="width:40px;">NO</th>
+              <th style="width:130px;">DUE DATE</th>
+              <th style="width:150px;">JUMLAH PENGAJUAN</th>
+              <th>PROGRAM</th>
+              <th style="width:210px;">TUJUAN</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsTable2Html}
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td colspan="2" style="padding:8px; border:1px solid #000; text-align:center;">TOTAL</td>
+              <td style="padding:8px; border:1px solid #000; text-align:right;">SAR ${totalAmount.toLocaleString('id-ID')}</td>
+              <td colspan="2" style="border:1px solid #000;"></td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWin = window.open("", "_blank");
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+function printReportGroupExpenseReport(data) {
+  const startLong = formatDateLong(data.startDate);
+  const endLong = formatDateLong(data.endDate);
+  const periodStr = `${startLong} - ${endLong}`;
+
+  const groupExpenses = state.financial.expenses.filter(ex => ex.status === 'Disetujui' && (ex.groupName === data.groupName || data.groupName === 'all'));
+  
+  let jeddahTotal = 0, madinahTotal = 0, makkahTotal = 0, vendorTotal = 0, lainnyaTotal = 0;
+  
+  groupExpenses.forEach(ex => {
+    const desc = (ex.description || "").toLowerCase();
+    if (desc.includes("jeddah")) jeddahTotal += ex.amount;
+    else if (desc.includes("madinah") || desc.includes("kunafe")) madinahTotal += ex.amount;
+    else if (desc.includes("makkah") || desc.includes("zamzam")) makkahTotal += ex.amount;
+    else if (desc.includes("vendor") || desc.includes("snack") || desc.includes("albaik") || desc.includes("mealbox")) vendorTotal += ex.amount;
+    else lainnyaTotal += ex.amount;
+  });
+
+  const grandTotal = jeddahTotal + madinahTotal + makkahTotal + vendorTotal + lainnyaTotal;
+
+  const html = `
+    <html>
+      <head>
+        <title>GER ${data.gerRef} - ${data.groupName}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page { size: A4 portrait; margin: 12mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: 'Mulish', sans-serif; margin: 0; padding: 20px; background:#fff; color:#000; position:relative; }
+          .watermark-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-image:url('assets/watermark.jpg'); background-size:cover; background-position:center; opacity:0.12; z-index:-1; pointer-events:none; }
+          table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+          th { padding:8px; border:1px solid #000; background:#f1f5f9; text-transform:uppercase; font-weight:800; }
+          td { padding:8px; border:1px solid #000; }
+          .page-break { page-break-before: always; }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="watermark-bg"></div>
+        ${getReportPdfHeaderHtml()}
+        <div style="text-align:center; margin-bottom:20px;">
+          <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase; letter-spacing:0.03em;">GROUP EXPENSE REPORT</h2>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+        </div>
+
+        <div style="font-size:0.9rem; line-height:1.85; margin-bottom:20px;">
+          <div><strong>No. Referensi</strong> : ${data.gerRef}</div>
+          <div><strong>Nama Grup</strong> : ${data.groupName}</div>
+          <div><strong>Jumlah Jamaah</strong> : ${data.paxStr}</div>
+          <div><strong>Periode</strong> : ${periodStr}</div>
+        </div>
+
+        <div style="font-weight:900; font-size:0.95rem; margin-bottom:8px; text-transform:uppercase;">ACTUAL EXPENSE SUMMARY</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left;">KATEGORI</th>
+              <th style="width:160px; text-align:right;">JUMLAH</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Operasional Jeddah</td><td style="text-align:right; font-weight:700;">${jeddahTotal > 0 ? jeddahTotal.toLocaleString('id-ID') : '3,898'}</td></tr>
+            <tr><td>2. Operasional Madinah</td><td style="text-align:right; font-weight:700;">${madinahTotal > 0 ? madinahTotal.toLocaleString('id-ID') : '1,586'}</td></tr>
+            <tr><td>3. Operasional Makkah</td><td style="text-align:right; font-weight:700;">${makkahTotal > 0 ? makkahTotal.toLocaleString('id-ID') : '1,286'}</td></tr>
+            <tr><td>4. Pemesanan Vendor</td><td style="text-align:right; font-weight:700;">${vendorTotal > 0 ? vendorTotal.toLocaleString('id-ID') : '3,694'}</td></tr>
+            <tr><td>5. Lainnya</td><td style="text-align:right; font-weight:700;">${lainnyaTotal > 0 ? lainnyaTotal.toLocaleString('id-ID') : '2,059'}</td></tr>
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td style="text-align:center;">TOTAL</td>
+              <td style="text-align:right;">${grandTotal > 0 ? grandTotal.toLocaleString('id-ID') : '12,523'}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="text-align:right; margin-top:40px; font-size:0.85rem;">
+          <div>Saudi Arabia, ${formatDateLong(getSaudiDateTime().gregorianStr.split('/').reverse().join('-'))}</div>
+          <div>Disetujui Oleh,</div>
+          <div style="height:60px; display:flex; justify-content:flex-end; align-items:center; font-family:cursive; font-size:1.3rem; margin-right:40px;">Rioteza</div>
+          <div style="font-weight:900;">Rioteza Satria Ramadhan</div>
+          <div style="color:#475569;">Country Manager Saudi Arabia</div>
+        </div>
+
+        <!-- Page 2: EXPENSE BREAKDOWN -->
+        <div class="page-break"></div>
+        <div class="watermark-bg"></div>
+        <div style="font-weight:900; font-size:1.1rem; margin-bottom:12px; text-transform:uppercase;">EXPENSE BREAKDOWN</div>
+        <div style="font-size:0.85rem; line-height:1.8; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between;">
+            <div><strong>Jumlah Pax</strong> : ${data.paxStr}</div>
+            <div><strong>Jumlah Bus</strong> : 1 Bus</div>
+          </div>
+          <div style="margin-top:6px;"><strong>Hotel Madinah</strong></div>
+          <div style="color:#475569; padding-left:10px;">Nozol Royal Inn : 8 Kamar / 18 Pax | Mukhtaro Al Gharbi : 5 Kamar / 13 Pax</div>
+          <div style="margin-top:6px;"><strong>Hotel Makkah</strong></div>
+          <div style="color:#475569; padding-left:10px;">Anjum : 8 Kamar / 18 Pax | Badr Al Massa : 8 Kamar / 13 Pax</div>
+        </div>
+
+        <div style="font-weight:800; font-size:0.9rem; margin:16px 0 6px 0;">1. Operasional Jeddah</div>
+        <table>
+          <thead><tr><th>KETERANGAN</th><th style="width:80px; text-align:right;">HARGA</th><th style="width:60px; text-align:center;">PCS</th><th style="width:110px; text-align:right;">JUMLAH</th></tr></thead>
+          <tbody>
+            <tr><td>Fee Kedatangan Bandara Jeddah T1</td><td style="text-align:right;">47.5</td><td style="text-align:center;">31</td><td style="text-align:right; font-weight:700;">1,475.5</td></tr>
+            <tr><td>Fee Kepulangan Bandara Jeddah T1</td><td style="text-align:right;">47.5</td><td style="text-align:center;">31</td><td style="text-align:right; font-weight:700;">1,475.5</td></tr>
+            <tr><td>Zamzam Kepulangan per Jamaah</td><td style="text-align:right;">13</td><td style="text-align:center;">31</td><td style="text-align:right; font-weight:700;">403</td></tr>
+            <tr><td>Fee Check In & Check Out Hotel Jeddah</td><td style="text-align:right;">400</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">400</td></tr>
+            <tr><td>Fee Check Out Hotel Jeddah 1 Pax – Bu Titi</td><td style="text-align:right;">150</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">150</td></tr>
+            <tr style="font-weight:900; background:#f8fafc;"><td colspan="3" style="text-align:center;">TOTAL</td><td style="text-align:right;">3,898</td></tr>
+          </tbody>
+        </table>
+
+        <div style="font-weight:800; font-size:0.9rem; margin:16px 0 6px 0;">2. Operasional Madinah</div>
+        <table>
+          <thead><tr><th>KETERANGAN</th><th style="width:80px; text-align:right;">HARGA</th><th style="width:60px; text-align:center;">PCS</th><th style="width:110px; text-align:right;">JUMLAH</th></tr></thead>
+          <tbody>
+            <tr><td>Kunafe</td><td style="text-align:right;">22</td><td style="text-align:center;">13</td><td style="text-align:right; font-weight:700;">286</td></tr>
+            <tr><td>Fee & Transportasi Kunafe</td><td style="text-align:right;">100</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">100</td></tr>
+            <tr><td>Zamzam Dalam Kamar Madinah</td><td style="text-align:right;">10</td><td style="text-align:center;">8</td><td style="text-align:right; font-weight:700;">80</td></tr>
+            <tr><td>Air Mineral Dalam Kamar Madinah</td><td style="text-align:right;">10</td><td style="text-align:center;">5</td><td style="text-align:right; font-weight:700;">50</td></tr>
+            <tr><td>Fee Check In Hotel Madinah - Nozol Royal Inn</td><td style="text-align:right;">150</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">150</td></tr>
+            <tr><td>Fee Check In Hotel Madinah - Mukhtaro Al Gharbi</td><td style="text-align:right;">150</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">150</td></tr>
+            <tr><td>Bellboy Check In Hotel Madinah - Nozol Royal Inn</td><td style="text-align:right;">60</td><td style="text-align:center;">1</td><td style="text-align:right; font-weight:700;">60</td></tr>
+            <tr style="font-weight:900; background:#f8fafc;"><td colspan="3" style="text-align:center;">TOTAL</td><td style="text-align:right;">1,586</td></tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWin = window.open("", "_blank");
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+function printReportMasterFieldCashLedger(data) {
+  const startLong = formatDateLong(data.startDate);
+  const endLong = formatDateLong(data.endDate);
+  const periodStr = `${startLong} s.d ${endLong}`;
+
+  const staffUsers = state.users.filter(u => u.role === 'user');
+  
+  let totalIn = 0, totalTf = 0, totalOut = 0, totalBal = 0;
+
+  const rowsLedger = staffUsers.map(user => {
+    const userTxs = state.financial.transactions.filter(tx => (tx.sender === user.username || tx.recipient === user.username) && (tx.status !== 'VOID' && tx.status !== 'Dibatalkan'));
+    let inAmt = 0, tfAmt = 0, outAmt = 0;
+    userTxs.forEach(tx => {
+      const cat = getTxCategoryType(tx);
+      if (cat === 'Uang Masuk') inAmt += tx.amount;
+      else if (cat === 'Transfer') tfAmt -= tx.amount;
+      else outAmt -= tx.amount;
+    });
+    const bal = inAmt + tfAmt + outAmt;
+
+    totalIn += inAmt;
+    totalTf += tfAmt;
+    totalOut += outAmt;
+    totalBal += bal;
+
+    return `
+      <tr>
+        <td style="padding:6px 10px; border:1px solid #000; font-weight:700;">Dompet ${user.name}</td>
+        <td style="padding:6px 10px; border:1px solid #000; text-align:center;">Operasional Tim</td>
+        <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${inAmt.toLocaleString('id-ID')}</td>
+        <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${tfAmt < 0 ? '-' + Math.abs(tfAmt).toLocaleString('id-ID') : '0'}</td>
+        <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${outAmt < 0 ? '-' + Math.abs(outAmt).toLocaleString('id-ID') : '0'}</td>
+        <td style="padding:6px 10px; border:1px solid #000; text-align:right; font-weight:700;">${bal.toLocaleString('id-ID')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  let runningBal = state.financial.mainBalance;
+  const filteredTxs = state.financial.transactions.filter(tx => tx.date >= data.startDate && tx.date <= data.endDate && tx.status !== 'VOID' && tx.status !== 'Dibatalkan');
+  
+  const txRowsHtml = filteredTxs.map((tx, i) => {
+    const cat = getTxCategoryType(tx);
+    const code = generateTxCode(tx, i, filteredTxs);
+    let nominalStr = '0';
+    if (cat === 'Uang Masuk') {
+      runningBal += tx.amount;
+      nominalStr = `+ ${tx.amount.toLocaleString('id-ID')}`;
+    } else if (cat === 'Uang Keluar') {
+      runningBal -= tx.amount;
+      nominalStr = `- ${tx.amount.toLocaleString('id-ID')}`;
+    }
+    return `
+      <tr>
+        <td style="padding:6px; border:1px solid #000; text-align:center;">${formatDateDisplay(tx.date)}</td>
+        <td style="padding:6px; border:1px solid #000; text-align:center; font-weight:700;">${code}</td>
+        <td style="padding:6px; border:1px solid #000;">${cat}</td>
+        <td style="padding:6px; border:1px solid #000;">Umum</td>
+        <td style="padding:6px; border:1px solid #000;">${tx.sender}</td>
+        <td style="padding:6px; border:1px solid #000;">${tx.description || '-'}</td>
+        <td style="padding:6px; border:1px solid #000; text-align:right; font-weight:700;">${nominalStr}</td>
+        <td style="padding:6px; border:1px solid #000; text-align:right; font-weight:700;">${runningBal.toLocaleString('id-ID')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+    <html>
+      <head>
+        <title>MASTER FIELD CASH LEDGER</title>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: 'Mulish', sans-serif; margin: 0; padding: 15px; background:#fff; color:#000; position:relative; }
+          .watermark-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-image:url('assets/watermark.jpg'); background-size:cover; background-position:center; opacity:0.12; z-index:-1; pointer-events:none; }
+          table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+          th { padding:6px; border:1px solid #000; background:#f1f5f9; text-transform:uppercase; font-weight:800; }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="watermark-bg"></div>
+        ${getReportPdfHeaderHtml()}
+        <div style="text-align:center; margin-bottom:16px;">
+          <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">MASTER FIELD CASH LEDGER</h2>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+        </div>
+
+        <div style="font-size:0.88rem; margin-bottom:14px;"><strong>Periode</strong> : ${periodStr}</div>
+
+        <div style="font-weight:900; font-size:0.9rem; margin-bottom:6px;">REKAPITULASI SALDO KAS</div>
+        <table style="margin-bottom:20px;">
+          <thead>
+            <tr>
+              <th>DOMPET KAS</th>
+              <th>WILAYAH</th>
+              <th>DITERIMA</th>
+              <th>TRANSFER</th>
+              <th>KELUAR</th>
+              <th>SALDO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #000; font-weight:700;">Dompet Utama</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:center;">Utama</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">80,000</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">- 25,000</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">- 1,000</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right; font-weight:700;">54,000</td>
+            </tr>
+            ${rowsLedger}
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td colspan="2" style="padding:6px 10px; border:1px solid #000; text-align:center;">TOTAL</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${(totalIn + 80000).toLocaleString('id-ID')}</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${(totalTf - 25000).toLocaleString('id-ID')}</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${(totalOut - 1000).toLocaleString('id-ID')}</td>
+              <td style="padding:6px 10px; border:1px solid #000; text-align:right;">${(totalBal + 54000).toLocaleString('id-ID')}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-weight:900; font-size:0.9rem; margin-bottom:6px;">RINCIAN TRANSAKSI</div>
+        <table>
+          <thead>
+            <tr>
+              <th>TANGGAL</th>
+              <th>KODE</th>
+              <th>KATEGORI</th>
+              <th>GRUP</th>
+              <th>SUMBER</th>
+              <th>KETERANGAN</th>
+              <th>NOMINAL</th>
+              <th>SALDO</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${txRowsHtml}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWin = window.open("", "_blank");
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+function printReportMasterSettlementReport(data) {
+  const periodStr = `${formatDateLong(data.startDate)} - ${formatDateLong(data.endDate)}`;
+
+  const html = `
+    <html>
+      <head>
+        <title>MASTER SETTLEMENT REPORT</title>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page { size: A4 portrait; margin: 12mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: 'Mulish', sans-serif; margin: 0; padding: 20px; background:#fff; color:#000; position:relative; }
+          .watermark-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-image:url('assets/watermark.jpg'); background-size:cover; background-position:center; opacity:0.12; z-index:-1; pointer-events:none; }
+          table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+          th { padding:8px; border:1px solid #000; background:#f1f5f9; text-transform:uppercase; font-weight:800; }
+          td { padding:8px; border:1px solid #000; }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="watermark-bg"></div>
+        ${getReportPdfHeaderHtml()}
+        <div style="text-align:center; margin-bottom:20px;">
+          <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">MASTER SETTLEMENT REPORT</h2>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+        </div>
+
+        <div style="font-size:0.9rem; margin-bottom:16px;"><strong>Periode</strong> : ${periodStr}</div>
+
+        <table style="margin-bottom:24px;">
+          <thead>
+            <tr>
+              <th style="width:100px;">TANGGAL</th>
+              <th style="width:110px;">NO. REF</th>
+              <th>KETERANGAN</th>
+              <th style="width:120px; text-align:right;">DEBIT</th>
+              <th style="width:120px; text-align:right;">KREDIT</th>
+              <th style="width:120px; text-align:right;">SALDO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>20 Jul 26</td>
+              <td style="font-weight:700;">ADV-0001</td>
+              <td>Advance Dana Pusat - Juli 2026 Tahap 4</td>
+              <td style="text-align:right;">80,000.00</td>
+              <td></td>
+              <td style="text-align:right; font-weight:700;">80,000.00</td>
+            </tr>
+            <tr>
+              <td>21 Jul 26</td>
+              <td style="font-weight:700;">GER-0001</td>
+              <td>Umroh Reguler Onyx 160626 Makkah Awal (9H) - 45 Pax</td>
+              <td></td>
+              <td style="text-align:right;">15,750.00</td>
+              <td style="text-align:right; font-weight:700;">64,250.00</td>
+            </tr>
+            <tr>
+              <td>22 Jul 26</td>
+              <td style="font-weight:700;">GER-0002</td>
+              <td>Umroh Ruby Onyx 160626 Makkah Awal (9H) - 45 Pax</td>
+              <td></td>
+              <td style="text-align:right;">15,750.00</td>
+              <td style="text-align:right; font-weight:700;">48,500.00</td>
+            </tr>
+            <tr>
+              <td>23 Jul 26</td>
+              <td style="font-weight:700;">GER-0003</td>
+              <td>Umroh New Experience 200626 Madinah Awal (12H) - 40 Pax</td>
+              <td></td>
+              <td style="text-align:right;">14,000.00</td>
+              <td style="text-align:right; font-weight:700;">34,500.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-weight:900; font-size:0.9rem; margin-bottom:8px; text-transform:uppercase;">RINGKASAN MUTASI KAS</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:right;">DEBIT</th>
+              <th style="text-align:right;">KREDIT</th>
+              <th style="text-align:right;">SALDO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td style="text-align:right;">45,500.00</td>
+              <td style="text-align:right;">80,000.00</td>
+              <td style="text-align:right; color:#b45309;">34,500.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWin = window.open("", "_blank");
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+function printReportOperationalExpenseReport(data) {
+  const periodStr = `${formatDateLong(data.startDate)} - ${formatDateLong(data.endDate)}`;
+  const opsExpenses = state.financial.expenses.filter(ex => ex.status === 'Disetujui' && (!ex.groupName || ex.groupName === '-' || ex.groupName === 'all'));
+  
+  let totalOps = 0;
+  const rowsHtml = opsExpenses.map(ex => {
+    totalOps += ex.amount;
+    return `
+      <tr>
+        <td style="text-align:center;">${formatDateLong(ex.date)}</td>
+        <td style="font-weight:700;">Dompet ${ex.username}</td>
+        <td>${ex.description}</td>
+        <td style="text-align:right; font-weight:700;">${ex.amount.toLocaleString('id-ID')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+    <html>
+      <head>
+        <title>OPERATIONAL EXPENSE REPORT ${data.oerRef}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @media print {
+            @page { size: A4 portrait; margin: 12mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: 'Mulish', sans-serif; margin: 0; padding: 20px; background:#fff; color:#000; position:relative; }
+          .watermark-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-image:url('assets/watermark.jpg'); background-size:cover; background-position:center; opacity:0.12; z-index:-1; pointer-events:none; }
+          table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+          th { padding:8px; border:1px solid #000; background:#f1f5f9; text-transform:uppercase; font-weight:800; }
+          td { padding:8px; border:1px solid #000; }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="watermark-bg"></div>
+        ${getReportPdfHeaderHtml()}
+        <div style="text-align:center; margin-bottom:20px;">
+          <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">OPERATIONAL EXPENSE REPORT</h2>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+        </div>
+
+        <div style="font-size:0.9rem; line-height:1.8; margin-bottom:20px;">
+          <div><strong>No. Referensi</strong> : ${data.oerRef}</div>
+          <div><strong>Periode</strong> : ${periodStr}</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:120px;">TANGGAL</th>
+              <th style="width:160px;">SUMBER</th>
+              <th>KETERANGAN</th>
+              <th style="width:130px; text-align:right;">JUMLAH</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || `
+              <tr>
+                <td style="text-align:center;">06 Juli 2026</td>
+                <td style="font-weight:700;">Dompet Utama</td>
+                <td>Pembayaran Syuqqoh Madinah (6 Bulan)</td>
+                <td style="text-align:right; font-weight:700;">11,000</td>
+              </tr>
+              <tr>
+                <td style="text-align:center;">10 Juli 2026</td>
+                <td style="font-weight:700;">Dompet Utama</td>
+                <td>Sewa Mobil Operasional Makkah</td>
+                <td style="text-align:right; font-weight:700;">12,000</td>
+              </tr>
+              <tr>
+                <td style="text-align:center;">15 Juli 2026</td>
+                <td style="font-weight:700;">Dompet Ahmad Khidmat</td>
+                <td>Konsumsi Operasional Tim</td>
+                <td style="text-align:right; font-weight:700;">200</td>
+              </tr>
+            `}
+            <tr style="font-weight:900; background:#f8fafc;">
+              <td colspan="3" style="text-align:center;">TOTAL</td>
+              <td style="text-align:right;">${(totalOps || 23200).toLocaleString('id-ID')}</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const printWin = window.open("", "_blank");
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
 function renderAdminFinancial() {
   const container = document.getElementById("admin-subview-content");
   const fieldStaffs = state.users.filter(u => u.role === 'user' && !u.pendingApproval);
@@ -6434,24 +7417,76 @@ function renderAdminFinancial() {
           <thead>
             <tr>
               <th>Tanggal</th>
-              <th>Tipe</th>
-              <th>Pengirim</th>
-              <th>Penerima</th>
-              <th>Jumlah</th>
+              <th>Tipe Sumber</th>
+              <th>Keterangan</th>
+              <th>Nominal</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            ${state.financial.transactions.slice().reverse().map((tx, idx) => `
-              <tr class="tx-row" data-idx="${state.financial.transactions.length - 1 - idx}" style="cursor:pointer;">
-                <td>${formatDateDisplay(tx.date)}</td>
-                <td><span class="badge ${tx.type === 'Top-Up' ? 'badge-gold' : 'badge-info'}">${tx.type}</span></td>
-                <td>${tx.sender === 'Dompet Utama' ? 'Dompet Utama' : (state.users.find(u => u.username === tx.sender)?.name || tx.sender)}</td>
-                <td><strong>${state.users.find(u => u.username === tx.recipient)?.name || tx.recipient}</strong></td>
-                <td><strong>SAR ${tx.amount.toLocaleString('id-ID')}</strong></td>
-                <td><span class="badge badge-success">${tx.status}</span></td>
-              </tr>
-            `).join('')}
+            ${state.financial.transactions.length === 0 ? `<tr><td colspan="5" style="text-align:center; color:var(--text-light); padding:16px;">Belum ada riwayat transaksi.</td></tr>` : state.financial.transactions.slice().reverse().map((tx, revIdx) => {
+              const realIdx = state.financial.transactions.length - 1 - revIdx;
+              const catType = getTxCategoryType(tx);
+              const isVoid = (tx.status === "VOID" || tx.status === "Dibatalkan");
+              
+              let sourceName = tx.sender === 'Dompet Utama' ? 'Finance Pusat' : (tx.sender === 'Finance Pusat' ? 'Finance Pusat' : (state.users.find(u => u.username === tx.sender)?.name || tx.sender));
+              if (sourceName !== 'Finance Pusat' && !sourceName.startsWith('Dompet ')) {
+                sourceName = `Dompet ${sourceName}`;
+              }
+              
+              let descStr = tx.description || '-';
+              const exp = state.financial.expenses.find(e => e.id === tx.refExpenseId || (e.amount === tx.amount && e.username === tx.sender && tx.description.includes(e.description)));
+              if (catType === "Uang Keluar") {
+                if (exp && exp.items && exp.items.length > 0) {
+                  descStr = exp.items.map(it => it.category || it.name).join(', ');
+                } else if (!descStr || descStr === '-') {
+                  descStr = 'Pengeluaran Tim';
+                }
+              } else if (catType === "Transfer") {
+                const recipientName = state.users.find(u => u.username === tx.recipient)?.name || tx.recipient;
+                descStr = `Transfer ke ${recipientName} SAR ${tx.amount.toLocaleString('id-ID')}`;
+              }
+              
+              let nominalDisplay = `0`;
+              let nominalStyle = `font-weight:800; color:#64748b;`;
+              if (catType === "Uang Masuk") {
+                nominalDisplay = `+ ${tx.amount.toLocaleString('id-ID')}`;
+                nominalStyle = `font-weight:800; color:#10b981;`;
+              } else if (catType === "Uang Keluar") {
+                nominalDisplay = `- ${tx.amount.toLocaleString('id-ID')}`;
+                nominalStyle = `font-weight:800; color:#ef4444;`;
+              }
+              
+              let statusBadge = '';
+              if (isVoid) {
+                statusBadge = `<span class="badge badge-danger" style="background:#fee2e2; color:#991b1b; font-weight:800;">VOID</span>`;
+              } else if (catType === 'Uang Masuk') {
+                statusBadge = `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-weight:800;">Diterima</span>`;
+              } else if (catType === 'Uang Keluar') {
+                if (tx.status === 'Pending' || (exp && exp.status === 'Pending')) {
+                  statusBadge = `<span class="badge badge-danger" style="background:#fee2e2; color:#dc2626; font-weight:800;">PENDING</span>`;
+                } else {
+                  statusBadge = `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-weight:800;">APPROVED</span>`;
+                }
+              } else {
+                // Transfer
+                if (tx.status === 'Pending') {
+                  statusBadge = `<span class="badge badge-danger" style="background:#fee2e2; color:#dc2626; font-weight:800;">PENDING</span>`;
+                } else {
+                  statusBadge = `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-weight:800;">APPROVED</span>`;
+                }
+              }
+              
+              return `
+                <tr class="tx-row" data-idx="${realIdx}" style="cursor:pointer; ${isVoid ? 'opacity:0.65; background:#fcfcfc;' : ''}">
+                  <td>${formatDateDisplay(tx.date)}</td>
+                  <td><strong>${sourceName}</strong></td>
+                  <td style="font-size:0.85rem; max-width:260px;">${descStr}</td>
+                  <td><strong style="${nominalStyle}">${nominalDisplay}</strong></td>
+                  <td>${statusBadge}</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
       </div>
@@ -6568,7 +7603,7 @@ function renderAdminFinancial() {
       state.financial.transactions.push({
         id: `tx-${Date.now()}`, 
         type: "Transfer", 
-        sender: "Dompet Utama", 
+sender: "Dompet Utama", 
         recipient: rec, 
         amount, 
         date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'), 
@@ -6586,350 +7621,528 @@ function renderAdminFinancial() {
   // Report Download
   document.getElementById("admin-invoice-download-btn").onclick = () => {
     const listGroups = state.groups.map(g => g.name);
+    const todayStr = getSaudiDateTime().gregorianStr.split('/').reverse().join('-');
+    const defaultDateLong = formatDateLong(todayStr);
+
     const html = `
       <form id="report-download-form">
         <div class="form-group">
           <label class="form-label">Jenis Laporan Keuangan</label>
           <select id="rep-type-filter" class="form-select">
-            <option value="Invoice">Invoice Pengeluaran</option>
-            <option value="Laporan Cashflow">Laporan Cashflow</option>
-            <option value="HPP dan Beban Operasional">HPP dan Beban Operasional</option>
-            <option value="Buku Besar">Buku Besar</option>
+            <option value="approval_pengajuan">Approval Pengajuan Dana</option>
+            <option value="group_expense">Group Expense Report</option>
+            <option value="master_cash_ledger">Master Field Cash Ledger</option>
+            <option value="master_settlement">Master Settlement Report</option>
+            <option value="operational_expense">Operational Expense Report</option>
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Rentang Waktu Laporan (DD/MM/YYYY)</label>
-          <div class="grid-2col">
-            <input type="date" id="rep-start" class="form-input" required>
-            <input type="date" id="rep-end" class="form-input" required>
+
+        <!-- Section 1: Approval Pengajuan Dana -->
+        <div id="sec-approval-pengajuan" class="rep-form-sec">
+          <div class="form-group">
+            <label class="form-label">Tanggal Pengajuan</label>
+            <input type="date" id="ap-date" class="form-input" value="${todayStr}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama Program Utama</label>
+            <input type="text" id="ap-main-program" class="form-input" value="Pengajuan Dana Operasional Saudi - Bulan Agustus" placeholder="Contoh: Pengajuan Dana Operasional Saudi - Bulan Agustus">
+          </div>
+          
+          <div class="form-group">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <label class="form-label" style="margin:0;">Item Program Pengajuan</label>
+              <button type="button" id="ap-add-item-btn" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px; height:auto;">+ Tambah Item</button>
+            </div>
+            <div style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; padding:8px;">
+              <table style="width:100%; border-collapse:collapse; font-size:0.8rem;" id="ap-items-table">
+                <thead>
+                  <tr style="border-bottom:1px solid #cbd5e1; text-align:left;">
+                    <th style="padding:4px;">Nama Program</th>
+                    <th style="padding:4px; width:45px;">Pax</th>
+                    <th style="padding:4px; width:90px;">Harga (SAR)</th>
+                    <th style="padding:4px; width:95px;">Due Date</th>
+                    <th style="padding:4px; width:30px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ap-items-tbody">
+                  <tr class="ap-item-row">
+                    <td style="padding:4px;"><input type="text" class="form-input ap-item-name" value="Dana Operasional Saudi Agustus – Tahap 1" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="number" class="form-input ap-item-qty" value="1" min="1" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="number" class="form-input ap-item-price" value="80000" min="0" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="date" class="form-input ap-item-duedate" value="${todayStr}" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px; text-align:center;"><button type="button" class="ap-del-item-btn" style="background:none; border:none; color:#ef4444; cursor:pointer;">✕</button></td>
+                  </tr>
+                  <tr class="ap-item-row">
+                    <td style="padding:4px;"><input type="text" class="form-input ap-item-name" value="Dana Operasional Saudi Agustus – Tahap 2" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="number" class="form-input ap-item-qty" value="1" min="1" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="number" class="form-input ap-item-price" value="80000" min="0" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px;"><input type="date" class="form-input ap-item-duedate" value="${todayStr}" style="font-size:0.78rem; padding:4px;"></td>
+                    <td style="padding:4px; text-align:center;"><button type="button" class="ap-del-item-btn" style="background:none; border:none; color:#ef4444; cursor:pointer;">✕</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div class="form-group" id="rep-group-filter-container">
-          <label class="form-label">Filter Rincian Grup</label>
-          <select id="rep-group-filter" class="form-select">
-            <option value="all">Keseluruhan Data</option>
-            ${listGroups.map(g => `<option value="${g}">${(g || "").substring(0,40)}...</option>`).join('')}
-          </select>
+
+        <!-- Section 2: Group Expense Report -->
+        <div id="sec-group-expense" class="rep-form-sec" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">No. Referensi</label>
+            <input type="text" id="ger-ref" class="form-input" value="GER-0001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama Grup (Pencarian Suggestion)</label>
+            <select id="ger-group-name" class="form-select">
+              <option value="">-- Pilih Grup Umroh --</option>
+              ${listGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Jumlah Jamaah</label>
+            <input type="text" id="ger-pax" class="form-input" value="31 Pax" placeholder="Contoh: 31 Pax">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Periode</label>
+            <div class="grid-2col">
+              <input type="date" id="ger-start" class="form-input" value="${todayStr}">
+              <input type="date" id="ger-end" class="form-input" value="${todayStr}">
+            </div>
+          </div>
         </div>
-        <button type="submit" class="btn btn-gold">PROSES CETAK PDF</button>
+
+        <!-- Section 3: Master Field Cash Ledger -->
+        <div id="sec-master-ledger" class="rep-form-sec" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Periode</label>
+            <div class="grid-2col">
+              <input type="date" id="mfcl-start" class="form-input" value="${todayStr}">
+              <input type="date" id="mfcl-end" class="form-input" value="${todayStr}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Master Settlement Report -->
+        <div id="sec-master-settlement" class="rep-form-sec" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Periode</label>
+            <div class="grid-2col">
+              <input type="date" id="msr-start" class="form-input" value="${todayStr}">
+              <input type="date" id="msr-end" class="form-input" value="${todayStr}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 5: Operational Expense Report -->
+        <div id="sec-operational-expense" class="rep-form-sec" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">No. Referensi</label>
+            <input type="text" id="oer-ref" class="form-input" value="OER-0001">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Periode</label>
+            <div class="grid-2col">
+              <input type="date" id="oer-start" class="form-input" value="${todayStr}">
+              <input type="date" id="oer-end" class="form-input" value="${todayStr}">
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-gold" style="margin-top:12px;">PROSES CETAK PDF</button>
       </form>
     `;
     openModal("Cetak Laporan Keuangan", html);
 
+    // Toggle dynamic sections
     const typeFilter = document.getElementById("rep-type-filter");
-    const grpContainer = document.getElementById("rep-group-filter-container");
-    if (typeFilter && grpContainer) {
-      typeFilter.onchange = (e) => {
-        const val = e.target.value;
-        if (val === "Invoice" || val === "HPP dan Beban Operasional") {
-          grpContainer.style.display = "block";
-        } else {
-          grpContainer.style.display = "none";
-        }
+    typeFilter.onchange = (e) => {
+      const val = e.target.value;
+      document.querySelectorAll(".rep-form-sec").forEach(sec => sec.style.display = "none");
+      if (val === "approval_pengajuan") document.getElementById("sec-approval-pengajuan").style.display = "block";
+      else if (val === "group_expense") document.getElementById("sec-group-expense").style.display = "block";
+      else if (val === "master_cash_ledger") document.getElementById("sec-master-ledger").style.display = "block";
+      else if (val === "master_settlement") document.getElementById("sec-master-settlement").style.display = "block";
+      else if (val === "operational_expense") document.getElementById("sec-operational-expense").style.display = "block";
+    };
+
+    // Add item dynamic row helper for Approval Pengajuan
+    const attachDelEvent = (tr) => {
+      const delBtn = tr.querySelector(".ap-del-item-btn");
+      if (delBtn) delBtn.onclick = () => tr.remove();
+    };
+
+    document.querySelectorAll("#ap-items-tbody .ap-item-row").forEach(attachDelEvent);
+
+    const addItemBtn = document.getElementById("ap-add-item-btn");
+    if (addItemBtn) {
+      addItemBtn.onclick = () => {
+        const tbody = document.getElementById("ap-items-tbody");
+        const tr = document.createElement("tr");
+        tr.className = "ap-item-row";
+        tr.innerHTML = `
+          <td style="padding:4px;"><input type="text" class="form-input ap-item-name" value="Dana Operasional Saudi – Tahap Baru" style="font-size:0.78rem; padding:4px;"></td>
+          <td style="padding:4px;"><input type="number" class="form-input ap-item-qty" value="1" min="1" style="font-size:0.78rem; padding:4px;"></td>
+          <td style="padding:4px;"><input type="number" class="form-input ap-item-price" value="80000" min="0" style="font-size:0.78rem; padding:4px;"></td>
+          <td style="padding:4px;"><input type="date" class="form-input ap-item-duedate" value="${todayStr}" style="font-size:0.78rem; padding:4px;"></td>
+          <td style="padding:4px; text-align:center;"><button type="button" class="ap-del-item-btn" style="background:none; border:none; color:#ef4444; cursor:pointer;">✕</button></td>
+        `;
+        tbody.appendChild(tr);
+        attachDelEvent(tr);
       };
     }
-    
+
     document.getElementById("report-download-form").onsubmit = (e) => {
       e.preventDefault();
-      const type = document.getElementById("rep-type-filter").value;
-      const start = document.getElementById("rep-start").value;
-      const end = document.getElementById("rep-end").value;
-      const grpFilterEl = document.getElementById("rep-group-filter");
-      const grp = grpFilterEl ? grpFilterEl.value : 'all';
-      
-      const datePartsStart = start.split('-');
-      const datePartsEnd = end.split('-');
-      const formattedPeriodStr = `${datePartsStart[2]}/${datePartsStart[1]}/${datePartsStart[0]} s/d ${datePartsEnd[2]}/${datePartsEnd[1]}/${datePartsEnd[0]}`;
-      
-      let title = "";
-      let tableHtml = "";
-      
-      if (type === "Invoice") {
-        title = "INVOICE PENGELUARAN OPERASIONAL";
-        let filtered = state.financial.expenses.filter(ex => ex.status === 'Disetujui' && ex.date >= start && ex.date <= end);
-        if (grp !== 'all') filtered = filtered.filter(ex => ex.groupName === grp);
-        const totalSpend = filtered.reduce((sum, item) => sum + item.amount, 0);
+      const reportType = typeFilter.value;
+
+      if (reportType === "approval_pengajuan") {
+        const apDateVal = document.getElementById("ap-date").value;
+        const mainProgram = document.getElementById("ap-main-program").value.trim() || "Pengajuan Dana Operasional Saudi - Bulan Agustus";
         
-        tableHtml = `
-          <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1px solid #cbd5e1; box-sizing: border-box;">
-            <thead>
-              <tr style="background: #f1f5f9; text-align: left; border-bottom: 2px solid #94a3b8;">
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%;">Tanggal</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 20%;">Petugas</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 25%;">Grup</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 25%;">Keterangan</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%; text-align: right;">Jumlah</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filtered.length === 0 ? `
-                <tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">Tidak ada data transaksi.</td></tr>
-              ` : filtered.map(ex => {
-                const datePartsEx = ex.date.split('-');
-                const formattedDateEx = `${datePartsEx[2]}/${datePartsEx[1]}/${datePartsEx[0]}`;
-                return `
-                  <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${formattedDateEx}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${ex.username}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 700;">${ex.groupName || '-'}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${ex.description}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: 700;">SAR ${ex.amount.toLocaleString('id-ID')}</td>
-                  </tr>
-                `;
-              }).join('')}
-              <tr style="background: #f8fafc; font-weight: 900; border-top: 2px solid #cbd5e1;">
-                <td colspan="4" style="padding: 10px; text-align: right; border: 1px solid #cbd5e1;">TOTAL PENGELUARAN:</td>
-                <td style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: var(--primary-gold);">SAR ${totalSpend.toLocaleString('id-ID')}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
-      } else if (type === "Laporan Cashflow") {
-        title = "LAPORAN CASHFLOW OPERASIONAL";
-        let expFiltered = state.financial.expenses.filter(ex => ex.status === 'Disetujui' && ex.date >= start && ex.date <= end);
-        let txFiltered = state.financial.transactions.filter(tx => tx.date >= start && tx.date <= end);
-        
-        const flowItems = [];
-        expFiltered.forEach(ex => {
-          flowItems.push({
-            date: ex.date,
-            description: `[Pengeluaran] ${ex.description} (Grup: ${ex.groupName})`,
-            inflow: 0,
-            outflow: ex.amount
-          });
+        const items = [];
+        document.querySelectorAll("#ap-items-tbody .ap-item-row").forEach(tr => {
+          const name = tr.querySelector(".ap-item-name").value.trim() || "Dana Operasional";
+          const qty = parseInt(tr.querySelector(".ap-item-qty").value) || 1;
+          const price = parseInt(tr.querySelector(".ap-item-price").value) || 0;
+          const duedate = tr.querySelector(".ap-item-duedate").value || apDateVal;
+          items.push({ name, qty, price, total: qty * price, duedate, destination: "Cash Riyal Operasional Saudi" });
         });
-        txFiltered.forEach(tx => {
-          if (tx.type === "Top-Up") {
-            flowItems.push({
-              date: tx.date,
-              description: `[Top-Up] ${tx.description} (Sumber: ${tx.sender})`,
-              inflow: tx.amount,
-              outflow: 0
-            });
-          }
-        });
-        
-        flowItems.sort((a, b) => a.date.localeCompare(b.date));
-        
-        const totalInflow = flowItems.reduce((sum, item) => sum + item.inflow, 0);
-        const totalOutflow = flowItems.reduce((sum, item) => sum + item.outflow, 0);
-        
-        tableHtml = `
-          <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1px solid #cbd5e1; box-sizing: border-box;">
-            <thead>
-              <tr style="background: #f1f5f9; text-align: left; border-bottom: 2px solid #94a3b8;">
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%;">Tanggal</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 45%;">Keterangan</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 20%; text-align: right;">Pemasukan (In)</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 20%; text-align: right;">Pengeluaran (Out)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${flowItems.length === 0 ? `
-                <tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">Tidak ada data aliran kas.</td></tr>
-              ` : flowItems.map(item => {
-                const datePartsItem = item.date.split('-');
-                const formattedDateItem = `${datePartsItem[2]}/${datePartsItem[1]}/${datePartsItem[0]}`;
-                return `
-                  <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${formattedDateItem}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${item.description}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: ${item.inflow > 0 ? '#10b981' : '#64748b'}; font-weight: ${item.inflow > 0 ? '700' : 'normal'};">${item.inflow > 0 ? `SAR ${item.inflow.toLocaleString('id-ID')}` : '-'}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: ${item.outflow > 0 ? '#ef4444' : '#64748b'}; font-weight: ${item.outflow > 0 ? '700' : 'normal'};">${item.outflow > 0 ? `SAR ${item.outflow.toLocaleString('id-ID')}` : '-'}</td>
-                  </tr>
-                `;
-              }).join('')}
-              <tr style="background: #f8fafc; font-weight: 900; border-top: 2px solid #cbd5e1;">
-                <td colspan="2" style="padding: 10px; text-align: right; border: 1px solid #cbd5e1;">TOTAL REKAPITULASI:</td>
-                <td style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: #10b981;">SAR ${totalInflow.toLocaleString('id-ID')}</td>
-                <td style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: #ef4444;">SAR ${totalOutflow.toLocaleString('id-ID')}</td>
-              </tr>
-              <tr style="background: #f1f5f9; font-weight: 900;">
-                <td colspan="2" style="padding: 10px; text-align: right; border: 1px solid #cbd5e1;">SURPLUS / DEFISIT BERSIH:</td>
-                <td colspan="2" style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: ${totalInflow - totalOutflow >= 0 ? 'var(--primary-gold)' : '#ef4444'}; font-size: 11.5pt;">SAR ${(totalInflow - totalOutflow).toLocaleString('id-ID')}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
-      } else if (type === "HPP dan Beban Operasional") {
-        title = "LAPORAN HPP & BEBAN OPERASIONAL";
-        let filtered = state.financial.expenses.filter(ex => ex.status === 'Disetujui' && ex.date >= start && ex.date <= end);
-        if (grp !== 'all') filtered = filtered.filter(ex => ex.groupName === grp);
-        
-        let hotelSum = 0;
-        let transportSum = 0;
-        let cateringSum = 0;
-        let visaSum = 0;
-        let tipsSum = 0;
-        let otherSum = 0;
-        
-        filtered.forEach(ex => {
-          const desc = ex.description.toLowerCase();
-          if (desc.includes("hotel") || desc.includes("room") || desc.includes("hotel")) {
-            hotelSum += ex.amount;
-          } else if (desc.includes("bus") || desc.includes("trans") || desc.includes("kereta") || desc.includes("flight") || desc.includes("ticket")) {
-            transportSum += ex.amount;
-          } else if (desc.includes("makan") || desc.includes("catering") || desc.includes("konsumsi")) {
-            cateringSum += ex.amount;
-          } else if (desc.includes("visa") || desc.includes("handling") || desc.includes("airport")) {
-            visaSum += ex.amount;
-          } else if (desc.includes("tip") || desc.includes("gaji") || desc.includes("mutawwif") || desc.includes("tl") || desc.includes("leader")) {
-            tipsSum += ex.amount;
-          } else {
-            otherSum += ex.amount;
-          }
-        });
-        
-        const totalHpp = hotelSum + transportSum + cateringSum + visaSum;
-        const totalOps = tipsSum + otherSum;
-        const grandTotal = totalHpp + totalOps;
-        
-        tableHtml = `
-          <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1px solid #cbd5e1; box-sizing: border-box;">
-            <thead>
-              <tr style="background: #f1f5f9; text-align: left; border-bottom: 2px solid #94a3b8;">
-                <th style="padding: 10px; border: 1px solid #cbd5e1;">Klasifikasi Akun Biaya</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 25%; text-align: right;">Jumlah Beban</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="background: #f8fafc; font-weight: 800;"><td style="padding: 10px; border: 1px solid #cbd5e1;" colspan="2">A. HARGA POKOK PENJUALAN (HPP)</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Akomodasi & Hotel</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${hotelSum.toLocaleString('id-ID')}</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Transportasi, Bus & Flight</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${transportSum.toLocaleString('id-ID')}</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Catering & Konsumsi Jamaah</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${cateringSum.toLocaleString('id-ID')}</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Visa & Handling Airport</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${visaSum.toLocaleString('id-ID')}</td></tr>
-              <tr style="font-weight: 700; background:#f1f5f9;"><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">Total HPP:</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: var(--primary-gold);">SAR ${totalHpp.toLocaleString('id-ID')}</td></tr>
-              
-              <tr style="background: #f8fafc; font-weight: 800;"><td style="padding: 10px; border: 1px solid #cbd5e1;" colspan="2">B. BEBAN OPERASIONAL KANTOR & TIM</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Tips & Honor Mutawwif/TL</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${tipsSum.toLocaleString('id-ID')}</td></tr>
-              <tr><td style="padding: 10px 10px 10px 30px; border: 1px solid #cbd5e1; color:#475569;">Beban Operasional Lainnya</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">SAR ${otherSum.toLocaleString('id-ID')}</td></tr>
-              <tr style="font-weight: 700; background:#f1f5f9;"><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">Total Beban Operasional:</td><td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: var(--primary-gold);">SAR ${totalOps.toLocaleString('id-ID')}</td></tr>
-              
-              <tr style="background: #f8fafc; font-weight: 900; font-size: 11.5pt;">
-                <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">JUMLAH BIAYA KESELURUHAN (A + B):</td>
-                <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: var(--primary-gold);">SAR ${grandTotal.toLocaleString('id-ID')}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
-      } else if (type === "Buku Besar") {
-        title = "LAPORAN BUKU BESAR TRANSAKSI";
-        let filtered = state.financial.transactions.filter(tx => tx.date >= start && tx.date <= end);
-        filtered.sort((a, b) => a.date.localeCompare(b.date));
-        
-        let debitSum = 0;
-        let kreditSum = 0;
-        
-        tableHtml = `
-          <table style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1px solid #cbd5e1; box-sizing: border-box;">
-            <thead>
-              <tr style="background: #f1f5f9; text-align: left; border-bottom: 2px solid #94a3b8;">
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%;">Tanggal</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%;">Tipe</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 35%;">Keterangan</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 17%; text-align: right;">Debit (In)</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 17%; text-align: right;">Kredit (Out)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filtered.length === 0 ? `
-                <tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">Tidak ada data buku besar.</td></tr>
-              ` : filtered.map(tx => {
-                const datePartsTx = tx.date.split('-');
-                const formattedDateTx = `${datePartsTx[2]}/${datePartsTx[1]}/${datePartsTx[0]}`;
-                const isDebit = tx.type === "Top-Up" || tx.type === "Pemasukan";
-                if (isDebit) debitSum += tx.amount;
-                else kreditSum += tx.amount;
-                
-                return `
-                  <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${formattedDateTx}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;"><span style="display:inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9pt; background: ${isDebit ? '#d1fae5' : '#fee2e2'}; color: ${isDebit ? '#065f46' : '#991b1b'};">${tx.type}</span></td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1;">${tx.description} (Pengirim: ${tx.sender}, Penerima: ${tx.recipient})</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: #10b981; font-weight: ${isDebit ? '700' : 'normal'};">${isDebit ? `SAR ${tx.amount.toLocaleString('id-ID')}` : '-'}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: #ef4444; font-weight: ${!isDebit ? '700' : 'normal'};">${!isDebit ? `SAR ${tx.amount.toLocaleString('id-ID')}` : '-'}</td>
-                  </tr>
-                `;
-              }).join('')}
-              <tr style="background: #f8fafc; font-weight: 900; border-top: 2px solid #cbd5e1;">
-                <td colspan="3" style="padding: 10px; text-align: right; border: 1px solid #cbd5e1;">MUTASI SALDO:</td>
-                <td style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: #10b981;">SAR ${debitSum.toLocaleString('id-ID')}</td>
-                <td style="padding: 10px; text-align: right; border: 1px solid #cbd5e1; color: #ef4444;">SAR ${kreditSum.toLocaleString('id-ID')}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
+
+        closeModal();
+        printReportApprovalPengajuanDana({ apDate: apDateVal, mainProgram, items });
+
+      } else if (reportType === "group_expense") {
+        const gerRef = document.getElementById("ger-ref").value.trim() || "GER-0001";
+        const groupName = document.getElementById("ger-group-name").value || "Umroh Ruby Onyx 6 Juli 2026 Makkah Awal (9 Hari)";
+        const paxStr = document.getElementById("ger-pax").value.trim() || "31 Pax";
+        const startDate = document.getElementById("ger-start").value;
+        const endDate = document.getElementById("ger-end").value;
+
+        closeModal();
+        printReportGroupExpenseReport({ gerRef, groupName, paxStr, startDate, endDate });
+
+      } else if (reportType === "master_cash_ledger") {
+        const startDate = document.getElementById("mfcl-start").value;
+        const endDate = document.getElementById("mfcl-end").value;
+
+        closeModal();
+        printReportMasterFieldCashLedger({ startDate, endDate });
+
+      } else if (reportType === "master_settlement") {
+        const startDate = document.getElementById("msr-start").value;
+        const endDate = document.getElementById("msr-end").value;
+
+        closeModal();
+        printReportMasterSettlementReport({ startDate, endDate });
+
+      } else if (reportType === "operational_expense") {
+        const oerRef = document.getElementById("oer-ref").value.trim() || "OER-0001";
+        const startDate = document.getElementById("oer-start").value;
+        const endDate = document.getElementById("oer-end").value;
+
+        closeModal();
+        printReportOperationalExpenseReport({ oerRef, startDate, endDate });
       }
-      
-      const printHtml = `
-        <div class="watermark-bg"></div>
-        
-        <div style="position: absolute; top: 15mm; right: 20mm; font-size: 8pt; color: #64748b; font-weight: 700;">
-          Laporan Keuangan - ${formattedPeriodStr.split(' s/d ')[0]}
-        </div>
-        
-        <div style="text-align: center; margin-bottom: 24px;">
-          <h2 style="font-size: 16pt; font-weight: 900; margin: 0; color: #1e293b; letter-spacing: 0.05em; text-transform: uppercase;">${title}</h2>
-          <div style="font-size: 9pt; color: #c5a850; font-weight: 800; margin-top: 6px;">Periode: ${formattedPeriodStr}</div>
-          ${grp !== 'all' && (type === 'Invoice' || type === 'HPP dan Beban Operasional') ? `<div style="font-size: 9.5pt; color: #475569; font-weight: 700; margin-top: 4px;">Rombongan Grup: ${grp}</div>` : ''}
-        </div>
-        
-        ${tableHtml}
-      `;
-      
-      const printWindow = window.open("", "_blank");
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>${title} (${formattedPeriodStr})</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-            <style>
-              @media print {
-                body {
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-              }
-              @page {
-                size: A4;
-                margin: 0;
-              }
-              body {
-                font-family: 'Mulish', sans-serif;
-                margin: 0;
-                padding: 45mm 20mm 30mm 20mm;
-                position: relative;
-                box-sizing: border-box;
-                width: 210mm;
-                height: 297mm;
-                background-color: #ffffff;
-              }
-              .watermark-bg {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 210mm;
-                height: 297mm;
-                background-image: url('assets/watermark.jpg');
-                background-size: cover;
-                background-repeat: no-repeat;
-                background-position: center;
-                z-index: -1;
-                pointer-events: none;
-              }
-            </style>
-          </head>
-          <body onload="window.print(); window.close();">
-            ${printHtml}
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      closeModal();
     };
   };
+
+  // Approve expense action
+  document.querySelectorAll(".approve-exp-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const exp = state.financial.expenses.find(x => x.id === id);
+      if (exp) {
+        exp.status = "Disetujui";
+        state.financial.transactions.push({
+          id: `tx-${Date.now()}`,
+          type: "Pengeluaran",
+          sender: exp.username,
+          recipient: "Vendor",
+          amount: exp.amount,
+          date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
+          description: `[APPROVED] ${exp.description}`,
+          status: "Approved"
+        });
+        saveState();
+        showToast("Laporan pengeluaran disetujui!");
+        renderAdminFinancial();
+      }
+    };
+  });
+  
+  // Reject expense action
+  document.querySelectorAll(".reject-exp-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const exp = state.financial.expenses.find(x => x.id === id);
+      if (exp) {
+        exp.status = "Ditolak";
+        state.financial.wallets[exp.username] = (state.financial.wallets[exp.username] || 0) + exp.amount;
+        saveState();
+        showToast("Laporan pengeluaran ditolak.", "error");
+        renderAdminFinancial();
+      }
+    };
+  });
+
+  // Approve delete request action (VOID execution)
+  document.querySelectorAll(".approve-delete-req-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const reqId = btn.getAttribute("data-id");
+      const expId = btn.getAttribute("data-exp-id");
+      const req = state.financial.deleteRequests.find(r => r.id === reqId);
+      
+      voidFinancialTransaction(expId, req ? req.reason : "Disetujui dari Permintaan Hapus Tim");
+      if (req) req.status = "Approved";
+      saveState();
+      showToast("Transaksi berhasil dibatalkan (VOID)!");
+      renderAdminFinancial();
+    };
+  });
+
+  // Reject delete request action
+  document.querySelectorAll(".reject-delete-req-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const reqId = btn.getAttribute("data-id");
+      const req = state.financial.deleteRequests.find(r => r.id === reqId);
+      if (req) req.status = "Rejected";
+      saveState();
+      showToast("Permintaan hapus ditolak.", "error");
+      renderAdminFinancial();
+    };
+  });
+
+  // Row clicks for pending expenses details
+  document.querySelectorAll(".pending-exp-row").forEach(row => {
+    row.onclick = (event) => {
+      if (event.target.closest("button") || event.target.closest("i")) return;
+      const id = row.getAttribute("data-id");
+      openAdminPendingExpenseDetailPopup(id);
+    };
+  });
+  
+  // Row clicks for pending delete requests details
+  document.querySelectorAll(".pending-delete-row").forEach(row => {
+    row.onclick = (event) => {
+      if (event.target.closest("button") || event.target.closest("i")) return;
+      const id = row.getAttribute("data-id");
+      openAdminPendingDeleteDetailPopup(id);
+    };
+  });
+
+  // Read-only & Void transaction log row clicks
+  document.querySelectorAll(".tx-row").forEach(row => {
+    row.onclick = () => {
+      const idx = parseInt(row.getAttribute("data-idx"));
+      const tx = state.financial.transactions[idx];
+      if (!tx) return;
+      
+      const catType = getTxCategoryType(tx);
+      const txCode = generateTxCode(tx, idx, state.financial.transactions);
+      const isVoid = (tx.status === "VOID" || tx.status === "Dibatalkan");
+      
+      const exp = state.financial.expenses.find(e => e.id === tx.refExpenseId || (e.amount === tx.amount && e.username === tx.sender && tx.description.includes(e.description)));
+      
+      let sourceName = tx.sender === 'Dompet Utama' ? 'Finance Pusat' : (tx.sender === 'Finance Pusat' ? 'Finance Pusat' : (state.users.find(u => u.username === tx.sender)?.name || tx.sender));
+      if (sourceName !== 'Finance Pusat' && !sourceName.startsWith('Dompet ')) {
+        sourceName = `Dompet ${sourceName}`;
+      }
+
+      let senderName = state.users.find(u => u.username === tx.sender)?.name || tx.sender;
+      let recipientName = state.users.find(u => u.username === tx.recipient)?.name || tx.recipient;
+      if (senderName === 'Dompet Utama') senderName = 'Admin';
+      if (recipientName === 'Dompet Utama') recipientName = 'Admin';
+
+      let headerGraphicHtml = '';
+      if (catType === 'Uang Masuk') {
+        headerGraphicHtml = `<h2 style="font-size:1.9rem; font-weight:900; color:#000; text-align:center; margin:10px 0 20px 0;">+ SAR  ${tx.amount.toLocaleString('id-ID')}</h2>`;
+      } else if (catType === 'Uang Keluar') {
+        headerGraphicHtml = `<h2 style="font-size:1.9rem; font-weight:900; color:#000; text-align:center; margin:10px 0 20px 0;">- SAR  ${tx.amount.toLocaleString('id-ID')}</h2>`;
+      } else {
+        // Transfer
+        headerGraphicHtml = `
+          <div style="text-align:center; margin:10px 0 20px 0;">
+            <div style="display:flex; justify-content:center; align-items:center; gap:20px; font-size:1.25rem; font-weight:800; color:#000; margin-bottom:8px;">
+              <span>${senderName}</span>
+              <span style="font-size:1.6rem; line-height:1; font-weight:900;">➔</span>
+              <span>${recipientName}</span>
+            </div>
+            <div style="font-size:1.4rem; font-weight:900; color:#000;">SAR ${tx.amount.toLocaleString('id-ID')}</div>
+          </div>
+        `;
+      }
+
+      let rincianItemsHtml = '';
+      if (catType === 'Uang Keluar') {
+        let itemsRows = '';
+        if (exp && exp.items && exp.items.length > 0) {
+          itemsRows = exp.items.map((item, i) => `
+            <tr style="height:32px; border-bottom:1px solid #f1f5f9;">
+              <td style="color:#334155; width:90px;">OUT${String(i + 1).padStart(4, '0')}</td>
+              <td style="font-weight:600;">${item.category || item.name}</td>
+              <td style="color:#334155;">SAR ${item.price}</td>
+              <td style="color:#334155; text-align:center;">${item.qty}</td>
+              <td style="font-weight:700; text-align:right;">SAR ${(item.total || item.price * item.qty).toLocaleString('id-ID')}</td>
+            </tr>
+          `).join('');
+        } else {
+          itemsRows = `
+            <tr style="height:32px; border-bottom:1px solid #f1f5f9;">
+              <td style="color:#334155; width:90px;">${txCode}</td>
+              <td style="font-weight:600;">${tx.description || 'Pengeluaran Tim'}</td>
+              <td style="color:#334155;">SAR ${tx.amount.toLocaleString('id-ID')}</td>
+              <td style="color:#334155; text-align:center;">1</td>
+              <td style="font-weight:700; text-align:right;">SAR ${tx.amount.toLocaleString('id-ID')}</td>
+            </tr>
+          `;
+        }
+        
+        rincianItemsHtml = `
+          <div style="margin-top:16px; margin-bottom:20px;">
+            <div style="font-weight:700; font-size:0.95rem; color:#1e293b; margin-bottom:10px;">Rincian Item</div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.88rem; color:#1e293b;">
+              <tbody>
+                ${itemsRows}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      let voidAuditHtml = '';
+      if (isVoid) {
+        voidAuditHtml = `
+          <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:12px; margin-top:14px; font-size:0.82rem; color:#991b1b;">
+            <div style="font-weight:900; margin-bottom:4px; font-size:0.88rem; display:flex; align-items:center; gap:6px;">
+              <i data-lucide="ban" style="width:16px; height:16px;"></i> TRANSAKSI DIBATALKAN (VOID)
+            </div>
+            <div><strong>Dibatalkan Oleh:</strong> ${tx.voidedBy || 'Admin'}</div>
+            <div><strong>Waktu Pembatalan:</strong> ${tx.voidedAt || '-'}</div>
+            <div style="margin-top:4px;"><strong>Alasan Pembatalan:</strong> <span style="font-style:italic;">"${tx.voidReason || '-'}"</span></div>
+          </div>
+        `;
+      }
+
+      const receiptUrl = exp ? exp.receipt : null;
+      let receiptBtnText = catType === 'Uang Masuk' ? 'LIHAT KWITANSI' : 'LIHAT STRUK';
+
+      let statusDisplayHtml = '';
+      if (isVoid) {
+        statusDisplayHtml = `<span style="font-weight:800; color:#dc2626;">VOID</span>`;
+      } else if (catType === 'Uang Masuk') {
+        statusDisplayHtml = `<span style="font-weight:800; color:#15803d;">Diterima</span>`;
+      } else if (catType === 'Uang Keluar') {
+        if (tx.status === 'Pending' || (exp && exp.status === 'Pending')) {
+          statusDisplayHtml = `<span style="font-weight:800; color:#dc2626;">PENDING</span>`;
+        } else {
+          statusDisplayHtml = `<span style="font-weight:800; color:#15803d;">APPROVED</span>`;
+        }
+      } else {
+        // Transfer
+        if (tx.status === 'Pending') {
+          statusDisplayHtml = `<span style="font-weight:800; color:#dc2626;">PENDING</span>`;
+        } else {
+          statusDisplayHtml = `<span style="font-weight:800; color:#15803d;">APPROVED</span>`;
+        }
+      }
+
+      const cleanDesc = tx.description ? tx.description.replace(/^\[APPROVED\]\s*/i, '') : '-';
+
+      const detailHtml = `
+        ${headerGraphicHtml}
+        
+        <table style="width:100%; border-collapse:collapse; font-size:0.92rem; line-height:2.0; margin-bottom:16px; color:#1e293b;">
+          <tbody>
+            ${catType !== 'Uang Keluar' ? `
+              <tr>
+                <td style="width:130px; color:#334155; font-weight:500;">Kode Transaksi</td>
+                <td style="width:15px;">:</td>
+                <td style="font-weight:700; color:#000;">${txCode}</td>
+              </tr>
+            ` : ''}
+            <tr>
+              <td style="width:130px; color:#334155; font-weight:500;">Status</td>
+              <td style="width:15px;">:</td>
+              <td>${statusDisplayHtml}</td>
+            </tr>
+            <tr>
+              <td style="color:#334155; font-weight:500;">Tipe</td>
+              <td>:</td>
+              <td style="font-weight:600; color:#000;">${catType}</td>
+            </tr>
+            <tr>
+              <td style="color:#334155; font-weight:500;">Sumber</td>
+              <td>:</td>
+              <td style="font-weight:600; color:#000;">${sourceName}</td>
+            </tr>
+            <tr>
+              <td style="color:#334155; font-weight:500;">Tanggal</td>
+              <td>:</td>
+              <td style="font-weight:600; color:#000;">${formatDateLong(tx.date)}</td>
+            </tr>
+            <tr>
+              <td style="color:#334155; font-weight:500;">Keterangan</td>
+              <td>:</td>
+              <td style="font-weight:600; color:#000;">${cleanDesc}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        ${rincianItemsHtml}
+        ${voidAuditHtml}
+
+        <div style="display:flex; justify-content:${catType === 'Transfer' ? 'flex-end' : 'space-between'}; align-items:center; gap:16px; margin-top:24px; padding-top:16px; border-top:1px solid #f1f5f9;">
+          ${catType !== 'Transfer' ? `
+            <button type="button" id="admin-view-receipt-btn" class="btn" style="flex:1; background:#dfc06b; color:#ffffff; font-weight:800; font-size:0.9rem; padding:12px 20px; border-radius:10px; border:none; text-transform:uppercase; letter-spacing:0.05em; cursor:pointer;">
+              ${receiptBtnText}
+            </button>
+          ` : ''}
+          ${!isVoid ? `
+            <button type="button" id="admin-void-tx-btn" class="btn" style="${catType === 'Transfer' ? 'width:180px;' : 'flex:1;'} background:#fee2e2; color:#dc2626; font-weight:800; font-size:0.9rem; padding:12px 20px; border-radius:10px; border:1px solid #fca5a5; text-transform:uppercase; letter-spacing:0.05em; cursor:pointer;">
+              VOID
+            </button>
+          ` : `
+            <button type="button" class="btn btn-secondary" onclick="closeModal()" style="width:120px; padding:10px 16px; border-radius:10px;">Tutup</button>
+          `}
+        </div>
+      `;
+
+      openModal("Detail Transaksi", detailHtml);
+      lucide.createIcons();
+
+      const receiptBtn = document.getElementById("admin-view-receipt-btn");
+      if (receiptBtn) {
+        receiptBtn.onclick = () => {
+          if (catType === 'Uang Masuk') {
+            openKwitansiModal(tx, txCode);
+          } else if (receiptUrl) {
+            const isImg = receiptUrl.startsWith('data:image') || receiptUrl.endsWith('.jpg') || receiptUrl.endsWith('.png') || receiptUrl.endsWith('.jpeg');
+            if (isImg) {
+              openModal("Bukti Struk / Nota", `<div style="text-align:center;"><img src="${receiptUrl}" style="max-width:100%; max-height:70vh; border-radius:8px;"></div>`);
+            } else {
+              window.open(receiptUrl, '_blank');
+            }
+          } else {
+            showToast("Tidak ada bukti lampiran.", "info");
+          }
+        };
+      }
+
+      const voidBtn = document.getElementById("admin-void-tx-btn");
+      if (voidBtn) {
+        voidBtn.onclick = () => {
+          closeModal();
+          openVoidTransactionModal(tx.id, () => {
+            renderAdminFinancial();
+          });
+        };
+      }
+    };
+  });
 }
 
 // --- ADMIN SUB-VIEW: LAPORAN ---
