@@ -1717,6 +1717,7 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         task.status = "Dalam Proses";
       } else if (type === "Keluar") {
         task.status = "Selesai";
+        task.published = false;
       }
 
       addNotification("penjadwalan", `Absensi ${type}: ${state.currentUser.name} melakukan ${type} untuk tugas ${task.type} (${groupName})`, { username, groupName });
@@ -3449,7 +3450,7 @@ function loadUserTab(tab) {
             <div style="font-family:'Mulish', sans-serif; padding:16px;">
               <div id="tx-capture-area" style="padding:16px; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;">
                 <div style="text-align:center; border-bottom:2px dashed #cbd5e1; padding-bottom:12px; margin-bottom:16px;">
-                  <h3 style="font-family:'Martel', serif; margin:0; font-weight:900;">jejak imani</h3>
+                  <h3 style="font-family:'Martel', serif; text-transform:lowercase; margin:0; font-weight:900;">jejak imani</h3>
                   <p style="font-size:0.75rem; color:var(--text-muted); margin:4px 0 0 0;">Bukti Transaksi Tim Khidmat</p>
                 </div>
                 
@@ -6809,7 +6810,7 @@ function printOrDownloadKwitansi(tx, txCode) {
           <div class="kwitansi-signatures">
             <div style="text-align: center; width: 35%;">
               <div style="font-weight: 500; margin-bottom: 50px;">Diserahkan Oleh</div>
-              <div style="font-weight: 800;">Finance Pusat <span style="color:#1e293b;">jejak imani</span></div>
+              <div style="font-weight: 800;">Finance Pusat <span class="brand-martel" style="color:#1e293b;">jejak imani</span></div>
             </div>
             <div style="text-align: center; width: 35%;">
               <div style="font-weight: 500; margin-bottom: 50px;">Diterima Oleh</div>
@@ -6869,7 +6870,7 @@ function openKwitansiModal(tx, txCode) {
         <div style="position:absolute; bottom:9%; left:4.5%; width:90%; display:flex; justify-content:space-between; align-items:flex-end; font-size:0.72rem;">
           <div style="text-align:center; width:35%;">
             <div style="font-weight:500; margin-bottom:24px;">Diserahkan Oleh</div>
-            <div style="font-weight:800;">Finance Pusat <strong>jejak imani</strong></div>
+            <div style="font-weight:800;">Finance Pusat <strong class="brand-martel">jejak imani</strong></div>
           </div>
           <div style="text-align:center; width:35%;">
             <div style="font-weight:500; margin-bottom:24px;">Diterima Oleh</div>
@@ -6898,7 +6899,7 @@ function openKwitansiModal(tx, txCode) {
   };
 
   document.getElementById("kw-share-btn").onclick = () => {
-    const shareText = `Kwitansi ${txCode} - ${formattedDate}\nNominal: ${nominalStr}\nTerbilang: ${terbilangStr}\nKeterangan: ${cleanDesc}\nPT. Jejak Imani Berkah Bersama`;
+    const shareText = `Kwitansi ${txCode} - ${formattedDate}\nNominal: ${nominalStr}\nTerbilang: ${terbilangStr}\nKeterangan: ${cleanDesc}\nPT. JEJAK IMANI BERKAH BERSAMA`;
     if (navigator.share) {
       navigator.share({
         title: `Kwitansi ${txCode}`,
@@ -6990,7 +6991,7 @@ function printReportApprovalPengajuanDana(data) {
         ${getReportPdfHeaderHtml()}
         <div style="text-align:center; margin-bottom:20px;">
           <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase; letter-spacing:0.03em;">FORM APPROVAL PENGAJUAN DANA</h2>
-          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat <span class="jejak-imani">jejak imani</span> Saudi Arabia</div>
         </div>
 
         <div style="font-size:0.9rem; line-height:1.85; margin-bottom:16px;">
@@ -7116,7 +7117,7 @@ function printReportGroupExpenseReport(data) {
         ${getReportPdfHeaderHtml()}
         <div style="text-align:center; margin-bottom:20px;">
           <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase; letter-spacing:0.03em;">GROUP EXPENSE REPORT</h2>
-          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat <span class="jejak-imani">jejak imani</span> Saudi Arabia</div>
         </div>
 
         <div style="font-size:0.9rem; line-height:1.85; margin-bottom:20px;">
@@ -7292,7 +7293,7 @@ function printReportMasterFieldCashLedger(data) {
         ${getReportPdfHeaderHtml()}
         <div style="text-align:center; margin-bottom:16px;">
           <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">MASTER FIELD CASH LEDGER</h2>
-          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat <span class="jejak-imani">jejak imani</span> Saudi Arabia</div>
         </div>
 
         <div style="font-size:0.88rem; margin-bottom:14px;"><strong>Periode</strong> : ${periodStr}</div>
@@ -7381,7 +7382,7 @@ function printReportMasterSettlementReport(data) {
         ${getReportPdfHeaderHtml()}
         <div style="text-align:center; margin-bottom:20px;">
           <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">MASTER SETTLEMENT REPORT</h2>
-          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat <span class="jejak-imani">jejak imani</span> Saudi Arabia</div>
         </div>
 
         <div style="font-size:0.9rem; margin-bottom:16px;"><strong>Periode</strong> : ${periodStr}</div>
@@ -7498,7 +7499,7 @@ function printReportOperationalExpenseReport(data) {
         ${getReportPdfHeaderHtml()}
         <div style="text-align:center; margin-bottom:20px;">
           <h2 style="margin:0; font-size:1.3rem; font-weight:900; text-transform:uppercase;">OPERATIONAL EXPENSE REPORT</h2>
-          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat jejak imani Saudi Arabia</div>
+          <div style="font-size:0.9rem; font-weight:700; color:#475569;">Tim Khidmat <span class="jejak-imani">jejak imani</span> Saudi Arabia</div>
         </div>
 
         <div style="font-size:0.9rem; line-height:1.8; margin-bottom:20px;">
@@ -8744,7 +8745,7 @@ function loadVendorTab(tab) {
           const origin = window.location.origin + window.location.pathname;
           const vendorUrl = `${origin}#vendor-view?id=${vId}`;
           const cleanPhone = rawContact.replace(/[^0-9]/g, '');
-          const msg = encodeURIComponent(`Assalamu'alaikum Warahmatullah,\n\nYth. Manajemen ${vName},\nBerikut kami kirimkan link Halaman Jadwal Pemesanan (Booking Schedule) dari Tim Khidmat Jejak Imani Saudi Arabia:\n\n🔗 ${vendorUrl}\n\nMohon dapat diperiksa dan dikonfirmasi. Terima kasih.`);
+          const msg = encodeURIComponent(`Assalamu'alaikum wr.wb,\nYth. ${vName}\n\nBerikut kami kirimkan link Halaman Jadwal Pemesanan (Booking Schedule) dari Tim Khidmat jejak imani saudi arabia:\n\n${vendorUrl}\n\nMohon dapat diperiksa dan dikonfirmasi. Terima kasih.`);
           window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
         };
       });
@@ -8950,60 +8951,115 @@ function openBookingFormPopup(editId = null) {
       <div class="form-group">
         <label class="form-label">Rombongan Grup</label>
         <select id="ab-group" class="form-select" required>
-          <option value="">-- Pilih --</option>
+          <option value="">-- Pilih Rombongan Grup --</option>
           ${state.groups.map(g => `<option value="${g.name}" ${isEdit && b.groupName === g.name ? 'selected' : ''}>${g.name}</option>`).join('')}
         </select>
       </div>
+
       <div class="form-group">
-        <label class="form-label">Kegiatan Itinerary</label>
-        <select id="ab-activity" class="form-select" required>
-          <option value="">-- Pilih Kegiatan --</option>
-        </select>
+        <label class="form-label">Tujuan Kegiatan (Layanan Vendor)</label>
+        <input type="text" id="ab-activity-goal" class="form-input" value="${isEdit ? (b.activityGoal || b.activity || '') : ''}" placeholder="Contoh: SNACK CITY TOUR MAKKAH" required>
       </div>
+
+      <div class="grid-2col" style="gap:10px;">
+        <div class="form-group">
+          <label class="form-label">Muthowwif Rombongan</label>
+          <select id="ab-muthawwif-select" class="form-select">
+            <option value="">-- Otomatis / Pilih Muthowwif --</option>
+          </select>
+          <input type="text" id="ab-muthawwif-custom" class="form-input" style="margin-top:6px;" value="${isEdit ? (b.muthawwif || '') : ''}" placeholder="Atau ketik nama Muthowwif">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lokasi / Hotel (Bus)</label>
+          <input type="text" id="ab-location" class="form-input" value="${isEdit ? (b.location || '') : ''}" placeholder="Contoh: Hotel Al Marwa Rayhaan Rotana (Bus 1)" required>
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Pilih Vendor</label>
         <select id="ab-vendor" class="form-select" required>
-          <option value="">-- Pilih --</option>
+          <option value="">-- Pilih Vendor --</option>
           ${state.vendors.map(v => `<option value="${v.id}" ${isEdit && b.vendorId === v.id ? 'selected' : ''}>${v.name} (${v.type})</option>`).join('')}
         </select>
       </div>
-      <div class="form-group">
-        <label class="form-label">Tanggal Mulai</label>
-        <input type="date" id="ab-start" class="form-input" value="${isEdit ? b.dateStart : ''}" required>
+
+      <div class="grid-2col" style="gap:10px;">
+        <div class="form-group">
+          <label class="form-label">Tanggal Layanan</label>
+          <input type="date" id="ab-start" class="form-input" value="${isEdit ? (b.dateStart || b.date) : ''}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Jam / Waktu Layanan</label>
+          <input type="time" id="ab-time" class="form-input" value="${isEdit ? (b.time || '05:30') : '05:30'}" required>
+        </div>
       </div>
       
-      <h5 style="margin-top:20px; margin-bottom:10px; font-weight:800;">Daftar Produk Booking</h5>
-      <div id="ab-products-container" style="display:flex; flex-direction:column; gap:12px;"></div>
-      <button type="button" id="ab-add-prod-btn" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.8rem; margin-bottom:20px;">+ Tambah Produk</button>
+      <h5 style="margin-top:16px; margin-bottom:8px; font-weight:800; font-size:0.9rem;">Daftar Produk Booking</h5>
+      <div id="ab-products-container" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <button type="button" id="ab-add-prod-btn" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.8rem; margin-top:8px; margin-bottom:16px;">+ Tambah Produk</button>
       
-      <div style="background:#f1f3f5; padding:12px; border-radius:6px; font-weight:800; font-size:0.95rem; margin-bottom:20px; border:1px solid #ced4da;">
-        Total Jumlah Harga: SAR <span id="ab-grand-total">0</span>
+      <div style="background:#f8fafc; padding:12px; border-radius:8px; font-weight:800; font-size:0.95rem; margin-bottom:16px; border:1px solid #e2e8f0; color:#0f172a;">
+        Total Estimasi Harga: SAR <span id="ab-grand-total">0</span>
       </div>
 
-      <div class="form-group"><label class="form-label">Catatan</label><input type="text" id="ab-notes" class="form-input" value="${isEdit ? (b.notes || '') : ''}" placeholder="Catatan tambahan"></div>
-      <button type="submit" class="btn btn-primary">PROSES BOOKING</button>
+      <div class="form-group">
+        <label class="form-label">Catatan Tambahan</label>
+        <input type="text" id="ab-notes" class="form-input" value="${isEdit ? (b.notes || '') : ''}" placeholder="Catatan tambahan untuk vendor">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; font-weight:800; padding:10px;">SIMPAN PEMESANAN BOOKING</button>
     </form>
   `;
-  openModal(isEdit ? "Sunting Pemesanan Booking" : "Plot Pemesanan Booking Baru", popupHtml);
+  openModal(isEdit ? "Sunting Pemesanan Booking Vendor" : "Plot Pemesanan Booking Vendor Baru", popupHtml);
   
   const gSelect = document.getElementById("ab-group");
-  const actSelect = document.getElementById("ab-activity");
+  const mSelect = document.getElementById("ab-muthawwif-select");
+  const mCustom = document.getElementById("ab-muthawwif-custom");
+  const locInput = document.getElementById("ab-location");
   const vSelect = document.getElementById("ab-vendor");
   const prodContainer = document.getElementById("ab-products-container");
   const grandTotalLabel = document.getElementById("ab-grand-total");
   
-  const updateActivities = () => {
-    actSelect.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
+  const updateGroupInfo = () => {
     const gn = gSelect.value;
-    const groupIti = state.itineraries.find(i => i.groupName === gn);
-    if (groupIti && groupIti.activities) {
-      groupIti.activities.forEach(a => {
-        actSelect.innerHTML += `<option value="${a.agenda}" ${isEdit && b.activity === a.agenda ? 'selected' : ''}>${a.agenda} (${formatDateDisplay(a.date)})</option>`;
+    const group = state.groups.find(g => g.name === gn);
+    mSelect.innerHTML = '<option value="">-- Otomatis dari Manifest Grup --</option>';
+    if (group) {
+      const muthList = [];
+      if (group.mutawwif) muthList.push(group.mutawwif);
+      if (Array.isArray(group.leaders)) muthList.push(...group.leaders);
+      if (Array.isArray(group.manifest)) {
+        group.manifest.forEach(m => {
+          if (m.role && m.role.toLowerCase().includes("mutawwif") && m.name) {
+            muthList.push(m.name);
+          }
+        });
+      }
+      const uniqueMuths = Array.from(new Set(muthList));
+      uniqueMuths.forEach(mName => {
+        mSelect.innerHTML += `<option value="${mName}">${mName}</option>`;
       });
+
+      if (!locInput.value) {
+        locInput.value = group.makkahHotel ? `${group.makkahHotel} (Bus 1)` : (group.madinahHotel ? `${group.madinahHotel} (Bus 1)` : 'Hotel Al Marwa Rayhaan Rotana (Bus 1)');
+      }
     }
   };
-  gSelect.onchange = updateActivities;
-  if (isEdit) updateActivities();
+
+  gSelect.onchange = () => {
+    updateGroupInfo();
+    if (mSelect.options.length > 1) {
+      mCustom.value = mSelect.options[1].value;
+    }
+  };
+
+  mSelect.onchange = () => {
+    if (mSelect.value) {
+      mCustom.value = mSelect.value;
+    }
+  };
+
+  if (isEdit) updateGroupInfo();
   
   const getSelectedVendorProducts = () => {
     const vId = vSelect.value;
@@ -9020,7 +9076,7 @@ function openBookingFormPopup(editId = null) {
   };
   
   const addBookingProdRow = (prodName = "", qty = 1, amount = 0) => {
-    const rowId = `b-prod-${Date.now()}-${Math.random()}`;
+    const rowId = `b-prod-${Date.now()}-${Math.floor(Math.random()*1000)}`;
     const div = document.createElement("div");
     div.className = "nested-form-card ab-prod-row";
     div.id = rowId;
@@ -9033,41 +9089,41 @@ function openBookingFormPopup(editId = null) {
     if (prodName) {
       const match = vendorProds.find(p => p.name === prodName);
       if (match) {
-        initialType = match.type;
-        initialPrice = match.price;
+        initialType = match.type || "Pcs";
+        initialPrice = match.price || 0;
       }
     }
     
     div.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <strong>Item Produk</strong>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <strong>Item Produk Layanan</strong>
         <button type="button" class="nested-remove-btn" onclick="document.getElementById('${rowId}').remove(); calculateBookingGrandTotal();">&times;</button>
       </div>
       <div class="grid-3col" style="gap:8px;">
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:6px;">
           <label class="form-label">Produk</label>
           <select class="form-select row-prod-select" required>
-            <option value="">-- Pilih --</option>
+            <option value="">-- Pilih Produk --</option>
             ${productOptions}
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Jenis</label>
-          <input type="text" class="form-input row-type" value="${initialType}" readonly disabled>
+        <div class="form-group" style="margin-bottom:6px;">
+          <label class="form-label">Satuan</label>
+          <input type="text" class="form-input row-type" value="${initialType || 'Pcs'}" placeholder="Pcs/Box">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:6px;">
           <label class="form-label">Harga SAR</label>
-          <input type="number" class="form-input row-price" value="${initialPrice}" readonly disabled>
+          <input type="number" class="form-input row-price" value="${initialPrice}">
         </div>
       </div>
       <div class="grid-2col" style="gap:8px;">
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:4px;">
           <label class="form-label">Qty</label>
           <input type="number" class="form-input row-qty" value="${qty}" min="1" required>
         </div>
-        <div class="form-group">
-          <label class="form-label">Jumlah SAR</label>
-          <input type="number" class="form-input row-total" value="${amount}" readonly disabled>
+        <div class="form-group" style="margin-bottom:4px;">
+          <label class="form-label">Subtotal SAR</label>
+          <input type="number" class="form-input row-total" value="${amount || (initialPrice * qty)}" readonly disabled>
         </div>
       </div>
     `;
@@ -9084,23 +9140,24 @@ function openBookingFormPopup(editId = null) {
       const prods = getSelectedVendorProducts();
       const match = prods.find(p => p.name === selectedName);
       if (match) {
-        typeInp.value = match.type;
-        priceInp.value = match.price;
-        totalInp.value = match.price * (parseInt(qtyInp.value) || 1);
+        typeInp.value = match.type || "Pcs";
+        priceInp.value = match.price || 0;
+        totalInp.value = (match.price || 0) * (parseInt(qtyInp.value) || 1);
       } else {
-        typeInp.value = "";
-        priceInp.value = 0;
         totalInp.value = 0;
       }
       calculateBookingGrandTotal();
     };
     
-    qtyInp.oninput = () => {
+    const recalculateRow = () => {
       const price = parseFloat(priceInp.value) || 0;
       const qtyVal = parseFloat(qtyInp.value) || 0;
       totalInp.value = price * qtyVal;
       calculateBookingGrandTotal();
     };
+
+    priceInp.oninput = recalculateRow;
+    qtyInp.oninput = recalculateRow;
   };
   
   vSelect.onchange = () => {
@@ -9119,7 +9176,7 @@ function openBookingFormPopup(editId = null) {
   
   if (isEdit) {
     if (bookedProducts.length > 0) {
-      bookedProducts.forEach(p => addBookingProdRow(p.name, p.qty, p.amount));
+      bookedProducts.forEach(p => addBookingProdRow(p.name, p.qty, p.amount || (p.price * p.qty)));
     } else {
       addBookingProdRow();
     }
@@ -9131,35 +9188,67 @@ function openBookingFormPopup(editId = null) {
   document.getElementById("admin-booking-form-popup").onsubmit = (e) => {
     e.preventDefault();
     const groupName = gSelect.value;
+    const activityGoal = document.getElementById("ab-activity-goal").value.trim();
+    const muthawwif = mCustom.value.trim() || mSelect.value || "Ust. Ahmad Saiful Haq";
+    const location = document.getElementById("ab-location").value.trim();
     const vendorId = vSelect.value;
     const dateStart = document.getElementById("ab-start").value;
-    const dateEnd = dateStart;
+    const time = document.getElementById("ab-time").value || "05:30";
     const notes = document.getElementById("ab-notes").value.trim();
-    const activity = actSelect.value;
     
     const rows = prodContainer.querySelectorAll(".ab-prod-row");
     const products = Array.from(rows).map(row => {
-      const name = row.querySelector(".row-prod-select").value;
+      const name = row.querySelector(".row-prod-select").value || row.querySelector(".row-type").value || "Item Produk";
+      const unit = row.querySelector(".row-type").value || "Pcs";
       const qty = parseInt(row.querySelector(".row-qty").value) || 1;
-      const price = parseInt(row.querySelector(".row-price").value) || 0;
+      const price = parseFloat(row.querySelector(".row-price").value) || 0;
       return {
         name,
+        unit,
         qty,
         price,
+        subtotal: qty * price,
         amount: qty * price
       };
     });
-    
+
+    const totalPrice = products.reduce((acc, p) => acc + p.subtotal, 0);
+
     if (isEdit) {
-      b.groupName = groupName; b.vendorId = vendorId; b.dateStart = dateStart; b.dateEnd = dateEnd; b.notes = notes; b.activity = activity; b.products = products;
+      b.groupName = groupName;
+      b.activityGoal = activityGoal;
+      b.muthawwif = muthawwif;
+      b.location = location;
+      b.vendorId = vendorId;
+      b.dateStart = dateStart;
+      b.time = time;
+      b.notes = notes;
+      b.products = products;
+      b.totalPrice = totalPrice;
     } else {
-      state.bookings.push({ id: `b-${Date.now()}`, groupName, vendorId, dateStart, dateEnd, notes, activity, products });
+      state.bookings.push({
+        id: `b-${Date.now()}`,
+        groupName,
+        activityGoal,
+        muthawwif,
+        location,
+        vendorId,
+        dateStart,
+        time,
+        notes,
+        products,
+        totalPrice,
+        status: "Aktif"
+      });
     }
-    
+
     saveState();
     closeModal();
-    showToast("Booking pemesanan disimpan!");
-    loadVendorTab("v-book");
+    showToast(`Pemesanan booking vendor berhasil ${isEdit ? 'diperbarui' : 'ditambahkan'}!`);
+
+    if (window.location.hash.startsWith("#admin/vendors")) {
+      loadVendorTab("v-book");
+    }
   };
 }
 // --- ADMIN SUB-VIEW: MANIFEST ---
@@ -10023,7 +10112,7 @@ function openJamaahIdCardPopup(uniqueCode) {
       <!-- Card Header -->
       <div style="text-align:center; border-bottom:1px solid rgba(197,168,80,0.4); padding-bottom:12px; margin-bottom:14px;">
         <div style="font-size:0.7rem; font-weight:800; color:#c5a850; text-transform:uppercase; letter-spacing:0.12em;">KARTU IDENTITAS JAMAAH UMROH</div>
-        <div style="font-size:1.15rem; font-weight:900; color:#ffffff; font-family:'Martel', serif; margin-top:2px;">jejak imani</div>
+        <div style="font-size:1.15rem; font-weight:900; color:#ffffff; font-family:'Martel', serif; text-transform:lowercase; margin-top:2px;">jejak imani</div>
         <div style="font-size:0.65rem; color:#94a3b8;">SAUDI HANDLING OPERATIONS & MANAGEMENT</div>
       </div>
       
@@ -10902,7 +10991,7 @@ function openBookingPdfPopup(bookingId) {
       <!-- Corporate Header -->
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid var(--primary-gold); padding-bottom:12px; margin-bottom:20px;">
         <div>
-          <h2 style="font-family:'Martel', serif; font-weight:900; color:var(--text-main); font-size:1.4rem; margin:0;">jejak imani</h2>
+          <h2 style="font-family:'Martel', serif; text-transform:lowercase; font-weight:900; color:var(--text-main); font-size:1.4rem; margin:0;">jejak imani</h2>
           <p style="font-size:0.75rem; color:var(--text-muted); margin:2px 0 0 0;">Saudi Operations & Handling Department</p>
         </div>
         <div style="text-align:right;">
@@ -11199,7 +11288,7 @@ function renderUserApplyTugas() {
     const listEl = document.getElementById("user-apply-list-container");
     if (!listEl) return;
     
-    let filtered = state.assignments.filter(t => t.published !== false);
+    let filtered = state.assignments.filter(t => t.published !== false && t.status !== "Selesai");
     if (q) {
       filtered = filtered.filter(t => 
         t.type.toLowerCase().includes(q) || 
@@ -11622,11 +11711,11 @@ function renderPublicVendorPortal() {
 
   if (!vendor) {
     APP_CONTAINER.innerHTML = `
-      <div style="max-width:600px; margin:50px auto; padding:30px; text-align:center; background:#fff; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,0.08); font-family:'Mulish', sans-serif;">
-        <div style="font-size:3rem; margin-bottom:12px;">⚠️</div>
-        <h2 style="font-weight:900; color:#1e293b; margin-bottom:8px;">Halaman Vendor Tidak Ditemukan</h2>
-        <p style="color:#64748b; font-size:0.9rem;">Link halaman jadwal pemesanan vendor ini tidak valid atau telah dihapus.</p>
-        <button onclick="window.location.hash='#login'" class="btn btn-gold" style="margin-top:16px; width:auto; padding:8px 16px;">Halaman Utama</button>
+      <div style="max-width:500px; margin:60px auto; padding:32px 20px; text-align:center; background:#fff; border-radius:20px; box-shadow:0 15px 35px rgba(0,0,0,0.06); font-family:'Mulish', sans-serif;">
+        <div style="font-size:3.5rem; margin-bottom:12px;">⚠️</div>
+        <h2 style="font-weight:900; color:#1e293b; margin-bottom:8px;">Portal Vendor Tidak Ditemukan</h2>
+        <p style="color:#64748b; font-size:0.9rem; line-height:1.5;">Link halaman jadwal pemesanan vendor ini tidak valid atau telah diperbarui.</p>
+        <button onclick="window.location.hash='#login'" class="btn btn-gold" style="margin-top:20px; width:auto; padding:10px 24px; font-weight:800; border-radius:12px;">Halaman Utama</button>
       </div>
     `;
     return;
@@ -11635,106 +11724,139 @@ function renderPublicVendorPortal() {
   // Filter all bookings for this vendor
   const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
   const totalOrders = vendorBookings.length;
+  const activeOrders = vendorBookings.filter(b => b.status !== 'Selesai').length;
+  const completedOrders = vendorBookings.filter(b => b.status === 'Selesai').length;
+
+  const makeVendorBookingCard = (b) => {
+    const group = state.groups.find(g => g.name === b.groupName);
+    const muthawwifName = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
+    const locationName = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Al Marwa Rayhaan Rotana (Bus 1)') : 'Hotel Al Marwa Rayhaan Rotana (Bus 1)');
+    const activityTitle = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR MAKKAH').toUpperCase();
+    const dateFormatted = formatDateDisplay(b.dateStart || b.date);
+    const timeFormatted = b.time ? b.time : '05:30';
+
+    const productsList = (b.products && b.products.length > 0) ? b.products : [
+      { name: b.notes || 'Snack Kering', qty: b.qty || 1, unit: b.unit || 'Pcs', amount: b.amount || (b.totalPrice || 242) }
+    ];
+
+    return `
+      <div class="vendor-card-row" style="background:#ffffff; border-radius:14px; padding:16px 18px; margin-bottom:14px; border:1px solid #f1f5f9; box-shadow:0 4px 14px rgba(0,0,0,0.03); border-bottom:3px solid #dfc06b; font-family:'Mulish', sans-serif;">
+        
+        <!-- Top Row: Activity Goal & Date/Time -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:6px;">
+          <div style="font-weight:900; font-size:0.95rem; color:#000; letter-spacing:0.01em; text-transform:uppercase;">
+            ${activityTitle}
+          </div>
+          <div style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
+            ${dateFormatted} | ${timeFormatted}
+          </div>
+        </div>
+
+        <!-- Group Name -->
+        <div style="font-size:0.85rem; color:#475569; margin-bottom:4px; font-weight:600;">
+          ${b.groupName}
+        </div>
+
+        <!-- Muthowwif -->
+        <div style="font-size:0.83rem; color:#334155; margin-bottom:3px;">
+          <span style="display:inline-block; width:85px; color:#64748b;">Muthowwif</span> : <strong style="color:#1e293b;">${muthawwifName}</strong>
+        </div>
+
+        <!-- Lokasi -->
+        <div style="font-size:0.83rem; color:#334155; margin-bottom:10px;">
+          <span style="display:inline-block; width:85px; color:#64748b;">Lokasi</span> : <strong style="color:#0f172a; font-weight:900;">${locationName}</strong>
+        </div>
+
+        <!-- Products Lines -->
+        <div style="border-top:1px dashed #e2e8f0; padding-top:8px; display:flex; flex-direction:column; gap:6px;">
+          ${productsList.map(prod => `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; color:#1e293b;">
+              <div style="flex:1; color:#334155; padding-left:12px;">${prod.name || 'Snack Kering'}</div>
+              <div style="width:90px; text-align:center; font-weight:700; color:#475569;">${prod.qty || 1} ${prod.unit || 'Pcs'}</div>
+              <div style="width:100px; text-align:right; font-weight:900; color:#0f172a;">SAR ${(prod.amount || prod.price || 0).toLocaleString('id-ID')}</div>
+            </div>
+          `).join('')}
+        </div>
+
+      </div>
+    `;
+  };
 
   APP_CONTAINER.innerHTML = `
-    <div style="min-height:100vh; background:#f8fafc; font-family:'Mulish', sans-serif; padding:20px 12px 60px 12px; box-sizing:border-box;">
-      <div style="max-width:950px; margin:0 auto;">
+    <div style="min-height:100vh; background:#f4f6f9; font-family:'Mulish', sans-serif; padding:12px 10px 60px 10px; box-sizing:border-box;">
+      <div style="max-width:700px; margin:0 auto;">
         
-        <!-- Header Banner -->
-        <div style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:16px; padding:24px; color:#fff; box-shadow:0 10px 25px rgba(0,0,0,0.15); margin-bottom:20px; position:relative; overflow:hidden;">
-          <div style="position:absolute; right:-20px; top:-20px; opacity:0.08; font-size:10rem; pointer-events:none;">🕋</div>
-          
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:16px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <img src="assets/logo.png" style="height:48px; object-fit:contain;" alt="Jejak Imani Logo" onerror="this.style.display='none';">
-              <div>
-                <div style="font-size:0.75rem; color:#dfc06b; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">PORTAL MITRA VENDOR & SUPPLIER</div>
-                <div style="font-size:0.9rem; font-weight:700; color:#cbd5e1;">PT. JEJAK IMANI BERKAH BERSAMA</div>
-              </div>
+        <!-- Header Bar: Soft UI / Glassmorphism -->
+        <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(16px); border-radius:18px; padding:12px 16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+            <img src="assets/logo.png" style="height:38px; object-fit:contain;" alt="Jejak Imani Logo" onerror="this.style.display='none';">
+            <div style="min-width:0;">
+              <div style="font-size:0.68rem; color:#b45309; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PORTAL MITRA VENDOR & SUPPLIER</div>
+              <div style="font-size:0.82rem; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PT. JEJAK IMANI BERKAH BERSAMA</div>
             </div>
-            
-            <div style="display:flex; gap:8px;">
-              <button onclick="window.print();" class="btn btn-gold" style="width:auto; padding:8px 14px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
-                <i data-lucide="printer" style="width:16px;"></i> Cetak Jadwal (PDF)
+          </div>
+
+          <!-- Real-Time Status Dot ONLY (Green / Red indicator) -->
+          <div style="display:flex; align-items:center; padding-left:4px;">
+            <span style="width:12px; height:12px; background:#10b981; border-radius:50%; display:inline-block; box-shadow:0 0 10px #10b981;" title="Connected Real-Time"></span>
+          </div>
+        </div>
+
+        <!-- Biodata Vendor (Integrated directly in background - No separate card widget, No location text) -->
+        <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:18px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <div style="flex:1; min-width:200px;">
+              <span style="background:#fef3c7; color:#92400e; font-weight:900; font-size:0.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase;">${vendor.type || 'Mitra Layanan'}</span>
+              <h1 style="margin:6px 0 2px 0; font-size:1.4rem; font-weight:900; color:#0f172a;">${vendor.name}</h1>
+              <div style="font-size:0.82rem; color:#475569; margin-bottom:4px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
+              <div style="font-size:0.8rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
+            </div>
+
+            <!-- Tombol Cetak PDF Dipindahkan Kesini -->
+            <div>
+              <button onclick="window.print();" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
+                <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
               </button>
             </div>
           </div>
-
-          <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:16px; margin-top:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-            <div>
-              <span style="background:#dfc06b; color:#000; font-weight:900; font-size:0.7rem; padding:3px 8px; border-radius:4px; text-transform:uppercase;">${vendor.type}</span>
-              <h1 style="margin:6px 0 2px 0; font-size:1.5rem; font-weight:900; color:#fff;">${vendor.name}</h1>
-              <div style="font-size:0.85rem; color:#94a3b8;">📞 ${vendor.contact || '-'} | 📍 ${vendor.location || 'Saudi Arabia'}</div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:0.75rem; color:#94a3b8;">Status Portal</div>
-              <div style="display:inline-flex; align-items:center; gap:6px; color:#10b981; font-weight:800; font-size:0.85rem;">
-                <span style="width:8px; height:8px; background:#10b981; border-radius:50%; display:inline-block; box-shadow:0 0 8px #10b981;"></span> Dihubungkan Real-Time
-              </div>
-            </div>
-          </div>
         </div>
 
-        <!-- Summary KPIs -->
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:20px;">
-          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Total Pemesanan (PO)</div>
-            <div style="font-size:1.6rem; font-weight:900; color:#1e293b; margin-top:4px;">${totalOrders} Ord</div>
+        <!-- 3 Metric Widgets: Total, Aktif (Belum Selesai), Selesai -->
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:20px;">
+          
+          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
+            <div style="font-size:0.7rem; color:#64748b; font-weight:800; text-transform:uppercase;">Total</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#0f172a; margin-top:2px;">${totalOrders}</div>
           </div>
-          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Status Aktif</div>
-            <div style="font-size:1.6rem; font-weight:900; color:#10b981; margin-top:4px;">${vendorBookings.filter(b => b.status !== 'Selesai').length} Aktif</div>
+
+          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
+            <div style="font-size:0.7rem; color:#d97706; font-weight:800; text-transform:uppercase;">Aktif (Belum Selesai)</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#d97706; margin-top:2px;">${activeOrders}</div>
           </div>
-          <div style="background:#fff; border-radius:12px; padding:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-            <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Peta Lokasi Layanan</div>
-            <div style="font-size:1.1rem; font-weight:800; color:#b45309; margin-top:4px;">${vendor.location || 'Saudi Arabia'}</div>
+
+          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
+            <div style="font-size:0.7rem; color:#10b981; font-weight:800; text-transform:uppercase;">Selesai</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#10b981; margin-top:2px;">${completedOrders}</div>
           </div>
+
         </div>
 
-        <!-- Bookings Schedule Table -->
-        <div style="background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,0.04); padding:20px; margin-bottom:20px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-            <div>
-              <h3 style="margin:0; font-size:1.1rem; font-weight:900; color:#0f172a;">Jadwal & Rincian Pemesanan (Booking Schedule)</h3>
-              <p style="margin:2px 0 0 0; font-size:0.8rem; color:#64748b;">Daftar jadwal pemesanan layanan dari Tim Khidmat Jejak Imani</p>
-            </div>
-            <input type="text" id="pv-search" class="form-input" placeholder="Cari nama grup atau tanggal..." style="max-width:260px; font-size:0.85rem;">
-          </div>
-
-          <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;" id="pv-table">
-              <thead>
-                <tr style="background:#f8fafc; text-align:left; border-bottom:2px solid #e2e8f0;">
-                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:40px;">NO</th>
-                  <th style="padding:10px; border-bottom:2px solid #e2e8f0;">NAMA GRUP UMROH</th>
-                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:160px;">PERIODE LAYANAN</th>
-                  <th style="padding:10px; border-bottom:2px solid #e2e8f0;">CATATAN & RINCIAN PESANAN</th>
-                  <th style="padding:10px; border-bottom:2px solid #e2e8f0; width:120px; text-align:center;">STATUS</th>
-                </tr>
-              </thead>
-              <tbody id="pv-tbody">
-                ${vendorBookings.length === 0 ? `
-                  <tr><td colspan="5" style="text-align:center; padding:24px; color:#94a3b8;">Belum ada jadwal pemesanan untuk vendor ini.</td></tr>
-                ` : vendorBookings.map((b, idx) => `
-                  <tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:10px; text-align:center; font-weight:700;">${idx + 1}</td>
-                    <td style="padding:10px;"><strong style="color:#0f172a;">${b.groupName}</strong></td>
-                    <td style="padding:10px; font-weight:600; color:#334155;">${formatDateDisplay(b.dateStart)} s/d ${formatDateDisplay(b.dateEnd)}</td>
-                    <td style="padding:10px; color:#475569;">${b.notes || '-'}</td>
-                    <td style="padding:10px; text-align:center;">
-                      <span class="badge ${b.status === 'Dikonfirmasi' ? 'badge-success' : 'badge-gold'}" style="font-size:0.75rem;">${b.status || 'Dikonfirmasi'}</span>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+        <!-- Search Bar (Tanpa Heading Text Sesuai Instruksi) -->
+        <div style="margin-bottom:14px;">
+          <input type="text" id="pv-search" class="form-input" placeholder="Cari pemesanan (kegiatan, grup, muthowwif)..." style="width:100%; font-size:0.85rem; padding:10px 14px; border-radius:12px; background:#fff; border:1px solid #cbd5e1; box-sizing:border-box;">
         </div>
 
-        <!-- Footer Notice & WA Admin Link -->
-        <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:12px; padding:16px; text-align:center; font-size:0.85rem; color:#78350f;">
-          <div style="font-weight:800; margin-bottom:4px;">Ada Pertanyaan atau Perubahan Jadwal?</div>
-          <div>Silakan hubungi Tim Handling & Finance Jejak Imani Saudi Arabia via WhatsApp.</div>
+        <!-- Dynamic Cards Container -->
+        <div id="pv-cards-container">
+          ${vendorBookings.length === 0 ? `
+            <div style="text-align:center; padding:30px; background:#fff; border-radius:14px; color:#94a3b8; font-size:0.85rem; border:1px solid #e2e8f0;">Belum ada jadwal pemesanan untuk vendor ini.</div>
+          ` : vendorBookings.map(b => makeVendorBookingCard(b)).join('')}
+        </div>
+
+        <!-- Footer Contact Notice -->
+        <div style="margin-top:24px; background:#fffdf5; border:1px solid #fef3c7; border-radius:14px; padding:14px; text-align:center; font-size:0.8rem; color:#78350f;">
+          <div style="font-weight:800; margin-bottom:2px;">Ada Pertanyaan atau Perubahan Jadwal?</div>
+          <div>Silakan hubungi Tim Handling & Finance jejak imani Saudi Arabia via WhatsApp.</div>
         </div>
 
       </div>
@@ -11743,28 +11865,24 @@ function renderPublicVendorPortal() {
 
   lucide.createIcons();
 
-  // Search handler inside public vendor schedule portal
+  // Search filter
   const pvSearch = document.getElementById("pv-search");
   if (pvSearch) {
     pvSearch.oninput = () => {
       const q = pvSearch.value.toLowerCase().trim();
-      const filtered = vendorBookings.filter(b => b.groupName.toLowerCase().includes(q) || (b.notes && b.notes.toLowerCase().includes(q)) || (b.dateStart && b.dateStart.includes(q)));
-      const tbody = document.getElementById("pv-tbody");
-      if (tbody) {
+      const filtered = vendorBookings.filter(b => {
+        const goal = (b.activityGoal || b.activity || '').toLowerCase();
+        const grp = (b.groupName || '').toLowerCase();
+        const muth = (b.muthawwif || '').toLowerCase();
+        const notes = (b.notes || '').toLowerCase();
+        return goal.includes(q) || grp.includes(q) || muth.includes(q) || notes.includes(q);
+      });
+      const container = document.getElementById("pv-cards-container");
+      if (container) {
         if (filtered.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color:#94a3b8;">Tidak ditemukan jadwal pemesanan yang cocok.</td></tr>`;
+          container.innerHTML = `<div style="text-align:center; padding:30px; background:#fff; border-radius:14px; color:#94a3b8; font-size:0.85rem; border:1px solid #e2e8f0;">Tidak ditemukan pemesanan yang cocok.</div>`;
         } else {
-          tbody.innerHTML = filtered.map((b, idx) => `
-            <tr style="border-bottom:1px solid #f1f5f9;">
-              <td style="padding:10px; text-align:center; font-weight:700;">${idx + 1}</td>
-              <td style="padding:10px;"><strong style="color:#0f172a;">${b.groupName}</strong></td>
-              <td style="padding:10px; font-weight:600; color:#334155;">${formatDateDisplay(b.dateStart)} s/d ${formatDateDisplay(b.dateEnd)}</td>
-              <td style="padding:10px; color:#475569;">${b.notes || '-'}</td>
-              <td style="padding:10px; text-align:center;">
-                <span class="badge ${b.status === 'Dikonfirmasi' ? 'badge-success' : 'badge-gold'}" style="font-size:0.75rem;">${b.status || 'Dikonfirmasi'}</span>
-              </td>
-            </tr>
-          `).join('');
+          container.innerHTML = filtered.map(b => makeVendorBookingCard(b)).join('');
         }
       }
     };
