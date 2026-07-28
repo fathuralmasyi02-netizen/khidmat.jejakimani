@@ -52,11 +52,17 @@ body {
 }
 
 /* 2. Custom Brand Font Handler */
-.jejak-imani {
-  font-family: 'Martel', serif;
-  text-transform: lowercase;
+.jejak-imani, .brand-martel, .brand-title {
+  font-family: 'Martel', serif !important;
+  text-transform: lowercase !important;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.brand-company {
+  font-family: 'Martel', serif !important;
+  text-transform: uppercase !important;
+  font-weight: 800;
 }
 
 /* 3. Typography Elements */
@@ -383,8 +389,7 @@ a {
 }
 
 .photo-frame-title {
-  font-family: 'Martel', serif;
-  text-transform: lowercase;
+  font-family: 'Martel', serif !important;
   font-weight: 700;
   color: var(--primary-gold);
   font-size: 0.8rem;
