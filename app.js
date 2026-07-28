@@ -7,6 +7,12 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+window.deferredVendorPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredVendorPrompt = e;
+});
+
 /* ==========================================================================
    TIM KHIDMAT JEJAK IMANI - CORE APPLICATION SCRIPT (UPDATED PHASE 3)
    Provides: SPA Router, Search Autocomplete, Saudi Date & Hijri year fix,
@@ -801,6 +807,14 @@ function router() {
     lucide.createIcons();
     updateDbStatusUI();
     return;
+  } else {
+    document.title = "Tim Khidmat jejak imani - Saudi Handling Operations";
+    if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+      let manifestLink = document.querySelector('link[rel="manifest"]');
+      if (manifestLink && manifestLink.getAttribute('href') !== 'manifest.json') {
+        manifestLink.setAttribute('href', 'manifest.json');
+      }
+    }
   }
   
   if (!state.currentUser && hash !== "#login" && hash !== "#register") {
@@ -11721,6 +11735,48 @@ function renderPublicVendorPortal() {
     return;
   }
 
+  // Dynamic Vendor PWA Metadata & Manifest
+  document.title = `Vendor JI - ${vendor.name}`;
+
+  const vendorManifestData = {
+    name: `Vendor JI - ${vendor.name}`,
+    short_name: "Vendor JI",
+    description: `Portal Pemesanan Vendor JI - ${vendor.name} (PT. JEJAK IMANI BERKAH BERSAMA)`,
+    start_url: window.location.href,
+    display: "standalone",
+    background_color: "#f4f6f9",
+    theme_color: "#0f172a",
+    icons: [
+      {
+        src: "assets/icon.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable"
+      },
+      {
+        src: "assets/icon.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      }
+    ]
+  };
+
+  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    const stringManifest = JSON.stringify(vendorManifestData);
+    const blob = new Blob([stringManifest], { type: 'application/json' });
+    const manifestUrl = URL.createObjectURL(blob);
+    let manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.setAttribute('href', manifestUrl);
+    }
+
+    let appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitleMeta) {
+      appleTitleMeta.setAttribute('content', 'Vendor JI');
+    }
+  }
+
   // Filter all bookings for this vendor
   const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
   const totalOrders = vendorBookings.length;
@@ -11812,8 +11868,11 @@ function renderPublicVendorPortal() {
               <div style="font-size:0.8rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
             </div>
 
-            <!-- Tombol Cetak PDF Dipindahkan Kesini -->
-            <div>
+            <!-- Action Buttons: Install PWA Vendor & Cetak PDF -->
+            <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+              <button id="pv-install-btn" class="btn btn-secondary" style="width:auto; padding:8px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; background:#0f172a; color:#ffffff; border:none; box-shadow:0 4px 12px rgba(15,23,42,0.2);">
+                <i data-lucide="smartphone" style="width:14px; height:14px;"></i> Install App Vendor JI
+              </button>
               <button onclick="window.print();" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
                 <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
               </button>
@@ -11864,6 +11923,40 @@ function renderPublicVendorPortal() {
   `;
 
   lucide.createIcons();
+
+  // Install PWA Vendor Event
+  const pvInstallBtn = document.getElementById("pv-install-btn");
+  if (pvInstallBtn) {
+    pvInstallBtn.onclick = () => {
+      if (window.deferredVendorPrompt) {
+        window.deferredVendorPrompt.prompt();
+        window.deferredVendorPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            showToast("Aplikasi Vendor JI berhasil dipasang di Layar Utama HP!");
+          }
+          window.deferredVendorPrompt = null;
+        });
+      } else {
+        openModal("📱 Pasang Aplikasi Vendor JI di HP", `
+          <div style="font-family:'Mulish', sans-serif; padding:10px 4px; text-align:center; color:#1e293b;">
+            <div style="font-size:2.5rem; margin-bottom:10px;">📱</div>
+            <h3 style="font-weight:900; margin-bottom:6px; color:#0f172a;">Tambahkan "Vendor JI" ke Layar Utama HP</h3>
+            <p style="font-size:0.85rem; color:#475569; margin-bottom:16px; line-height:1.5;">
+              Buka portal vendor <strong>${vendor.name}</strong> secara terpisah dari Homescreen HP Anda dengan nama <strong>"Vendor JI"</strong>.
+            </p>
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px; text-align:left; font-size:0.82rem; line-height:1.7; margin-bottom:16px;">
+              <div style="font-weight:800; color:#0f172a; margin-bottom:6px;">Langkah Pemasangan di HP:</div>
+              <div><strong>1. Browser Safari (iPhone/iPad):</strong><br>
+              Ketuk tombol <strong>Share / Bagikan (📤)</strong> ➔ Gulir ke bawah lalu pilih <strong>"Tambahkan ke Layar Utama" (Add to Home Screen)</strong>.</div>
+              <div style="margin-top:8px;"><strong>2. Browser Chrome / Edge (Android):</strong><br>
+              Ketuk titik tiga (⋮) di pojok kanan atas ➔ Pilih <strong>"Tambahkan ke Layar Utama" / "Install Aplikasi"</strong>.</div>
+            </div>
+            <button onclick="closeModal();" class="btn btn-gold" style="width:100%; font-weight:800; padding:10px;">Saya Mengerti</button>
+          </div>
+        `);
+      }
+    };
+  }
 
   // Search filter
   const pvSearch = document.getElementById("pv-search");
