@@ -26,27 +26,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // --- 1. LOCAL DATABASE STATE (localStorage) ---
 const DEFAULT_STATE = {
   users: [
-    { username: "admin", password: "admin123", role: "admin", name: "Ustadz H. Haris", whatsapp: "+628111222333", region: "Makkah", pendingApproval: false },
-    { username: "handling", password: "handling123", role: "user", name: "Ahmad Khidmat", whatsapp: "+96650111222", region: "Bandara Jeddah", pendingApproval: false }
+    { username: "adminkhidmat", password: "35rbjamaah", role: "admin", name: "Admin Saudi Operational", whatsapp: "+966500000000", region: "Saudi Arabia", pendingApproval: false }
   ],
   groups: [],
-  itineraries: [
-    {
-      groupName: "Umroh Ruby Onyx 6 Juli 2026 Makkah Awal (9 Hari)",
-      activities: [
-        { date: "2026-07-06", time: "14:30", city: "Jeddah", agenda: "Mendarat T1 Jeddah & Distribusi Mealbox Albaik", remarks: "Penyambutan oleh Tim Handling Bandara" },
-        { date: "2026-07-06", time: "17:00", city: "Makkah", agenda: "Check In Anjum Hotel Makkah & Pelaksanaan Umroh Pertama", remarks: "Bimbingan oleh Ustadz Pembimbing" },
-        { date: "2026-07-08", time: "07:00", city: "Makkah", agenda: "Ziyarah Kota Makkah (Jabal Tsur, Arafah, Mina)", remarks: "Persiapan Bus Rawahel" },
-        { date: "2026-07-10", time: "09:00", city: "Madinah", agenda: "Transfer Bus ke Madinah & Check In Nozol Royal Inn", remarks: "Perjalanan +- 5 Jam via Highway" }
-      ]
-    }
-  ],
+  itineraries: [],
   assignments: [],
   assignmentOffers: [],
   rooms: [],
-  documents: [
-    { id: "doc-1", groupName: "Umum", name: "SOP Penugasan Handling Lapangan", file: "sop_handling_v2.pdf" }
-  ],
+  documents: [],
   financial: {
     mainBalance: 0,
     wallets: {},
@@ -60,10 +47,7 @@ const DEFAULT_STATE = {
   },
   vendors: [],
   bookings: [],
-  assets: [
-    { id: "ast-1", name: "Walkie Talkie Motorola", status: "Tersedia", qty: 10, location: "Gudang Makkah" },
-    { id: "ast-2", name: "Toyota Hiace Operasional", status: "Digunakan", qty: 2, location: "Jeddah Airport" }
-  ],
+  assets: [],
   notifications: [],
   lastReadNotificationTimestamp: 0
 };
@@ -133,6 +117,50 @@ function ensureStateCompat() {
   };
   
   state.users = ensureArray(state.users, DEFAULT_STATE.users);
+  
+  // Migration: Ensure legacy "admin" user is converted to new "adminkhidmat" / "Admin Saudi Operational"
+  let hasAdmin = false;
+  state.users = state.users.map(u => {
+    if (u.username === "admin" || u.name === "Ustadz H. Haris" || u.role === "admin") {
+      hasAdmin = true;
+      return {
+        username: "adminkhidmat",
+        password: "35rbjamaah",
+        role: "admin",
+        name: "Admin Saudi Operational",
+        whatsapp: "+966500000000",
+        region: "Saudi Arabia",
+        pendingApproval: false
+      };
+    }
+    return u;
+  });
+  
+  if (!hasAdmin) {
+    state.users.unshift({
+      username: "adminkhidmat",
+      password: "35rbjamaah",
+      role: "admin",
+      name: "Admin Saudi Operational",
+      whatsapp: "+966500000000",
+      region: "Saudi Arabia",
+      pendingApproval: false
+    });
+  }
+  
+  // Also migrate currentUser session if logged in as legacy admin
+  if (state.currentUser && (state.currentUser.username === "admin" || state.currentUser.name === "Ustadz H. Haris" || state.currentUser.role === "admin")) {
+    state.currentUser = {
+      username: "adminkhidmat",
+      password: "35rbjamaah",
+      role: "admin",
+      name: "Admin Saudi Operational",
+      whatsapp: "+966500000000",
+      region: "Saudi Arabia",
+      pendingApproval: false
+    };
+    localStorage.setItem("jejak_imani_session", JSON.stringify(state.currentUser));
+  }
   state.groups = ensureArray(state.groups, DEFAULT_STATE.groups);
   state.itineraries = ensureArray(state.itineraries, DEFAULT_STATE.itineraries);
   state.assignments = ensureArray(state.assignments, DEFAULT_STATE.assignments);
@@ -203,185 +231,8 @@ function ensureStateCompat() {
     state.notifications = state.notifications.filter(n => n.timestamp > oneDayAgo);
   }
 
-  // Seed documents across all 7 requested categories for all groups
-  state.documents = ensureArray(state.documents, DEFAULT_STATE.documents || []);
-  state.groups.forEach(group => {
-    if (!group || !group.name) return;
-    const gName = group.name;
-    const cleanSlug = gName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-
-    const docItems = [
-      {
-        id: `doc-prof-${cleanSlug}`,
-        groupName: gName,
-        category: "Profiling Jamaah",
-        name: `Profiling Jamaah & Rekam Medis - ${gName}`,
-        file: `profiling_jamaah_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-visa-${cleanSlug}`,
-        groupName: gName,
-        category: "Visa",
-        name: `Manifest Visa Umroh KSA - ${gName}`,
-        file: `visa_manifest_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-paspor-${cleanSlug}`,
-        groupName: gName,
-        category: "Paspor",
-        name: `Manifest & Scan Paspor Jamaah - ${gName}`,
-        file: `manifest_paspor_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-ticket-${cleanSlug}`,
-        groupName: gName,
-        category: "E-Ticket",
-        name: `E-Ticket Penerbangan Saudia Airlines - ${gName}`,
-        file: `eticket_saudia_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-bus-${cleanSlug}`,
-        groupName: gName,
-        category: "Bus List",
-        name: `Bus List & Manifesto Transpor Bus 1 - ${gName}`,
-        file: `bus_list_manifest_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-paket-${cleanSlug}`,
-        groupName: gName,
-        category: "Paket Info",
-        name: `Informasi Paket & Layanan Akomodasi - ${gName}`,
-        file: `paket_info_${cleanSlug}.pdf`
-      },
-      {
-        id: `doc-iti-${cleanSlug}`,
-        groupName: gName,
-        category: "Itinerary",
-        name: `Itinerary Perjalanan Umroh Lengkap - ${gName}`,
-        file: `itinerary_lengkap_${cleanSlug}.pdf`
-      }
-    ];
-
-    docItems.forEach(d => {
-      if (!state.documents.some(x => (x.category === d.category || x.name === d.name) && x.groupName === d.groupName)) {
-        state.documents.push(d);
-      }
-    });
-  });
-
-  // Seed Data: "Umroh Reguler 20 Juli 2026 Madinah Awal (9 Hari)" & 25 Jamaah
-  const targetGroupName = "Umroh Reguler 20 Juli 2026 Madinah Awal (9 Hari)";
-  let targetGroup = state.groups.find(g => g.name === targetGroupName);
-  if (!targetGroup) {
-    targetGroup = {
-      name: targetGroupName,
-      rute: "Jakarta (CGK) - Madinah (MED) - Makkah - Jeddah (JED) - Jakarta (CGK)",
-      dateStart: "2026-07-20",
-      dateEnd: "2026-07-28",
-      hotels: ["Maden Al Rawda", "Al Marwa Rayhaan Rotana"],
-      packages: [
-        { name: "Sapphire Plus", pax: 25, hotelMadinah: "Maden Al Rawda", hotelMakkah: "Al Marwa Rayhaan Rotana" }
-      ],
-      flightArrival: [
-        { date: "2026-07-20", code: "SV819", takeoff: "11:00", landing: "17:30", remarks: "Direct Airport Madinah" }
-      ],
-      flightDeparture: [
-        { date: "2026-07-28", code: "SV818", takeoff: "21:00", landing: "11:00", remarks: "Direct CGK" }
-      ],
-      leaders: ["Ustadz H. Ahmad Ridwan"],
-      mutawwif: "Syekh Abdullah Al-Madani",
-      mealsArrival: ["Nasi Box Transit Madinah Airport"],
-      mealsDeparture: ["Buffet Resto Airport Jeddah"]
-    };
-    state.groups.unshift(targetGroup);
-  }
-
-  const hasTargetRooms = state.rooms.some(r => r.groupName === targetGroupName);
-  if (!hasTargetRooms) {
-    const jamaah25 = [
-      { guestNo: "1", name: "H. BAMBANG SUTRISNO", remark: "Laki-laki" },
-      { guestNo: "2", name: "HJ. SITI AMINAH", remark: "Perempuan" },
-      { guestNo: "3", name: "ACHMAD FAUZI", remark: "Laki-laki" },
-      { guestNo: "4", name: "DEWI LESTARI", remark: "Perempuan" },
-      { guestNo: "5", name: "RUDI HERMAWAN", remark: "Laki-laki" },
-      { guestNo: "6", name: "HJ. RATNA SARI", remark: "Perempuan" },
-      { guestNo: "7", name: "AYU VIDYA PUTRI", remark: "Perempuan" },
-      { guestNo: "8", name: "H. AGUS SETIAWAN", remark: "Laki-laki" },
-      { guestNo: "9", name: "NUR HIDAYAH", remark: "Perempuan" },
-      { guestNo: "10", name: "MUHAMMAD RIZKY", remark: "Laki-laki" },
-      { guestNo: "11", name: "HJ. ENDANG SRI WAHYUNI", remark: "Perempuan" },
-      { guestNo: "12", name: "DEDI KURNIAWAN", remark: "Laki-laki" },
-      { guestNo: "13", name: "RINA WATI", remark: "Perempuan" },
-      { guestNo: "14", name: "H. BUDI SANTOSO", remark: "Laki-laki" },
-      { guestNo: "15", name: "HJ. SRI RAHAYU", remark: "Perempuan" },
-      { guestNo: "16", name: "ANDI WIJAYA", remark: "Laki-laki" },
-      { guestNo: "17", name: "LIA FEBRIANI", remark: "Perempuan" },
-      { guestNo: "18", name: "TRI WAHYUDI", remark: "Laki-laki" },
-      { guestNo: "19", name: "HJ. NINGSIH", remark: "Perempuan" },
-      { guestNo: "20", name: "H. SUPRIYADI", remark: "Laki-laki" },
-      { guestNo: "21", name: "HJ. KARTINI", remark: "Perempuan" },
-      { guestNo: "22", name: "EKO PRASETYO", remark: "Laki-laki" },
-      { guestNo: "23", name: "ANITA INDAH", remark: "Perempuan" },
-      { guestNo: "24", name: "H. HENDRA GUNAWAN", remark: "Laki-laki" },
-      { guestNo: "25", name: "HJ. MAYA ROSIDA", remark: "Perempuan" }
-    ];
-
-    // Maden Al Rawda (Madinah)
-    state.rooms.push({
-      id: "rm-seed-1", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "1", roomNumber: "1001", typeBed: "Quad",
-      guests: [jamaah25[0], jamaah25[2], jamaah25[4], jamaah25[7]]
-    });
-    state.rooms.push({
-      id: "rm-seed-2", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "2", roomNumber: "1002", typeBed: "Quad",
-      guests: [jamaah25[1], jamaah25[3], jamaah25[5], jamaah25[6]]
-    });
-    state.rooms.push({
-      id: "rm-seed-3", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "3", roomNumber: "1003", typeBed: "Quad",
-      guests: [jamaah25[9], jamaah25[11], jamaah25[13], jamaah25[15]]
-    });
-    state.rooms.push({
-      id: "rm-seed-4", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "4", roomNumber: "1004", typeBed: "Quad",
-      guests: [jamaah25[8], jamaah25[10], jamaah25[12], jamaah25[14]]
-    });
-    state.rooms.push({
-      id: "rm-seed-5", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "5", roomNumber: "1005", typeBed: "Quad",
-      guests: [jamaah25[17], jamaah25[19], jamaah25[21], jamaah25[23]]
-    });
-    state.rooms.push({
-      id: "rm-seed-6", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "6", roomNumber: "1006", typeBed: "Quad",
-      guests: [jamaah25[16], jamaah25[18], jamaah25[20], jamaah25[22]]
-    });
-    state.rooms.push({
-      id: "rm-seed-7", groupName: targetGroupName, hotelName: "Maden Al Rawda", roomlistNumber: "7", roomNumber: "1007", typeBed: "Single",
-      guests: [jamaah25[24]]
-    });
-
-    // Al Marwa Rayhaan Rotana (Makkah)
-    state.rooms.push({
-      id: "rm-seed-8", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "1", roomNumber: "2101", typeBed: "Quad",
-      guests: [jamaah25[0], jamaah25[2], jamaah25[4], jamaah25[7]]
-    });
-    state.rooms.push({
-      id: "rm-seed-9", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "2", roomNumber: "2102", typeBed: "Quad",
-      guests: [jamaah25[1], jamaah25[3], jamaah25[5], jamaah25[6]]
-    });
-    state.rooms.push({
-      id: "rm-seed-10", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "3", roomNumber: "2103", typeBed: "Quad",
-      guests: [jamaah25[9], jamaah25[11], jamaah25[13], jamaah25[15]]
-    });
-    state.rooms.push({
-      id: "rm-seed-11", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "4", roomNumber: "2104", typeBed: "Quad",
-      guests: [jamaah25[8], jamaah25[10], jamaah25[12], jamaah25[14]]
-    });
-    state.rooms.push({
-      id: "rm-seed-12", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "5", roomNumber: "2105", typeBed: "Quad",
-      guests: [jamaah25[17], jamaah25[19], jamaah25[21], jamaah25[23]]
-    });
-    state.rooms.push({
-      id: "rm-seed-14", groupName: targetGroupName, hotelName: "Al Marwa Rayhaan Rotana", roomlistNumber: "7", roomNumber: "2107", typeBed: "Single",
-      guests: [jamaah25[24]]
-    });
-  }
+  // Production Ready: Ensure documents array exists
+  state.documents = ensureArray(state.documents, []);
 
   // Keep user itineraries, assignments, and assignment offers intact
 }
@@ -457,7 +308,7 @@ function loadState() {
     try {
       const parsedLocal = JSON.parse(local);
       if (parsedLocal && typeof parsedLocal === "object") {
-        state = mergeStates(state, parsedLocal);
+        state = parsedLocal;
       } else if (!state || typeof state !== "object") {
         state = JSON.parse(JSON.stringify(DEFAULT_STATE));
       }
@@ -529,9 +380,9 @@ function loadState() {
           return;
         }
         
-        console.log("Received data is different. Merging and re-routing view.");
+        console.log("Received data is different. Updating state from cloud.");
         const localCurrentUser = state.currentUser;
-        state = mergeStates(data, state);
+        state = data;
         state.currentUser = localCurrentUser;
         ensureStateCompat();
         
@@ -575,6 +426,8 @@ function saveState() {
     localStorage.removeItem("jejak_imani_session");
   }
   
+  // CENTRALIZED FIREBASE RULE: Only push local state to Cloud Firebase if Firebase has already loaded its cloud state
+  // This prevents stale localStorage on secondary devices from overwriting clean Firebase cloud data upon login/load.
   if (firebaseDb && isFirebaseRemoteLoaded) {
     const stateToSave = {};
     for (let k in state) {
@@ -582,7 +435,11 @@ function saveState() {
         stateToSave[k] = state[k];
       }
     }
-    firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
+    try {
+      firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
+    } catch(e) {
+      console.warn("Firebase save error:", e);
+    }
   }
 }
 
@@ -1134,7 +991,7 @@ function renderUserPortal(subView) {
         : `<div class="activity-list" style="box-shadow:none; padding:0;">
             ${userNotifications.slice().reverse().map(n => `
               <div class="activity-item">
-                <div class="activity-icon"><i data-lucide="${n.type === 'financial' ? 'wallet' : (n.type === 'penjadwalan' ? 'calendar-range' : 'info')}"></i></div>
+                <div class="activity-icon"><i data-lucide="bell"></i></div>
                 <div class="activity-body">
                   <div class="activity-text">${n.message}</div>
                   <div class="activity-time">${new Date(n.timestamp).toLocaleTimeString('id-ID')} Saudi</div>
@@ -4044,7 +3901,7 @@ function renderAdminPortal(subView) {
             <i data-lucide="store"></i><span>Vendor & Booking</span>
           </div>
           <div class="admin-nav-item ${activeSubView === 'aset' ? 'active' : ''}" data-target="aset">
-            <i data-lucide="package-search"></i><span>Aset Operasional</span>
+            <i data-lucide="box"></i><span>Aset Operasional</span>
           </div>
           
           <!-- Kategori: Menu Yang Sudah Ada -->
@@ -4083,27 +3940,36 @@ function renderAdminPortal(subView) {
       
       <!-- Main Content -->
       <div class="admin-main">
-        <header class="admin-topbar">
-          <div style="display:flex; align-items:center; gap:16px;">
-            <button class="sidebar-toggle-btn" id="sidebar-toggle-btn">
-              <i data-lucide="menu" style="width: 22px; height: 22px;"></i>
-            </button>
-            <h2 class="admin-page-title" id="admin-view-title">Dashboard</h2>
-          </div>
-          <div class="admin-topbar-right" style="display:flex; align-items:center; gap:8px;">
-            <button class="btn btn-secondary" onclick="downloadDatabaseBackup();" title="Unduh Backup Database JSON" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
-              <i data-lucide="download" style="width: 15px; height: 15px;"></i> Backup Data
-            </button>
-            <button class="btn btn-secondary" onclick="restoreDatabaseBackup();" title="Pulihkan Backup Database JSON" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
-              <i data-lucide="upload" style="width: 15px; height: 15px;"></i> Restore Data
-            </button>
-            <button class="btn btn-secondary" onclick="window.location.reload();" title="Reload Web" style="width:auto; padding:5px 10px; font-size:0.78rem; display:flex; align-items:center; gap:5px; background:#f8fafc; border-color:#cbd5e1;">
-              <i data-lucide="rotate-cw" style="width: 15px; height: 15px;"></i> Refresh
-            </button>
-            <div class="admin-datetime">
-              <span>📅 ${gregorianLongStr} / ${hijriStr}</span>
-              <span class="admin-clock">Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
+        <header class="admin-topbar" style="display:flex; flex-direction:column; padding:12px 20px; background:#ffffff; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:90;">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle Menu Sidebar" style="background:transparent; border:none; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative; z-index:1001; pointer-events:auto;">
+                <i data-lucide="menu" style="width: 22px; height: 22px; color:#0f172a;"></i>
+              </button>
+              <h2 class="admin-page-title" id="admin-view-title" style="margin:0; font-size:1.2rem; font-weight:800; color:#0f172a;">Dashboard</h2>
             </div>
+            <div class="admin-topbar-right" style="display:flex; align-items:center; gap:6px;">
+              <button class="btn btn-secondary icon-hdr-btn" onclick="downloadDatabaseBackup();" title="Backup Data" style="width:auto; padding:6px 10px; border-radius:8px; background:#f8fafc; border-color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center;">
+                <i data-lucide="download" style="width: 16px; height: 16px; color:#0f172a;"></i>
+              </button>
+              <label class="btn btn-secondary icon-hdr-btn" title="Restore Data" style="width:auto; padding:6px 10px; border-radius:8px; background:#f8fafc; border-color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; margin:0;">
+                <i data-lucide="upload" style="width: 16px; height: 16px; color:#0f172a;"></i>
+                <input type="file" id="restore-db-input" accept=".json" onchange="restoreDatabaseBackup(event);" style="display:none;">
+              </label>
+              <button class="btn btn-secondary icon-hdr-btn" onclick="window.location.reload();" title="Refresh App" style="width:auto; padding:6px 10px; border-radius:8px; background:#f8fafc; border-color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center;">
+                <i data-lucide="rotate-cw" style="width: 16px; height: 16px; color:#0f172a;"></i>
+              </button>
+              <div class="admin-datetime desktop-only-datetime">
+                <span>${gregorianLongStr} / ${hijriStr}</span>
+                <span class="admin-clock">Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Mobile Sub-Header Date & Clock Bar (1 row attached seamlessly) -->
+          <div class="admin-mobile-datetime-subbar">
+            <span>${gregorianLongStr} / ${hijriStr}</span>
+            <span class="admin-clock">Saudi: <span class="saudi-clock-widget">${timeStr}</span></span>
           </div>
         </header>
         
@@ -4118,9 +3984,24 @@ function renderAdminPortal(subView) {
   });
   
   const sidebar = document.getElementById("admin-sidebar");
-  document.getElementById("sidebar-toggle-btn").onclick = () => sidebar.classList.toggle("collapsed");
+  const toggleBtn = document.getElementById("sidebar-toggle-btn");
+  if (toggleBtn && sidebar) {
+    toggleBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (window.innerWidth <= 768) {
+        sidebar.classList.toggle("open");
+      } else {
+        sidebar.classList.toggle("collapsed");
+      }
+    };
+  }
   const closeBtn = document.getElementById("sidebar-close-btn");
-  if (closeBtn) closeBtn.onclick = () => sidebar.classList.add("collapsed");
+  if (closeBtn && sidebar) {
+    closeBtn.onclick = () => {
+      sidebar.classList.remove("open");
+      sidebar.classList.add("collapsed");
+    };
+  }
   
   document.getElementById("admin-logout-btn").onclick = () => {
     state.currentUser = null;
@@ -4179,7 +4060,13 @@ function renderAdminPortal(subView) {
     window.location.hash = "#admin/dashboard";
   }
   
-  lucide.createIcons();
+  try {
+    if (typeof lucide !== "undefined" && lucide.createIcons) {
+      lucide.createIcons();
+    }
+  } catch(e) {
+    console.warn("Lucide icon creation warning:", e);
+  }
 }
 
 // --- ADMIN SUB-VIEW: DASHBOARD ---
@@ -4213,7 +4100,7 @@ function renderAdminDashboard() {
       <div class="metric-card" onclick="window.location.hash = '#admin/financial'" style="cursor:pointer;" title="Buka Approval Kas">
         <div class="metric-info">
           <h4>Approval Kas</h4>
-          <div class="metric-val ${pendingExpenses > 0 ? 'gold' : ''}">${pendingExpenses} Berkas</div>
+          <div class="metric-val ${pendingExpenses > 0 ? 'gold' : ''}">${pendingExpenses}</div>
         </div>
         <div class="metric-icon"><i data-lucide="receipt"></i></div>
       </div>
@@ -4222,7 +4109,7 @@ function renderAdminDashboard() {
       <div class="metric-card" onclick="window.adminLaporanTabMode = 'absensi'; window.location.hash = '#admin/laporan';" style="cursor:pointer;" title="Buka Laporan Absensi">
         <div class="metric-info">
           <h4>Laporan Absensi</h4>
-          <div class="metric-val ${unreadAbsences > 0 ? 'gold' : ''}">${unreadAbsences} Absen</div>
+          <div class="metric-val ${unreadAbsences > 0 ? 'gold' : ''}">${unreadAbsences}</div>
         </div>
         <div class="metric-icon"><i data-lucide="clipboard-list"></i></div>
       </div>
@@ -4231,7 +4118,7 @@ function renderAdminDashboard() {
       <div class="metric-card" onclick="window.adminLaporanTabMode = 'kejadian'; window.location.hash = '#admin/laporan';" style="cursor:pointer;" title="Buka Laporan Kejadian">
         <div class="metric-info">
           <h4>Laporan Kejadian</h4>
-          <div class="metric-val ${unreadIncidents > 0 ? 'gold' : ''}">${unreadIncidents} Kejadian</div>
+          <div class="metric-val ${unreadIncidents > 0 ? 'gold' : ''}">${unreadIncidents}</div>
         </div>
         <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
       </div>
@@ -4240,7 +4127,7 @@ function renderAdminDashboard() {
       <div class="metric-card" onclick="window.location.hash = '#admin/datatim?tab=pending'" style="cursor:pointer;" title="Buka Pendaftar Baru">
         <div class="metric-info">
           <h4>Pendaftar Baru</h4>
-          <div class="metric-val ${pendingUsersCount > 0 ? 'gold' : ''}">${pendingUsersCount} Akun</div>
+          <div class="metric-val ${pendingUsersCount > 0 ? 'gold' : ''}">${pendingUsersCount}</div>
         </div>
         <div class="metric-icon"><i data-lucide="user-plus"></i></div>
       </div>
@@ -4249,7 +4136,7 @@ function renderAdminDashboard() {
       <div class="metric-card" onclick="window.location.hash = '#admin/penjadwalan?filter=applied'" style="cursor:pointer;" title="Buka Approval Apply Tugas">
         <div class="metric-info">
           <h4>Apply Tugas</h4>
-          <div class="metric-val ${totalApplicantsCount > 0 ? 'gold' : ''}">${totalApplicantsCount} Pengajuan</div>
+          <div class="metric-val ${totalApplicantsCount > 0 ? 'gold' : ''}">${totalApplicantsCount}</div>
         </div>
         <div class="metric-icon"><i data-lucide="user-check"></i></div>
       </div>
@@ -4259,7 +4146,7 @@ function renderAdminDashboard() {
     
       <div class="table-card">
         <div class="table-header-bar" style="border-bottom:none; padding-bottom:4px;">
-          <h3 class="table-title">Daftar Rombongan Grup</h3>
+          <h3 class="table-title">Daftar Grup</h3>
         </div>
         <div class="tab-header" style="margin-bottom:16px; padding:0 16px; border-bottom:none; display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-secondary tab-btn active" id="grup-tab-all" data-filter="all" style="padding:6px 12px; font-size:0.75rem; border-radius:8px; border:1px solid var(--primary-gold); background:var(--primary-gold); color:#fff; display:inline-flex; align-items:center; gap:6px; font-weight:700;">
@@ -4447,23 +4334,18 @@ function renderCalendarNavigator() {
         const groupIti = state.itineraries.find(iti => iti.groupName === g.name);
         let city = "";
         if (groupIti && groupIti.activities) {
-          const sortedActs = [...groupIti.activities].sort((a, b) => a.date.localeCompare(b.date));
-          const lastAct = sortedActs.filter(a => a.date <= checkDateStr).pop();
-          if (lastAct && lastAct.city) {
-            city = lastAct.city;
+          const matchingAct = groupIti.activities.find(a => a.date === checkDateStr);
+          if (matchingAct && matchingAct.city) {
+            city = matchingAct.city;
           }
         }
         
-        // Fallback midpoint logic
-        if (!city) {
-          const midpoint = new Date((arr.getTime() + dep.getTime()) / 2);
-          city = (cur <= midpoint) ? "Madinah" : "Makkah";
+        if (city) {
+          const cLower = city.toLowerCase();
+          if (cLower === "makkah") activeMakkah.push(g.name);
+          else if (cLower === "madinah") activeMadinah.push(g.name);
+          else if (cLower === "jeddah") activeJeddah.push(g.name);
         }
-        
-        const cLower = city.toLowerCase();
-        if (cLower === "makkah") activeMakkah.push(g.name);
-        else if (cLower === "madinah") activeMadinah.push(g.name);
-        else if (cLower === "jeddah") activeJeddah.push(g.name);
       }
     });
 
@@ -4565,9 +4447,17 @@ function renderItineraryContent() {
     document.getElementById("iti-view-mode-grup").classList.add("active");
     
     contents.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:16px;">
-        <input type="text" id="iti-grup-search-input" class="form-input" placeholder="Cari itinerary grup..." style="max-width:300px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
-        <button id="add-iti-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus-circle"></i> Tambah Itinerary Baru</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="text" id="iti-grup-search-input" class="form-input" placeholder="Cari itinerary grup..." style="max-width:240px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
+          <div style="display:flex; gap:4px;" id="iti-status-filter-container">
+            <button class="btn btn-secondary iti-filter-status-btn active" data-filter="all" title="Semua Grup" style="padding:6px 10px; font-size:0.75rem; border-radius:6px; background:var(--primary-gold); color:#fff; border-color:var(--primary-gold);"><i data-lucide="layers" style="width:14px; height:14px;"></i></button>
+            <button class="btn btn-secondary iti-filter-status-btn" data-filter="upcoming" title="Akan Datang" style="padding:6px 10px; font-size:0.75rem; border-radius:6px; background:#fff; color:#475569; border-color:#cbd5e1;"><i data-lucide="calendar-clock" style="width:14px; height:14px;"></i></button>
+            <button class="btn btn-secondary iti-filter-status-btn" data-filter="active" title="Aktif" style="padding:6px 10px; font-size:0.75rem; border-radius:6px; background:#fff; color:#475569; border-color:#cbd5e1;"><i data-lucide="activity" style="width:14px; height:14px;"></i></button>
+            <button class="btn btn-secondary iti-filter-status-btn" data-filter="completed" title="Selesai" style="padding:6px 10px; font-size:0.75rem; border-radius:6px; background:#fff; color:#475569; border-color:#cbd5e1;"><i data-lucide="check-circle-2" style="width:14px; height:14px;"></i></button>
+          </div>
+        </div>
+        <button id="add-iti-popup-btn" class="btn btn-gold" title="Tambah Itinerary Baru" style="width:auto; padding:8px 12px;"><i data-lucide="plus-circle" style="width:16px; height:16px;"></i></button>
       </div>
       
       <div class="table-card">
@@ -4586,9 +4476,22 @@ function renderItineraryContent() {
       </div>
     `;
     
+    let currentItiStatusFilter = "all";
     const renderGrupItiList = () => {
       const q = document.getElementById("iti-grup-search-input").value.toLowerCase().trim();
-      const filtered = state.itineraries.filter(iti => iti.groupName.toLowerCase().includes(q));
+      const todayStr = getSaudiDateTime().gregorianStr.split('/').reverse().join('-');
+      
+      const filtered = state.itineraries.filter(iti => {
+        const matchesQ = iti.groupName.toLowerCase().includes(q);
+        const groupObj = state.groups.find(g => g.name === iti.groupName);
+        let matchesStatus = true;
+        if (groupObj) {
+          if (currentItiStatusFilter === "upcoming") matchesStatus = (todayStr < groupObj.dateStart);
+          else if (currentItiStatusFilter === "active") matchesStatus = (todayStr >= groupObj.dateStart && todayStr <= groupObj.dateEnd);
+          else if (currentItiStatusFilter === "completed") matchesStatus = (todayStr > groupObj.dateEnd);
+        }
+        return matchesQ && matchesStatus;
+      });
       const tbody = document.getElementById("iti-grup-tbody");
       if (!tbody) return;
       
@@ -4685,6 +4588,22 @@ function renderItineraryContent() {
           openModal("Linimasa Rencana Perjalanan", timelineHtml);
         };
       });
+      document.querySelectorAll(".iti-filter-status-btn").forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll(".iti-filter-status-btn").forEach(b => {
+            b.classList.remove("active");
+            b.style.background = "#fff";
+            b.style.color = "#475569";
+            b.style.borderColor = "#cbd5e1";
+          });
+          btn.classList.add("active");
+          btn.style.background = "var(--primary-gold)";
+          btn.style.color = "#fff";
+          btn.style.borderColor = "var(--primary-gold)";
+          currentItiStatusFilter = btn.getAttribute("data-filter");
+          renderGrupItiList();
+        };
+      });
       tbody.querySelectorAll(".edit-iti-popup-btn").forEach(btn => {
         btn.onclick = () => openItineraryFormPopup(parseInt(btn.getAttribute("data-idx")));
       });
@@ -4718,7 +4637,7 @@ function renderItineraryContent() {
     
     // Weekly strip around active date
     let dateCardsHtml = "";
-    for (let i = -3; i <= 3; i++) {
+    for (let i = -30; i <= 30; i++) {
       const tempDate = new Date(activeDateObj);
       tempDate.setDate(activeDateObj.getDate() + i);
       const tempDateStr = tempDate.toISOString().split('T')[0];
@@ -4727,8 +4646,8 @@ function renderItineraryContent() {
       const isSelected = (tempDateStr === state.itiCalActiveDate);
       
       dateCardsHtml += `
-        <div class="iti-cal-date-card ${isSelected ? 'active' : ''}" data-date="${tempDateStr}" style="flex:1; min-width:60px; text-align:center; padding:8px; border:1px solid ${isSelected ? 'var(--primary-gold)' : '#e2e8f0'}; background:${isSelected ? 'var(--primary-gold)' : '#ffffff'}; color:${isSelected ? '#ffffff' : 'var(--text-main)'}; border-radius:6px; cursor:pointer; font-size:0.8rem; transition:all 0.2s;">
-          <div style="font-weight:600; text-transform:uppercase; font-size:0.65rem; color:${isSelected ? '#ffffff' : '#888888'};">${dayName}</div>
+        <div class="iti-cal-date-card ${isSelected ? 'active' : ''}" id="iti-date-card-${tempDateStr}" data-date="${tempDateStr}" style="flex-shrink:0; min-width:65px; text-align:center; padding:8px; border:1px solid ${isSelected ? 'var(--primary-gold)' : '#e2e8f0'}; background:${isSelected ? 'var(--primary-gold)' : '#ffffff'}; color:${isSelected ? '#ffffff' : 'var(--text-main)'}; border-radius:8px; cursor:pointer; font-size:0.8rem; transition:all 0.2s; scroll-snap-align:center;">
+          <div style="font-weight:700; text-transform:uppercase; font-size:0.65rem; color:${isSelected ? '#ffffff' : '#888888'};">${dayName}</div>
           <div style="font-size:1.1rem; font-weight:800; margin-top:2px;">${dayNum}</div>
         </div>
       `;
@@ -4747,7 +4666,7 @@ function renderItineraryContent() {
         </div>
         
         <!-- Week Date Selector Strip -->
-        <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; border-bottom:1px solid #e2e8f0; margin-bottom:12px;">
+        <div id="iti-date-scroll-strip" style="display:flex; gap:8px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; padding-bottom:8px; border-bottom:1px solid #e2e8f0; margin-bottom:12px;">
           ${dateCardsHtml}
         </div>
         
@@ -4786,6 +4705,13 @@ function renderItineraryContent() {
       </div>
     `;
     
+
+    setTimeout(() => {
+      const activeCard = document.getElementById(`iti-date-card-${state.itiCalActiveDate}`);
+      if (activeCard) {
+        activeCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    }, 50);
 
     // Bind Export PDF click
     document.getElementById("iti-cal-export-pdf-btn").onclick = () => {
@@ -8469,15 +8395,17 @@ function renderAdminLaporan() {
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <input type="text" id="ll-filter-search" class="form-input" placeholder="Cari nama petugas, lokasi..." style="flex:1; min-width:200px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
         
-        <select id="ll-filter-group" class="form-select" style="width:200px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
+        <input type="text" id="ll-filter-group-input" list="ll-group-list" class="form-input" placeholder="Cari / Pilih Grup..." style="width:200px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0; background:#fff;">
+        <datalist id="ll-group-list">
           <option value="">Semua Grup Rombongan</option>
-          ${state.groups.map(g => `<option value="${g.name || ''}">${(g.name || '').substring(0,25)}...</option>`).join('')}
-        </select>
-        
-        <select id="ll-filter-staff" class="form-select" style="width:180px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0;">
+          ${state.groups.map(g => `<option value="${g.name}"></option>`).join('')}
+        </datalist>
+
+        <input type="text" id="ll-filter-staff-input" list="ll-staff-list" class="form-input" placeholder="Cari / Pilih Petugas..." style="width:180px; padding:6px 12px; font-size:0.85rem; height:auto; margin:0; background:#fff;">
+        <datalist id="ll-staff-list">
           <option value="">Semua Petugas</option>
-          ${state.users.filter(u => u.role === "user").map(u => `<option value="${u.username}">${u.name}</option>`).join('')}
-        </select>
+          ${state.users.filter(u => u.role === "user").map(u => `<option value="${u.name} (${u.username})"></option>`).join('')}
+        </datalist>
       </div>
     </div>
 
@@ -8495,8 +8423,10 @@ function renderAdminLaporan() {
   });
   
   document.getElementById("ll-filter-search").oninput = loadLaporanTabContent;
-  document.getElementById("ll-filter-group").onchange = loadLaporanTabContent;
-  document.getElementById("ll-filter-staff").onchange = loadLaporanTabContent;
+  const gInp = document.getElementById("ll-filter-group-input");
+  const sInp = document.getElementById("ll-filter-staff-input");
+  if (gInp) { gInp.oninput = loadLaporanTabContent; gInp.onchange = loadLaporanTabContent; }
+  if (sInp) { sInp.oninput = loadLaporanTabContent; sInp.onchange = loadLaporanTabContent; }
   
   loadLaporanTabContent();
 }
@@ -8506,8 +8436,11 @@ function loadLaporanTabContent() {
   if (!contents) return;
   
   const query = document.getElementById("ll-filter-search").value.toLowerCase().trim();
-  const grpValue = document.getElementById("ll-filter-group").value;
-  const petValue = document.getElementById("ll-filter-staff").value;
+  const grpValue = document.getElementById("ll-filter-group-input") ? document.getElementById("ll-filter-group-input").value.trim() : "";
+  const petInput = document.getElementById("ll-filter-staff-input") ? document.getElementById("ll-filter-staff-input").value.trim() : "";
+  let petValue = petInput;
+  const matchUser = petInput.match(/\(([^)]+)\)/);
+  if (matchUser && matchUser[1]) petValue = matchUser[1];
   
   if (window.adminLaporanTabMode === "absensi") {
     const filteredAbs = state.reports.attendance.filter(a => {
@@ -8534,7 +8467,7 @@ function loadLaporanTabContent() {
                 <th>Nama Petugas</th>
                 <th>Penugasan</th>
                 <th>Absen</th>
-                <th>GPS & Foto Preview</th>
+                <th>Foto Preview</th>
               </tr>
             </thead>
             <tbody id="ll-abs-tbody"></tbody>
@@ -8557,10 +8490,29 @@ function loadLaporanTabContent() {
           <td>${formatDateDisplay(a.date)} | ${a.time}</td>
           <td><strong>${name}</strong></td>
           <td><code>${task ? task.type : 'Umum'}</code></td>
-          <td><span class="badge ${a.type === 'Masuk' ? 'badge-success' : 'badge-gold'}">${a.type}</span></td>
           <td>
-            <code>${a.coords}</code> | 
-            <span class="badge badge-info view-absen-preview-btn" style="cursor:pointer; font-size:0.7rem; padding:4px 8px;" data-time="${a.time}" data-date="${formatDateDisplay(a.date)}" data-coords="${a.coords}">PREVIEW</span>
+            <span class="badge ${a.type === 'Masuk' ? 'badge-success' : 'badge-gold'}">${a.type}</span>
+            ${(() => {
+              if (a.type === 'Keluar') {
+                const checkIn = state.reports.attendance.find(x => x.username === a.username && x.taskId === a.taskId && x.type === 'Masuk');
+                if (checkIn && checkIn.date && checkIn.time && a.date && a.time) {
+                  const t1 = new Date(`${checkIn.date}T${checkIn.time}`);
+                  const t2 = new Date(`${a.date}T${a.time}`);
+                  if (!isNaN(t1) && !isNaN(t2)) {
+                    let diffMs = t2 - t1;
+                    if (diffMs > 0) {
+                      const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                      const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                      return `<div style="font-size:0.72rem; color:#64748b; font-weight:700; margin-top:2px;">Durasi: ${diffHrs > 0 ? diffHrs + ' Jam ' : ''}${diffMins} Mnt</div>`;
+                    }
+                  }
+                }
+              }
+              return '';
+            })()}
+          </td>
+          <td>
+            <span class="badge badge-info view-absen-preview-btn" style="cursor:pointer; font-size:0.7rem; padding:4px 8px; font-weight:800;" data-time="${a.time}" data-date="${formatDateDisplay(a.date)}" data-coords="${a.coords}">PREVIEW</span>
           </td>
         </tr>
       `;
@@ -8678,7 +8630,7 @@ function loadVendorTab(tab) {
     contents.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:16px;">
         <input type="text" id="vendor-search-input" class="form-input" placeholder="Cari nama, tipe, kontak vendor..." style="max-width:300px;">
-        <button id="add-vendor-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus"></i> Tambah Master Vendor</button>
+        <button id="add-vendor-popup-btn" class="btn btn-gold" title="Tambah Master Vendor" style="width:auto; padding:8px 12px;"><i data-lucide="plus-circle" style="width:16px; height:16px;"></i></button>
       </div>
       
       <div class="table-card">
@@ -8724,11 +8676,11 @@ function loadVendorTab(tab) {
           <td>${v.notes || '-'}</td>
           <td>
             <div class="action-btn-group" style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="btn btn-gold copy-vendor-link-btn" data-id="${v.id}" data-name="${v.name}" style="width:auto; padding:4px 8px; font-size:0.75rem;" title="Salin Link Schedule Vendor">
-                <i data-lucide="link" style="width:12px;"></i> Link Portal
+              <button class="btn btn-gold copy-vendor-link-btn" data-id="${v.id}" data-name="${v.name}" style="width:auto; padding:6px 10px;" title="Salin Link Portal Vendor">
+                <i data-lucide="link" style="width:14px; height:14px;"></i>
               </button>
-              <button class="btn btn-secondary wa-vendor-link-btn" data-id="${v.id}" data-contact="${v.contact}" data-name="${v.name}" style="width:auto; padding:4px 8px; font-size:0.75rem; color:#10b981; border-color:#a7f3d0; box-shadow:none;" title="Kirim Link via WA Vendor">
-                <i data-lucide="message-circle" style="width:12px;"></i> Share WA
+              <button class="btn btn-secondary wa-vendor-link-btn" data-id="${v.id}" data-contact="${v.contact}" data-name="${v.name}" style="width:auto; padding:6px 10px; color:#10b981; border-color:#a7f3d0; box-shadow:none;" title="Share WA Vendor">
+                <i data-lucide="message-circle" style="width:14px; height:14px;"></i>
               </button>
               <button class="action-icon-btn edit-vendor-btn" data-id="${v.id}" title="Edit Master Vendor"><i data-lucide="edit" style="width:14px;"></i></button>
               <button class="action-icon-btn delete-vendor-btn" data-id="${v.id}" title="Hapus Vendor"><i data-lucide="trash" style="width:14px; color:#ef4444;"></i></button>
@@ -8799,7 +8751,7 @@ function loadVendorTab(tab) {
     contents.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:16px;">
         <input type="text" id="booking-search-input" class="form-input" placeholder="Cari booking grup, vendor..." style="max-width:300px;">
-        <button id="add-booking-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus"></i> Plot Pemesanan Vendor</button>
+        <button id="add-booking-popup-btn" class="btn btn-gold" title="Plot Pemesanan Vendor" style="width:auto; padding:8px 12px;"><i data-lucide="calendar-plus" style="width:16px; height:16px;"></i></button>
       </div>
       
       <div class="table-card">
@@ -9664,10 +9616,10 @@ function renderManifestList(searchQuery = "") {
   container.querySelectorAll(".delete-manifest-btn").forEach(btn => {
     btn.onclick = () => {
       const idx = parseInt(btn.getAttribute("data-idx"));
-      if (confirm("Hapus data manifest rombongan ini?")) {
-        state.groups.splice(idx, 1);
-        saveState();
-        showToast("Manifest dihapus.");
+      const group = state.groups[idx];
+      if (group && confirm(`Hapus data manifest rombongan "${group.name}" beserta seluruh data terhubung (Itinerary, Roomlist, Tugas Tim, & Dokumen)?`)) {
+        deleteGroupCascade(group.name);
+        showToast("Grup dan seluruh data terhubung berhasil dihapus total!");
         renderAdminManifest();
       }
     };
@@ -10870,11 +10822,12 @@ function renderAdminDokumen() {
 }
 function renderAdminAset() {
   const container = document.getElementById("admin-subview-content");
+  if (!container) return;
   
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:16px;">
       <input type="text" id="asset-search-input" class="form-input" placeholder="Cari nama barang atau lokasi aset..." style="max-width:300px;">
-      <button id="add-asset-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus-circle"></i> Tambah Aset Baru</button>
+      <button id="add-asset-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px; font-weight:800; display:inline-flex; align-items:center; gap:6px;"><i data-lucide="plus-circle" style="width:16px; height:16px; color:#fff;"></i> Tambah Aset Baru</button>
     </div>
     
     <div class="table-card">
@@ -10897,16 +10850,19 @@ function renderAdminAset() {
   
   const searchInp = document.getElementById("asset-search-input");
   const renderAssetList = () => {
-    const query = searchInp.value.toLowerCase().trim();
+    const query = searchInp ? searchInp.value.toLowerCase().trim() : "";
     const tbody = document.getElementById("asset-tbody");
+    if (!tbody) return;
+
+    if (!state.assets) state.assets = [];
     const filtered = state.assets.filter(a => 
-      a.name.toLowerCase().includes(query) || 
-      a.location.toLowerCase().includes(query) || 
-      a.status.toLowerCase().includes(query)
+      (a.name || "").toLowerCase().includes(query) || 
+      (a.location || "").toLowerCase().includes(query) || 
+      (a.status || "").toLowerCase().includes(query)
     );
     
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-light);">Tidak ada barang aset ditemukan.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-light); padding:24px;">Tidak ada barang aset ditemukan.</td></tr>`;
       return;
     }
     
@@ -10921,15 +10877,18 @@ function renderAdminAset() {
         <td><code>${a.qty} Pcs</code></td>
         <td>${a.location}</td>
         <td>
-          <div class="action-btn-group">
-            <button class="action-icon-btn edit-asset-popup-btn" data-idx="${state.assets.indexOf(a)}"><i data-lucide="edit" style="width:14px;"></i></button>
-            <button class="action-icon-btn delete-asset-btn" data-idx="${state.assets.indexOf(a)}"><i data-lucide="trash" style="width:14px; color:#ef4444;"></i></button>
+          <div class="action-btn-group" style="display:flex; gap:6px;">
+            <button class="btn btn-secondary edit-asset-popup-btn" data-idx="${state.assets.indexOf(a)}" style="width:auto; padding:5px 10px; font-size:0.75rem; display:inline-flex; align-items:center; gap:5px; border-color:#cbd5e1; font-weight:700;">
+              <i data-lucide="edit-3" style="width:14px; height:14px; color:#0f172a;"></i> Edit
+            </button>
+            <button class="btn btn-danger delete-asset-btn" data-idx="${state.assets.indexOf(a)}" style="width:auto; padding:5px 10px; font-size:0.75rem; display:inline-flex; align-items:center; gap:5px; font-weight:700;">
+              <i data-lucide="trash-2" style="width:14px; height:14px; color:#ef4444;"></i> Hapus
+            </button>
           </div>
         </td>
       </tr>
     `).join('');
     
-    lucide.createIcons();
     bindAssetActions();
   };
 
@@ -10945,14 +10904,17 @@ function renderAdminAset() {
           saveState();
           showToast("Aset berhasil dihapus.");
           renderAdminAset();
+          try { lucide.createIcons(); } catch(e) {}
         }
       };
     });
   };
 
-  searchInp.oninput = renderAssetList;
+  if (searchInp) searchInp.oninput = renderAssetList;
   renderAssetList();
-  document.getElementById("add-asset-popup-btn").onclick = () => openAssetFormPopup();
+  
+  const addBtn = document.getElementById("add-asset-popup-btn");
+  if (addBtn) addBtn.onclick = () => openAssetFormPopup();
 }
 function openAssetFormPopup(editIdx = null) {
   const isEdit = (editIdx !== null);
@@ -12218,13 +12180,32 @@ function openVendorProcessModal(bookingId) {
           </div>
         `}
 
-        <button id="btn-share-delivery-img" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#25d366; color:#fff; border:none; box-shadow:0 4px 14px rgba(37,211,102,0.3);">
-          <i data-lucide="share-2"></i> Share
-        </button>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button id="btn-share-delivery-img" class="btn btn-gold" style="flex:1; padding:12px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#25d366; color:#fff; border:none; box-shadow:0 4px 14px rgba(37,211,102,0.3);">
+            <i data-lucide="share-2"></i> Share
+          </button>
+          <button id="btn-delete-completed-booking" class="btn btn-danger" style="width:auto; padding:12px 16px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <i data-lucide="trash-2" style="width:16px; height:16px;"></i> Hapus
+          </button>
+        </div>
       </div>
     `);
 
     lucide.createIcons();
+
+    const delCompletedBtn = document.getElementById("btn-delete-completed-booking");
+    if (delCompletedBtn) {
+      delCompletedBtn.onclick = () => {
+        if (confirm("Hapus data pemesanan selesai ini secara permanen?")) {
+          state.bookings = state.bookings.filter(x => x.id !== b.id);
+          saveState();
+          closeModal();
+          showToast("Data pemesanan berhasil dihapus!");
+          if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+          else if (window.location.hash.startsWith("#admin/vendor")) renderAdminVendor();
+        }
+      };
+    }
 
     document.getElementById("btn-share-delivery-img").onclick = async () => {
       if (!b.deliveryPhoto) {
@@ -12553,3 +12534,47 @@ function renderPublicVendorPortal() {
   if (pvDateFilter) pvDateFilter.onchange = () => applyVendorFilters();
 }
 
+
+// Utility to reset database to 100% clean production launch state
+function resetDatabaseToFreshLaunchState() {
+  if (confirm("Konfirmasi Launching Produksi: Hapus SEMUA data bawaan demo dan bersihkan database?")) {
+    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    saveState();
+    localStorage.removeItem("TIM_KHIDMAT_STATE_V1");
+    if (firebaseDb) {
+      try {
+        firebaseDb.ref("state").set(state);
+      } catch(e) {
+        console.warn("Firebase reset error:", e);
+      }
+    }
+    showToast("Database berhasil dibersihkan! Siap untuk Launching Produksi.");
+    setTimeout(() => window.location.reload(), 1000);
+  }
+}
+
+// Helper to cascade delete a group and all connected data (Itinerary, Roomlist, Assignments, Documents, Bookings)
+function deleteGroupCascade(groupName) {
+  if (!groupName) return;
+  
+  // 1. Delete group
+  state.groups = state.groups.filter(g => g && g.name !== groupName);
+  
+  // 2. Delete connected itineraries
+  state.itineraries = state.itineraries.filter(i => i && i.groupName !== groupName);
+  
+  // 3. Delete connected rooms & jamaah
+  state.rooms = state.rooms.filter(r => r && r.groupName !== groupName);
+  
+  // 4. Delete connected assignments
+  state.assignments = state.assignments.filter(a => a && a.groupName !== groupName);
+  
+  // 5. Delete connected documents
+  state.documents = state.documents.filter(d => d && d.groupName !== groupName);
+  
+  // 6. Delete connected bookings
+  state.bookings = state.bookings.filter(b => b && b.groupName !== groupName);
+  
+  // Save updated clean state to LocalStorage & Firebase Realtime DB
+  saveState();
+}
