@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khidmat-ji-cache-v67';
+const CACHE_NAME = 'khidmat-ji-cache-v68';
 const ASSETS_TO_CACHE = [
   './index.html',
   './style.css',
@@ -6,7 +6,8 @@ const ASSETS_TO_CACHE = [
   './assets/logo.png',
   './assets/icon.png',
   './assets/watermark.jpg',
-  './assets/kwitansi_bg.png'
+  './assets/kwitansi_bg.png',
+  './assets/vendor_pdf_bg.png'
 ];
 
 self.addEventListener('install', (e) => {
