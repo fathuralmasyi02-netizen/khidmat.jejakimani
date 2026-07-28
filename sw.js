@@ -1,7 +1,7 @@
 {
-  "name": "Khidmat Jejak Imani",
+  "name": "Khidmat jejak imani",
   "short_name": "Khidmat JI",
-  "description": "Aplikasi Operasional Saudi Handling Tim Khidmat Jejak Imani",
+  "description": "Aplikasi Operasional Tim Khidmat jejak imani Saudi Arabia",
   "start_url": "./index.html",
   "display": "minimal-ui",
   "background_color": "#ffffff",
