@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khidmat-ji-cache-v68';
+const CACHE_NAME = 'khidmat-ji-cache-v71';
 const ASSETS_TO_CACHE = [
   './index.html',
   './style.css',
