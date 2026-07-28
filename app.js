@@ -11720,9 +11720,6 @@ function renderUserTaskDetailFull() {
     }
   };
 
-  document.getElementById("tab-btn-tugas").onclick = () => { activeTaskDetailTab = "tugas"; updateTabBtns(); drawTabContent(); };
-  document.getElementById("tab-btn-grup").onclick = () => { activeTaskDetailTab = "grup"; updateTabBtns(); drawTabContent(); };
-  document.getElementById("tab-btn-roomlist").onclick = () => { activeTaskDetailTab = "roomlist"; updateTabBtns(); drawTabContent(); };
   document.getElementById("tab-btn-dokumen").onclick = () => { activeTaskDetailTab = "dokumen"; updateTabBtns(); drawTabContent(); };
 
   drawTabContent();
@@ -11731,6 +11728,471 @@ function renderUserTaskDetailFull() {
 // ==========================================
 // PUBLIC VENDOR SCHEDULE PORTAL PAGE
 // ==========================================
+
+function printPublicVendorPDF(vendorId) {
+  const vendor = state.vendors.find(v => v.id === vendorId);
+  if (!vendor) return;
+
+  const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    showToast("Gagal membuka jendela cetak. Izinkan pop-up di browser.", "error");
+    return;
+  }
+
+  const printHtml = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Jadwal Pemesanan Vendor - ${vendor.name}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Martel:wght@400;700;900&family=Mulish:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: 'Mulish', sans-serif;
+          color: #0f172a;
+          background: #ffffff;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .page-container {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto;
+          box-sizing: border-box;
+          background: url('assets/vendor_pdf_bg.png') no-repeat center top;
+          background-size: 100% 100%;
+          padding: 145px 44px 44px 44px;
+          position: relative;
+        }
+        .header-title {
+          text-align: center;
+          margin-bottom: 20px;
+          border-bottom: 2px solid #dfc06b;
+          padding-bottom: 10px;
+        }
+        .header-title h1 {
+          font-family: 'Martel', serif;
+          font-size: 1.3rem;
+          margin: 0;
+          color: #0f172a;
+          text-transform: uppercase;
+        }
+        .header-title p {
+          margin: 4px 0 0 0;
+          font-size: 0.8rem;
+          color: #64748b;
+          font-weight: 700;
+        }
+        .vendor-info-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 18px;
+          font-size: 0.83rem;
+          background: rgba(248,250,252,0.9);
+          border-radius: 8px;
+        }
+        .vendor-info-table td {
+          padding: 7px 12px;
+          border: 1px solid #cbd5e1;
+        }
+        .booking-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 24px;
+          font-size: 0.8rem;
+        }
+        .booking-table th {
+          background: #0f172a;
+          color: #ffffff;
+          padding: 8px 10px;
+          text-align: left;
+          font-weight: 800;
+          border: 1px solid #0f172a;
+        }
+        .booking-table td {
+          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          vertical-align: top;
+          background: #ffffff;
+        }
+        .status-badge {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-weight: 800;
+          font-size: 0.72rem;
+          text-align: center;
+        }
+        .badge-baru { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .badge-proses { background: #fffbe6; color: #d97706; border: 1px solid #fde68a; }
+        .badge-selesai { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .footer-note {
+          margin-top: 30px;
+          text-align: center;
+          font-size: 0.75rem;
+          color: #64748b;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 10px;
+        }
+      </style>
+    </head>
+    <body onload="window.print();">
+      <div class="page-container">
+        
+        <div class="header-title">
+          <h1>JADWAL & LAPORAN PEMESANAN MITRA VENDOR</h1>
+          <p>PT. JEJAK IMANI BERKAH BERSAMA - SAUDI HANDLING OPERATIONS</p>
+        </div>
+
+        <table class="vendor-info-table">
+          <tr>
+            <td style="width:18%; color:#64748b;">Mitra Vendor</td>
+            <td style="width:32%;"><strong>${vendor.name}</strong></td>
+            <td style="width:18%; color:#64748b;">Tipe Layanan</td>
+            <td style="width:32%;"><strong>${vendor.type || 'Mitra Layanan'}</strong></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">Kontak</td>
+            <td><strong>${vendor.contact || '-'}</strong></td>
+            <td style="color:#64748b;">Total Pesanan</td>
+            <td><strong>${vendorBookings.length} Pemesanan</strong></td>
+          </tr>
+        </table>
+
+        <table class="booking-table">
+          <thead>
+            <tr>
+              <th style="width:5%;">No</th>
+              <th style="width:25%;">Tujuan & Grup</th>
+              <th style="width:20%;">Muthowwif & Lokasi</th>
+              <th style="width:18%;">Waktu Pengantaran</th>
+              <th style="width:20%;">Rincian Produk</th>
+              <th style="width:12%;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${vendorBookings.length === 0 ? `
+              <tr><td colspan="6" style="text-align:center; padding:16px; color:#94a3b8;">Belum ada jadwal pemesanan vendor.</td></tr>
+            ` : vendorBookings.map((b, idx) => {
+              const group = state.groups.find(g => g.name === b.groupName);
+              const muth = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
+              const loc = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Rotana Makkah') : 'Hotel Rotana Makkah');
+              const act = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR').toUpperCase();
+              const dt = formatDateDisplay(b.dateStart || b.date) + ' | ' + (b.time || '05:30');
+              const st = b.status || 'Pesanan Baru';
+              let badgeClass = 'badge-baru';
+              if (st === 'Proses') badgeClass = 'badge-proses';
+              else if (st === 'Selesai') badgeClass = 'badge-selesai';
+
+              const prods = (b.products && b.products.length > 0) ? b.products : [
+                { name: b.notes || 'Snack Kering', qty: b.qty || 1, unit: b.unit || 'Pcs', amount: b.amount || (b.totalPrice || 242) }
+              ];
+
+              return `
+                <tr>
+                  <td style="text-align:center;">${idx + 1}</td>
+                  <td>
+                    <strong>${act}</strong>
+                    <div style="font-size:0.75rem; color:#475569; margin-top:2px;">${b.groupName}</div>
+                  </td>
+                  <td>
+                    <div>Ust. ${muth}</div>
+                    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">📍 ${loc}</div>
+                  </td>
+                  <td style="font-weight:700;">${dt}</td>
+                  <td>
+                    ${prods.map(p => `<div>• ${p.name} (${p.qty} ${p.unit})</div>`).join('')}
+                    <div style="font-weight:800; margin-top:3px; color:#0f172a;">Total: SAR ${(b.totalPrice || 0).toLocaleString('id-ID')}</div>
+                  </td>
+                  <td style="text-align:center;">
+                    <span class="status-badge ${badgeClass}">${st}</span>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          Dokumen resmi terverifikasi secara sistem oleh Tim Khidmat & Finance PT. JEJAK IMANI BERKAH BERSAMA (Saudi Arabia Operations).
+        </div>
+
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+}
+
+window.activeVendorCamStream = null;
+
+function openVendorProcessModal(bookingId) {
+  const b = state.bookings.find(x => x.id === bookingId);
+  if (!b) return;
+
+  const vendor = state.vendors.find(v => v.id === b.vendorId);
+  const vName = vendor ? vendor.name : 'Mitra Vendor';
+  const group = state.groups.find(g => g.name === b.groupName);
+  const muthawwifName = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
+  const locationName = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Al Marwa Rayhaan Rotana (Bus 1)') : 'Hotel Al Marwa Rayhaan Rotana (Bus 1)');
+  const activityTitle = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR MAKKAH').toUpperCase();
+  const dateFormatted = formatDateDisplay(b.dateStart || b.date);
+  const timeFormatted = b.time ? b.time : '05:30';
+
+  const status = b.status || 'Pesanan Baru';
+
+  if (status === 'Pesanan Baru' || status === 'Aktif') {
+    openModal("📦 Konfirmasi Proses Pemesanan", `
+      <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:14px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="background:#3b82f6; color:#fff; font-size:0.7rem; font-weight:800; padding:2px 8px; border-radius:10px;">Pesanan Baru</span>
+            <span style="font-size:0.8rem; font-weight:700; color:#1d4ed8;">${dateFormatted} | ${timeFormatted}</span>
+          </div>
+          <h3 style="font-size:1rem; font-weight:900; color:#0f172a; margin:0 0 4px 0;">${activityTitle}</h3>
+          <div style="font-size:0.85rem; color:#475569; font-weight:600;">${b.groupName}</div>
+        </div>
+
+        <div style="font-size:0.85rem; line-height:1.7; margin-bottom:18px;">
+          <div>👤 Muthowwif: <strong>Ust. ${muthawwifName}</strong></div>
+          <div>📍 Lokasi Pengantaran: <strong>${locationName}</strong></div>
+          <div style="margin-top:8px; border-top:1px dashed #cbd5e1; padding-top:8px;">
+            <strong>Daftar Item Pemesanan:</strong>
+            ${(b.products && b.products.length > 0 ? b.products : [{name: 'Item Produk', qty: 1, unit: 'Pcs', amount: b.totalPrice}]).map(p => `
+              <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-top:2px;">
+                <span>• ${p.name}</span>
+                <strong>${p.qty} ${p.unit} (SAR ${(p.amount || p.price || 0).toLocaleString('id-ID')})</strong>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <button id="btn-confirm-to-proses" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.95rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#d97706; color:#fff; border:none; box-shadow:0 4px 14px rgba(217,119,6,0.3);">
+          <i data-lucide="check-circle-2"></i> Konfirmasi Proses Pemesanan
+        </button>
+      </div>
+    `);
+
+    lucide.createIcons();
+
+    document.getElementById("btn-confirm-to-proses").onclick = () => {
+      b.status = "Proses";
+      saveState();
+      pushData();
+      closeModal();
+      showToast("Pesanan berhasil dikonfirmasi dan status berubah menjadi PROSES!");
+      if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+    };
+
+  } else if (status === 'Proses') {
+    let currentFacingMode = 'environment';
+    let capturedWatermarkDataUrl = null;
+
+    openModal("📸 Foto Bukti Pengantaran (Watermark)", `
+      <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
+        <div style="font-size:0.83rem; color:#64748b; margin-bottom:12px;">
+          Silakan jepret foto bukti pengantaran pesanan <strong>${activityTitle}</strong> ke lokasi <strong>${locationName}</strong>. Teks watermark lokasi, tanggal, & muthowwif akan otomatis terpasang real-time.
+        </div>
+
+        <!-- Live Camera Container -->
+        <div id="v-cam-box" style="position:relative; width:100%; height:260px; background:#0f172a; border-radius:14px; overflow:hidden; margin-bottom:12px; display:flex; align-items:center; justify-content:center;">
+          <video id="v-cam-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+          
+          <button id="v-cam-flip" class="btn btn-secondary" style="position:absolute; top:10px; right:10px; font-size:0.75rem; padding:6px 12px; background:rgba(15,23,42,0.75); color:#fff; backdrop-filter:blur(8px); border-radius:20px; border:1px solid rgba(255,255,255,0.3); font-weight:800;">
+            🔄 Flip Kamera
+          </button>
+        </div>
+
+        <!-- Capture & Upload Buttons -->
+        <div style="display:flex; gap:10px; margin-bottom:14px;">
+          <button id="v-cam-snap-btn" class="btn btn-gold" style="flex:1; padding:10px; font-weight:800; font-size:0.85rem; border-radius:10px; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <i data-lucide="camera"></i> Jepret Foto
+          </button>
+          <label class="btn btn-secondary" style="flex:1; padding:10px; font-weight:800; font-size:0.85rem; border-radius:10px; text-align:center; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; background:#e2e8f0; color:#1e293b;">
+            <i data-lucide="upload"></i> Upload File
+            <input type="file" id="v-file-input" accept="image/*" capture="environment" style="display:none;">
+          </label>
+        </div>
+
+        <!-- Preview Container -->
+        <div id="v-preview-box" style="display:none; margin-bottom:14px; text-align:center;">
+          <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Preview Foto Ter-Watermark:</div>
+          <img id="v-preview-img" style="width:100%; max-height:260px; object-fit:contain; border-radius:12px; border:2px solid #10b981; box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+        </div>
+
+        <button id="btn-submit-delivery" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.95rem; border-radius:12px; display:none; background:#10b981; color:#fff; border:none; box-shadow:0 4px 14px rgba(16,185,129,0.3);">
+          ✅ Submit Foto & Selesaikan Pemesanan
+        </button>
+      </div>
+    `);
+
+    lucide.createIcons();
+
+    const videoEl = document.getElementById("v-cam-video");
+    const flipBtn = document.getElementById("v-cam-flip");
+    const snapBtn = document.getElementById("v-cam-snap-btn");
+    const fileInput = document.getElementById("v-file-input");
+    const previewBox = document.getElementById("v-preview-box");
+    const previewImg = document.getElementById("v-preview-img");
+    const submitBtn = document.getElementById("btn-submit-delivery");
+
+    const stopCamera = () => {
+      if (window.activeVendorCamStream) {
+        window.activeVendorCamStream.getTracks().forEach(track => track.stop());
+        window.activeVendorCamStream = null;
+      }
+    };
+
+    const startCamera = async (mode) => {
+      stopCamera();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode },
+          audio: false
+        });
+        window.activeVendorCamStream = stream;
+        videoEl.srcObject = stream;
+      } catch (err) {
+        console.warn("Kamera tidak dapat diakses langsung:", err);
+      }
+    };
+
+    startCamera(currentFacingMode);
+
+    flipBtn.onclick = () => {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      startCamera(currentFacingMode);
+    };
+
+    const generateWatermark = (sourceImgOrVideo, isVideo = true) => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      let width = isVideo ? (sourceImgOrVideo.videoWidth || 640) : sourceImgOrVideo.naturalWidth;
+      let height = isVideo ? (sourceImgOrVideo.videoHeight || 480) : sourceImgOrVideo.naturalHeight;
+
+      canvas.width = width;
+      canvas.height = height;
+
+      ctx.drawImage(sourceImgOrVideo, 0, 0, width, height);
+
+      // Add watermark overlay bar at bottom
+      const overlayHeight = Math.max(100, Math.round(height * 0.28));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.84)";
+      ctx.fillRect(0, height - overlayHeight, width, overlayHeight);
+
+      // Gold top accent line
+      ctx.fillStyle = "#dfc06b";
+      ctx.fillRect(0, height - overlayHeight, width, 4);
+
+      // Watermark Text
+      const now = new Date();
+      const timeStr = now.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' }) + ' ' + now.toLocaleTimeString('id-ID') + ' AST (Saudi Arabia)';
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `bold ${Math.max(14, Math.round(width * 0.038))}px 'Mulish', sans-serif`;
+      ctx.fillText(`📍 ${vName}`, 16, height - overlayHeight + 26);
+
+      ctx.fillStyle = "#fef3c7";
+      ctx.font = `bold ${Math.max(12, Math.round(width * 0.032))}px 'Mulish', sans-serif`;
+      ctx.fillText(`📦 ${activityTitle} | ${b.groupName}`, 16, height - overlayHeight + 50);
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = `normal ${Math.max(11, Math.round(width * 0.028))}px 'Mulish', sans-serif`;
+      ctx.fillText(`👤 Muthowwif: Ust. ${muthawwifName} | 📍 ${locationName}`, 16, height - overlayHeight + 72);
+
+      ctx.fillStyle = "#10b981";
+      ctx.font = `bold ${Math.max(11, Math.round(width * 0.028))}px 'Mulish', sans-serif`;
+      ctx.fillText(`🕒 ${timeStr} | GPS Verified: 21.4225° N, 39.8262° E`, 16, height - overlayHeight + 92);
+
+      capturedWatermarkDataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      previewImg.src = capturedWatermarkDataUrl;
+      previewBox.style.display = "block";
+      submitBtn.style.display = "block";
+
+      stopCamera();
+    };
+
+    snapBtn.onclick = () => {
+      generateWatermark(videoEl, true);
+    };
+
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const img = new Image();
+        img.onload = () => {
+          generateWatermark(img, false);
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    submitBtn.onclick = () => {
+      if (!capturedWatermarkDataUrl) {
+        showToast("Ambil foto bukti terlebih dahulu.", "error");
+        return;
+      }
+      b.deliveryPhoto = capturedWatermarkDataUrl;
+      b.status = "Selesai";
+      saveState();
+      pushData();
+      stopCamera();
+      closeModal();
+      showToast("Foto bukti pengantaran berhasil disubmit & status pemesanan SELESAI!");
+      if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+    };
+
+  } else if (status === 'Selesai') {
+    openModal("✅ Bukti Pengantaran Pemesanan (Selesai)", `
+      <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-size:0.75rem; font-weight:800; padding:3px 10px; border-radius:12px;">Pesanan Selesai</span>
+          <span style="font-size:0.8rem; font-weight:700; color:#64748b;">${dateFormatted} | ${timeFormatted}</span>
+        </div>
+
+        <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 4px 0;">${activityTitle}</h3>
+        <div style="font-size:0.85rem; color:#475569; font-weight:600; margin-bottom:14px;">${b.groupName}</div>
+
+        ${b.deliveryPhoto ? `
+          <div style="margin-bottom:16px; text-align:center;">
+            <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Foto Bukti Pengantaran Terverifikasi:</div>
+            <img src="${b.deliveryPhoto}" style="width:100%; max-height:280px; object-fit:contain; border-radius:12px; border:2px solid #10b981; box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+          </div>
+        ` : `
+          <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:12px; color:#64748b; font-size:0.85rem; margin-bottom:16px;">
+            Bukti foto pengantaran diselesaikan langsung oleh muthowwif & vendor.
+          </div>
+        `}
+
+        <button id="btn-share-delivery-wa" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#25d366; color:#fff; border:none; box-shadow:0 4px 14px rgba(37,211,102,0.3);">
+          <i data-lucide="share-2"></i> Bagikan Bukti Pengantaran via WhatsApp
+        </button>
+      </div>
+    `);
+
+    lucide.createIcons();
+
+    document.getElementById("btn-share-delivery-wa").onclick = () => {
+      const shareMsg = `Assalamu'alaikum wr.wb,\n\nBerikut kami kirimkan Konfirmasi Bukti Pengantaran Pemesanan Vendor:\n• *Vendor*: ${vName}\n• *Kegiatan*: ${activityTitle}\n• *Grup*: ${b.groupName}\n• *Muthowwif*: Ust. ${muthawwifName}\n• *Lokasi*: ${locationName}\n• *Status*: SELESAI (Telah Diantar)\n\nTerima kasih.`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareMsg)}`, '_blank');
+    };
+  }
+}
 
 function renderPublicVendorPortal() {
   const hash = window.location.hash;
@@ -11796,8 +12258,11 @@ function renderPublicVendorPortal() {
   // Filter all bookings for this vendor
   const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
   const totalOrders = vendorBookings.length;
-  const activeOrders = vendorBookings.filter(b => b.status !== 'Selesai').length;
+  const newOrders = vendorBookings.filter(b => !b.status || b.status === 'Pesanan Baru' || b.status === 'Aktif').length;
+  const processOrders = vendorBookings.filter(b => b.status === 'Proses').length;
   const completedOrders = vendorBookings.filter(b => b.status === 'Selesai').length;
+
+  let currentStatusFilter = "semua";
 
   const makeVendorBookingCard = (b) => {
     const group = state.groups.find(g => g.name === b.groupName);
@@ -11811,16 +12276,31 @@ function renderPublicVendorPortal() {
       { name: b.notes || 'Snack Kering', qty: b.qty || 1, unit: b.unit || 'Pcs', amount: b.amount || (b.totalPrice || 242) }
     ];
 
+    const currentStatus = b.status || 'Pesanan Baru';
+    let badgeStyle = "background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px;";
+    let badgeText = "Pesanan Baru";
+
+    if (currentStatus === 'Proses') {
+      badgeStyle = "background:#fffbe6; color:#d97706; border:1px solid #fde68a; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px;";
+      badgeText = "Proses";
+    } else if (currentStatus === 'Selesai') {
+      badgeStyle = "background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px;";
+      badgeText = "Selesai";
+    }
+
     return `
-      <div class="vendor-card-row" style="background:#ffffff; border-radius:14px; padding:16px 18px; margin-bottom:14px; border:1px solid #f1f5f9; box-shadow:0 4px 14px rgba(0,0,0,0.03); border-bottom:3px solid #dfc06b; font-family:'Mulish', sans-serif;">
+      <div onclick="openVendorProcessModal('${b.id}')" class="vendor-card-row" style="cursor:pointer; background:#ffffff; border-radius:14px; padding:16px 18px; margin-bottom:14px; border:1px solid #f1f5f9; box-shadow:0 4px 14px rgba(0,0,0,0.03); border-bottom:3px solid #dfc06b; font-family:'Mulish', sans-serif; transition:transform 0.15s ease;">
         
-        <!-- Top Row: Activity Goal & Date/Time -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:6px;">
-          <div style="font-weight:900; font-size:0.95rem; color:#000; letter-spacing:0.01em; text-transform:uppercase;">
+        <!-- Top Row: Activity Goal, Status Badge, & Date/Time -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
+          <div style="font-weight:900; font-size:0.95rem; color:#000; letter-spacing:0.01em; text-transform:uppercase; flex:1;">
             ${activityTitle}
           </div>
-          <div style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
-            ${dateFormatted} | ${timeFormatted}
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+            <span style="${badgeStyle}">${badgeText}</span>
+            <div style="font-size:0.78rem; font-weight:700; color:#334155; white-space:nowrap; margin-top:2px;">
+              ${dateFormatted} | ${timeFormatted}
+            </div>
           </div>
         </div>
 
@@ -11850,6 +12330,11 @@ function renderPublicVendorPortal() {
           `).join('')}
         </div>
 
+        <!-- Tap Hint -->
+        <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #f1f5f9; text-align:right; font-size:0.75rem; font-weight:800; color:#b45309;">
+          Klik untuk kelola / upload foto pengantaran ➔
+        </div>
+
       </div>
     `;
   };
@@ -11874,7 +12359,7 @@ function renderPublicVendorPortal() {
           </div>
         </div>
 
-        <!-- Biodata Vendor (Integrated directly in background - No separate card widget, No location text) -->
+        <!-- Biodata Vendor -->
         <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:18px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:16px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
             <div style="flex:1; min-width:200px;">
@@ -11884,36 +12369,32 @@ function renderPublicVendorPortal() {
               <div style="font-size:0.8rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
             </div>
 
-            <!-- Tombol Cetak PDF -->
+            <!-- Tombol Cetak PDF dengan Background Letterhead -->
             <div>
-              <button onclick="window.print();" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
+              <button onclick="printPublicVendorPDF('${vendor.id}');" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
                 <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
               </button>
             </div>
           </div>
         </div>
 
-        <!-- 3 Metric Widgets: Total, Aktif (Belum Selesai), Selesai -->
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:20px;">
-          
-          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
-            <div style="font-size:0.7rem; color:#64748b; font-weight:800; text-transform:uppercase;">Total</div>
-            <div style="font-size:1.5rem; font-weight:900; color:#0f172a; margin-top:2px;">${totalOrders}</div>
-          </div>
-
-          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
-            <div style="font-size:0.7rem; color:#d97706; font-weight:800; text-transform:uppercase;">Aktif (Belum Selesai)</div>
-            <div style="font-size:1.5rem; font-weight:900; color:#d97706; margin-top:2px;">${activeOrders}</div>
-          </div>
-
-          <div style="background:rgba(255,255,255,0.9); backdrop-filter:blur(10px); border-radius:14px; padding:14px 10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.02); text-align:center;">
-            <div style="font-size:0.7rem; color:#10b981; font-weight:800; text-transform:uppercase;">Selesai</div>
-            <div style="font-size:1.5rem; font-weight:900; color:#10b981; margin-top:2px;">${completedOrders}</div>
-          </div>
-
+        <!-- Filter Tab Bar: Semua, Pesanan Baru, Proses, Selesai -->
+        <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; scrollbar-width:none;">
+          <button id="pv-tab-semua" class="pv-filter-btn active" data-filter="semua" style="flex:1; min-width:90px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #0f172a; background:#0f172a; color:#ffffff; cursor:pointer; text-align:center; transition:all 0.2s;">
+            Semua (${totalOrders})
+          </button>
+          <button id="pv-tab-baru" class="pv-filter-btn" data-filter="baru" style="flex:1; min-width:110px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#1d4ed8; cursor:pointer; text-align:center; transition:all 0.2s;">
+            Pesanan Baru (${newOrders})
+          </button>
+          <button id="pv-tab-proses" class="pv-filter-btn" data-filter="proses" style="flex:1; min-width:95px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#d97706; cursor:pointer; text-align:center; transition:all 0.2s;">
+            Proses (${processOrders})
+          </button>
+          <button id="pv-tab-selesai" class="pv-filter-btn" data-filter="selesai" style="flex:1; min-width:95px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#10b981; cursor:pointer; text-align:center; transition:all 0.2s;">
+            Selesai (${completedOrders})
+          </button>
         </div>
 
-        <!-- Search Bar (Tanpa Heading Text Sesuai Instruksi) -->
+        <!-- Search Bar -->
         <div style="margin-bottom:14px;">
           <input type="text" id="pv-search" class="form-input" placeholder="Cari pemesanan (kegiatan, grup, muthowwif)..." style="width:100%; font-size:0.85rem; padding:10px 14px; border-radius:12px; background:#fff; border:1px solid #cbd5e1; box-sizing:border-box;">
         </div>
@@ -11937,28 +12418,61 @@ function renderPublicVendorPortal() {
 
   lucide.createIcons();
 
+  const applyVendorFilters = () => {
+    const q = (document.getElementById("pv-search")?.value || "").toLowerCase().trim();
+    const filtered = vendorBookings.filter(b => {
+      const st = b.status || "Pesanan Baru";
+      let matchTab = true;
+      if (currentStatusFilter === "baru") matchTab = (st === "Pesanan Baru" || st === "Aktif");
+      else if (currentStatusFilter === "proses") matchTab = (st === "Proses");
+      else if (currentStatusFilter === "selesai") matchTab = (st === "Selesai");
 
+      const goal = (b.activityGoal || b.activity || '').toLowerCase();
+      const grp = (b.groupName || '').toLowerCase();
+      const muth = (b.muthawwif || '').toLowerCase();
+      const notes = (b.notes || '').toLowerCase();
+      const matchSearch = !q || (goal.includes(q) || grp.includes(q) || muth.includes(q) || notes.includes(q));
 
-  // Search filter
+      return matchTab && matchSearch;
+    });
+
+    const container = document.getElementById("pv-cards-container");
+    if (container) {
+      if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:30px; background:#fff; border-radius:14px; color:#94a3b8; font-size:0.85rem; border:1px solid #e2e8f0;">Tidak ada pemesanan dalam kategori ini.</div>`;
+      } else {
+        container.innerHTML = filtered.map(b => makeVendorBookingCard(b)).join('');
+      }
+    }
+  };
+
+  // Tab Filtering Handler
+  document.querySelectorAll(".pv-filter-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".pv-filter-btn").forEach(b => {
+        b.style.background = "#ffffff";
+        b.style.border = "1px solid #e2e8f0";
+        const f = b.getAttribute("data-filter");
+        if (f === "baru") b.style.color = "#1d4ed8";
+        else if (f === "proses") b.style.color = "#d97706";
+        else if (f === "selesai") b.style.color = "#10b981";
+        else b.style.color = "#0f172a";
+      });
+
+      btn.style.background = "#0f172a";
+      btn.style.color = "#ffffff";
+      btn.style.border = "1px solid #0f172a";
+
+      currentStatusFilter = btn.getAttribute("data-filter");
+      applyVendorFilters();
+    };
+  });
+
+  // Search Filter Handler
   const pvSearch = document.getElementById("pv-search");
   if (pvSearch) {
     pvSearch.oninput = () => {
-      const q = pvSearch.value.toLowerCase().trim();
-      const filtered = vendorBookings.filter(b => {
-        const goal = (b.activityGoal || b.activity || '').toLowerCase();
-        const grp = (b.groupName || '').toLowerCase();
-        const muth = (b.muthawwif || '').toLowerCase();
-        const notes = (b.notes || '').toLowerCase();
-        return goal.includes(q) || grp.includes(q) || muth.includes(q) || notes.includes(q);
-      });
-      const container = document.getElementById("pv-cards-container");
-      if (container) {
-        if (filtered.length === 0) {
-          container.innerHTML = `<div style="text-align:center; padding:30px; background:#fff; border-radius:14px; color:#94a3b8; font-size:0.85rem; border:1px solid #e2e8f0;">Tidak ditemukan pemesanan yang cocok.</div>`;
-        } else {
-          container.innerHTML = filtered.map(b => makeVendorBookingCard(b)).join('');
-        }
-      }
+      applyVendorFilters();
     };
   }
 }
