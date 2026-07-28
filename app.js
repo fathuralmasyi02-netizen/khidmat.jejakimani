@@ -58,12 +58,7 @@ const DEFAULT_STATE = {
     attendance: [],
     incidents: []
   },
-  vendors: [
-    { id: "v-1", type: "Konsumsi / Catering", name: "Albaik Catering Saudi", contact: "+966501234567", location: "Jeddah / Makkah", notes: "Pemesanan Snack & Mealbox Kedatangan / Kepulangan", products: [{ name: "Mealbox Albaik", price: 25 }, { name: "Snack Box City Tour", price: 15 }] },
-    { id: "v-2", type: "Hotel / Akomodasi", name: "Nozol Royal Inn Madinah", contact: "+966507654321", location: "Madinah", notes: "Hotel Transit & Jamaah Madinah", products: [{ name: "Kamar Quad", price: 450 }, { name: "Kamar Triple", price: 500 }] },
-    { id: "v-3", type: "Hotel / Akomodasi", name: "Anjum Hotel Makkah", contact: "+966508889999", location: "Makkah", notes: "Hotel Utama Jamaah Makkah", products: [{ name: "Kamar Quad", price: 650 }, { name: "Kamar Triple", price: 700 }] },
-    { id: "v-4", type: "Transportasi / Bus", name: "Rawahel Transport Saudi", contact: "+966501112233", location: "Saudi Arabia", notes: "Armada Bus Ziyarah & Transfer Airport", products: [{ name: "Bus Mercy 2026 (49 Seat)", price: 1200 }] }
-  ],
+  vendors: [],
   bookings: [],
   assets: [
     { id: "ast-1", name: "Walkie Talkie Motorola", status: "Tersedia", qty: 10, location: "Gudang Makkah" },
@@ -11729,6 +11724,35 @@ function renderUserTaskDetailFull() {
 // PUBLIC VENDOR SCHEDULE PORTAL PAGE
 // ==========================================
 
+function formatDateIndonesian(dateStr) {
+  if (!dateStr) return "-";
+  let y, m, d;
+  if (dateStr.includes('-')) {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      y = parts[0];
+      m = parseInt(parts[1], 10);
+      d = parseInt(parts[2], 10);
+    }
+  } else if (dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      d = parseInt(parts[0], 10);
+      m = parseInt(parts[1], 10);
+      y = parts[2];
+    }
+  }
+  if (!d || !m || !y) return dateStr;
+
+  const monthsIndo = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const dayPadded = String(d).padStart(2, '0');
+  const monthName = monthsIndo[m - 1] || "";
+  return `${dayPadded} ${monthName} ${y}`;
+}
+
 function printPublicVendorPDF(vendorId) {
   const vendor = state.vendors.find(v => v.id === vendorId);
   if (!vendor) return;
@@ -11886,7 +11910,7 @@ function printPublicVendorPDF(vendorId) {
               const muth = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
               const loc = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Rotana Makkah') : 'Hotel Rotana Makkah');
               const act = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR').toUpperCase();
-              const dt = formatDateDisplay(b.dateStart || b.date) + ' | ' + (b.time || '05:30');
+              const dt = formatDateIndonesian(b.dateStart || b.date) + ' | ' + (b.time || '05:30');
               const st = b.status || 'Pesanan Baru';
               let badgeClass = 'badge-baru';
               if (st === 'Proses') badgeClass = 'badge-proses';
@@ -11905,7 +11929,7 @@ function printPublicVendorPDF(vendorId) {
                   </td>
                   <td>
                     <div>Ust. ${muth}</div>
-                    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">📍 ${loc}</div>
+                    <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">${loc}</div>
                   </td>
                   <td style="font-weight:700;">${dt}</td>
                   <td>
@@ -11947,13 +11971,13 @@ function openVendorProcessModal(bookingId) {
   const muthawwifName = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
   const locationName = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Al Marwa Rayhaan Rotana (Bus 1)') : 'Hotel Al Marwa Rayhaan Rotana (Bus 1)');
   const activityTitle = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR MAKKAH').toUpperCase();
-  const dateFormatted = formatDateDisplay(b.dateStart || b.date);
+  const dateFormatted = formatDateIndonesian(b.dateStart || b.date);
   const timeFormatted = b.time ? b.time : '05:30';
 
   const status = b.status || 'Pesanan Baru';
 
   if (status === 'Pesanan Baru' || status === 'Aktif') {
-    openModal("📦 Konfirmasi Proses Pemesanan", `
+    openModal("Konfirmasi Proses Pemesanan", `
       <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
         <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:14px; margin-bottom:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -11965,8 +11989,8 @@ function openVendorProcessModal(bookingId) {
         </div>
 
         <div style="font-size:0.85rem; line-height:1.7; margin-bottom:18px;">
-          <div>👤 Muthowwif: <strong>Ust. ${muthawwifName}</strong></div>
-          <div>📍 Lokasi Pengantaran: <strong>${locationName}</strong></div>
+          <div>Muthowwif: <strong>Ust. ${muthawwifName}</strong></div>
+          <div>Lokasi Pengantaran: <strong>${locationName}</strong></div>
           <div style="margin-top:8px; border-top:1px dashed #cbd5e1; padding-top:8px;">
             <strong>Daftar Item Pemesanan:</strong>
             ${(b.products && b.products.length > 0 ? b.products : [{name: 'Item Produk', qty: 1, unit: 'Pcs', amount: b.totalPrice}]).map(p => `
@@ -11979,70 +12003,72 @@ function openVendorProcessModal(bookingId) {
         </div>
 
         <button id="btn-confirm-to-proses" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.95rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#d97706; color:#fff; border:none; box-shadow:0 4px 14px rgba(217,119,6,0.3);">
-          <i data-lucide="check-circle-2"></i> Konfirmasi Proses Pemesanan
+          Konfirmasi Proses Pemesanan
         </button>
       </div>
     `);
-
-    lucide.createIcons();
 
     document.getElementById("btn-confirm-to-proses").onclick = () => {
       b.status = "Proses";
       saveState();
       pushData();
-      closeModal();
-      showToast("Pesanan berhasil dikonfirmasi dan status berubah menjadi PROSES!");
-      if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+
+      // Show animated checklist confirmation modal overlay
+      const modalBody = document.querySelector("#global-modal-content") || document.querySelector(".modal-body");
+      if (modalBody) {
+        modalBody.innerHTML = `
+          <div style="text-align:center; padding:32px 16px; font-family:'Mulish', sans-serif;">
+            <div style="width:68px; height:68px; margin:0 auto 14px auto; background:#ecfdf5; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#10b981; font-size:2.2rem; border:2px solid #a7f3d0;">
+              ✓
+            </div>
+            <h3 style="font-weight:900; color:#0f172a; font-size:1.15rem; margin:0 0 4px 0;">Pemesanan Dikonfirmasi</h3>
+            <p style="color:#64748b; font-size:0.83rem; margin:0;">Status pesanan berhasil diperbarui menjadi PROSES</p>
+          </div>
+        `;
+      }
+      setTimeout(() => {
+        closeModal();
+        if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+      }, 1200);
     };
 
   } else if (status === 'Proses') {
     let currentFacingMode = 'environment';
     let capturedWatermarkDataUrl = null;
 
-    openModal("📸 Foto Bukti Pengantaran (Watermark)", `
+    openModal("Foto Bukti Pengantaran", `
       <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
-        <div style="font-size:0.83rem; color:#64748b; margin-bottom:12px;">
-          Silakan jepret foto bukti pengantaran pesanan <strong>${activityTitle}</strong> ke lokasi <strong>${locationName}</strong>. Teks watermark lokasi, tanggal, & muthowwif akan otomatis terpasang real-time.
-        </div>
-
-        <!-- Live Camera Container -->
-        <div id="v-cam-box" style="position:relative; width:100%; height:260px; background:#0f172a; border-radius:14px; overflow:hidden; margin-bottom:12px; display:flex; align-items:center; justify-content:center;">
+        
+        <!-- Live Camera Container with 1:1 Square Aspect Ratio -->
+        <div id="v-cam-box" style="position:relative; width:100%; aspect-ratio:1/1; max-height:360px; background:#0f172a; border-radius:14px; overflow:hidden; margin-bottom:12px; display:flex; align-items:center; justify-content:center;">
           <video id="v-cam-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
-          
-          <button id="v-cam-flip" class="btn btn-secondary" style="position:absolute; top:10px; right:10px; font-size:0.75rem; padding:6px 12px; background:rgba(15,23,42,0.75); color:#fff; backdrop-filter:blur(8px); border-radius:20px; border:1px solid rgba(255,255,255,0.3); font-weight:800;">
-            🔄 Flip Kamera
-          </button>
         </div>
 
-        <!-- Capture & Upload Buttons -->
+        <!-- Camera Control Bar: Ambil Foto & Flip Kamera side by side -->
         <div style="display:flex; gap:10px; margin-bottom:14px;">
-          <button id="v-cam-snap-btn" class="btn btn-gold" style="flex:1; padding:10px; font-weight:800; font-size:0.85rem; border-radius:10px; display:flex; align-items:center; justify-content:center; gap:6px;">
-            <i data-lucide="camera"></i> Jepret Foto
+          <button id="v-cam-snap-btn" class="btn btn-gold" style="flex:1; padding:12px; font-weight:800; font-size:0.88rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+            Ambil Foto
           </button>
-          <label class="btn btn-secondary" style="flex:1; padding:10px; font-weight:800; font-size:0.85rem; border-radius:10px; text-align:center; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; background:#e2e8f0; color:#1e293b;">
-            <i data-lucide="upload"></i> Upload File
-            <input type="file" id="v-file-input" accept="image/*" capture="environment" style="display:none;">
-          </label>
+          <button id="v-cam-flip-btn" class="btn btn-secondary" style="flex:1; padding:12px; font-weight:800; font-size:0.88rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px; background:#e2e8f0; color:#1e293b; border:none;">
+            Flip Kamera
+          </button>
         </div>
 
-        <!-- Preview Container -->
+        <!-- Preview Container with Fullscreen Fit Object-Contain -->
         <div id="v-preview-box" style="display:none; margin-bottom:14px; text-align:center;">
-          <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Preview Foto Ter-Watermark:</div>
-          <img id="v-preview-img" style="width:100%; max-height:260px; object-fit:contain; border-radius:12px; border:2px solid #10b981; box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+          <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Preview Foto</div>
+          <img id="v-preview-img" style="width:100%; max-height:65vh; object-fit:contain; border-radius:14px; border:2px solid #000; box-shadow:0 8px 24px rgba(0,0,0,0.25); background:#000;">
         </div>
 
         <button id="btn-submit-delivery" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.95rem; border-radius:12px; display:none; background:#10b981; color:#fff; border:none; box-shadow:0 4px 14px rgba(16,185,129,0.3);">
-          ✅ Submit Foto & Selesaikan Pemesanan
+          Selesaikan Pemesanan
         </button>
       </div>
     `);
 
-    lucide.createIcons();
-
     const videoEl = document.getElementById("v-cam-video");
-    const flipBtn = document.getElementById("v-cam-flip");
     const snapBtn = document.getElementById("v-cam-snap-btn");
-    const fileInput = document.getElementById("v-file-input");
+    const flipBtn = document.getElementById("v-cam-flip-btn");
     const previewBox = document.getElementById("v-preview-box");
     const previewImg = document.getElementById("v-preview-img");
     const submitBtn = document.getElementById("btn-submit-delivery");
@@ -12062,7 +12088,7 @@ function openVendorProcessModal(bookingId) {
           audio: false
         });
         window.activeVendorCamStream = stream;
-        videoEl.srcObject = stream;
+        if (videoEl) videoEl.srcObject = stream;
       } catch (err) {
         console.warn("Kamera tidak dapat diakses langsung:", err);
       }
@@ -12075,48 +12101,60 @@ function openVendorProcessModal(bookingId) {
       startCamera(currentFacingMode);
     };
 
-    const generateWatermark = (sourceImgOrVideo, isVideo = true) => {
+    const generateWatermark = (sourceImgOrVideo) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
-      let width = isVideo ? (sourceImgOrVideo.videoWidth || 640) : sourceImgOrVideo.naturalWidth;
-      let height = isVideo ? (sourceImgOrVideo.videoHeight || 480) : sourceImgOrVideo.naturalHeight;
+      // Total Canvas: 4:5 Portrait Ratio (1080 x 1350 px)
+      const targetWidth = 1080;
+      const targetHeight = 1350;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
 
-      canvas.width = width;
-      canvas.height = height;
+      // 1:1 Square Photo Section at Top (1080 x 1080 px)
+      const photoHeight = 1080;
 
-      ctx.drawImage(sourceImgOrVideo, 0, 0, width, height);
+      // Crop input image/video to 1:1 Square aspect ratio for top photo area
+      let srcW = sourceImgOrVideo.videoWidth || sourceImgOrVideo.naturalWidth || 1080;
+      let srcH = sourceImgOrVideo.videoHeight || sourceImgOrVideo.naturalHeight || 1080;
 
-      // Add watermark overlay bar at bottom
-      const overlayHeight = Math.max(100, Math.round(height * 0.28));
-      ctx.fillStyle = "rgba(15, 23, 42, 0.84)";
-      ctx.fillRect(0, height - overlayHeight, width, overlayHeight);
+      let cropSize = Math.min(srcW, srcH);
+      let cropX = Math.round((srcW - cropSize) / 2);
+      let cropY = Math.round((srcH - cropSize) / 2);
 
-      // Gold top accent line
-      ctx.fillStyle = "#dfc06b";
-      ctx.fillRect(0, height - overlayHeight, width, 4);
+      // Draw cropped 1:1 photo in the top 1080x1080 square section
+      ctx.drawImage(sourceImgOrVideo, cropX, cropY, cropSize, cropSize, 0, 0, targetWidth, photoHeight);
 
-      // Watermark Text
-      const now = new Date();
-      const timeStr = now.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' }) + ' ' + now.toLocaleTimeString('id-ID') + ' AST (Saudi Arabia)';
+      // Bottom Black Watermark Banner (1080 x 270 px) -> Total Canvas 1080x1350 (4:5 Portrait)
+      const bannerHeight = 270;
+      const bannerY = photoHeight; // y = 1080
 
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, bannerY, targetWidth, bannerHeight);
+
+      // 1. Centered Vendor Name (Serif Font 'Martel', serif)
       ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${Math.max(14, Math.round(width * 0.038))}px 'Mulish', sans-serif`;
-      ctx.fillText(`📍 ${vName}`, 16, height - overlayHeight + 26);
+      ctx.textAlign = "center";
+      ctx.font = "normal 36px 'Martel', serif";
+      ctx.fillText(vName, targetWidth / 2, bannerY + 52);
 
-      ctx.fillStyle = "#fef3c7";
-      ctx.font = `bold ${Math.max(12, Math.round(width * 0.032))}px 'Mulish', sans-serif`;
-      ctx.fillText(`📦 ${activityTitle} | ${b.groupName}`, 16, height - overlayHeight + 50);
+      // 2. Activity Goal (Bold Uppercase) - Left Aligned
+      ctx.textAlign = "left";
+      ctx.font = "900 28px 'Mulish', sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(activityTitle, 36, bannerY + 115);
 
-      ctx.fillStyle = "#cbd5e1";
-      ctx.font = `normal ${Math.max(11, Math.round(width * 0.028))}px 'Mulish', sans-serif`;
-      ctx.fillText(`👤 Muthowwif: Ust. ${muthawwifName} | 📍 ${locationName}`, 16, height - overlayHeight + 72);
+      // 3. Group Name - Left Aligned
+      ctx.font = "500 23px 'Mulish', sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(b.groupName, 36, bannerY + 160);
 
-      ctx.fillStyle = "#10b981";
-      ctx.font = `bold ${Math.max(11, Math.round(width * 0.028))}px 'Mulish', sans-serif`;
-      ctx.fillText(`🕒 ${timeStr} | GPS Verified: 21.4225° N, 39.8262° E`, 16, height - overlayHeight + 92);
+      // 4. Location Name - Left Aligned
+      ctx.font = "500 23px 'Mulish', sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(locationName, 36, bannerY + 205);
 
-      capturedWatermarkDataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      capturedWatermarkDataUrl = canvas.toDataURL("image/jpeg", 0.90);
       previewImg.src = capturedWatermarkDataUrl;
       previewBox.style.display = "block";
       submitBtn.style.display = "block";
@@ -12125,21 +12163,7 @@ function openVendorProcessModal(bookingId) {
     };
 
     snapBtn.onclick = () => {
-      generateWatermark(videoEl, true);
-    };
-
-    fileInput.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const img = new Image();
-        img.onload = () => {
-          generateWatermark(img, false);
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
+      generateWatermark(videoEl);
     };
 
     submitBtn.onclick = () => {
@@ -12152,13 +12176,28 @@ function openVendorProcessModal(bookingId) {
       saveState();
       pushData();
       stopCamera();
-      closeModal();
-      showToast("Foto bukti pengantaran berhasil disubmit & status pemesanan SELESAI!");
-      if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+
+      // Show animated checklist completion modal overlay
+      const modalBody = document.querySelector("#global-modal-content") || document.querySelector(".modal-body");
+      if (modalBody) {
+        modalBody.innerHTML = `
+          <div style="text-align:center; padding:32px 16px; font-family:'Mulish', sans-serif;">
+            <div style="width:68px; height:68px; margin:0 auto 14px auto; background:#ecfdf5; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#10b981; font-size:2.2rem; border:2px solid #a7f3d0;">
+              ✓
+            </div>
+            <h3 style="font-weight:900; color:#0f172a; font-size:1.15rem; margin:0 0 4px 0;">Pesanan Selesai</h3>
+            <p style="color:#64748b; font-size:0.83rem; margin:0;">Foto bukti pengantaran berhasil disubmit</p>
+          </div>
+        `;
+      }
+      setTimeout(() => {
+        closeModal();
+        if (window.location.hash.startsWith("#vendor-view")) renderPublicVendorPortal();
+      }, 1200);
     };
 
   } else if (status === 'Selesai') {
-    openModal("✅ Bukti Pengantaran Pemesanan (Selesai)", `
+    openModal("Bukti Pengantaran", `
       <div style="font-family:'Mulish', sans-serif; color:#1e293b;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <span style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-size:0.75rem; font-weight:800; padding:3px 10px; border-radius:12px;">Pesanan Selesai</span>
@@ -12170,8 +12209,8 @@ function openVendorProcessModal(bookingId) {
 
         ${b.deliveryPhoto ? `
           <div style="margin-bottom:16px; text-align:center;">
-            <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Foto Bukti Pengantaran Terverifikasi:</div>
-            <img src="${b.deliveryPhoto}" style="width:100%; max-height:280px; object-fit:contain; border-radius:12px; border:2px solid #10b981; box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+            <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:6px;">Foto Bukti Pengantaran Terverifikasi</div>
+            <img src="${b.deliveryPhoto}" style="width:100%; max-height:65vh; object-fit:contain; border-radius:14px; border:2px solid #000; box-shadow:0 8px 24px rgba(0,0,0,0.25); background:#000;">
           </div>
         ` : `
           <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:12px; color:#64748b; font-size:0.85rem; margin-bottom:16px;">
@@ -12179,17 +12218,48 @@ function openVendorProcessModal(bookingId) {
           </div>
         `}
 
-        <button id="btn-share-delivery-wa" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#25d366; color:#fff; border:none; box-shadow:0 4px 14px rgba(37,211,102,0.3);">
-          <i data-lucide="share-2"></i> Bagikan Bukti Pengantaran via WhatsApp
+        <button id="btn-share-delivery-img" class="btn btn-gold" style="width:100%; padding:12px; font-weight:800; font-size:0.92rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px; background:#25d366; color:#fff; border:none; box-shadow:0 4px 14px rgba(37,211,102,0.3);">
+          <i data-lucide="share-2"></i> Share
         </button>
       </div>
     `);
 
     lucide.createIcons();
 
-    document.getElementById("btn-share-delivery-wa").onclick = () => {
-      const shareMsg = `Assalamu'alaikum wr.wb,\n\nBerikut kami kirimkan Konfirmasi Bukti Pengantaran Pemesanan Vendor:\n• *Vendor*: ${vName}\n• *Kegiatan*: ${activityTitle}\n• *Grup*: ${b.groupName}\n• *Muthowwif*: Ust. ${muthawwifName}\n• *Lokasi*: ${locationName}\n• *Status*: SELESAI (Telah Diantar)\n\nTerima kasih.`;
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareMsg)}`, '_blank');
+    document.getElementById("btn-share-delivery-img").onclick = async () => {
+      if (!b.deliveryPhoto) {
+        showToast("Tidak ada foto untuk dibagikan", "error");
+        return;
+      }
+      try {
+        // Convert Base64 dataUrl to Blob file for direct native image sharing
+        const res = await fetch(b.deliveryPhoto);
+        const blob = await res.blob();
+        const file = new File([blob], `bukti_pengantaran_${b.id}.jpg`, { type: "image/jpeg" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "Bukti Pengantaran",
+            text: `Foto Bukti Pengantaran Vendor - ${activityTitle}`
+          });
+        } else {
+          // Fallback: Open image in new window / tab for direct saving / sharing
+          const win = window.open();
+          if (win) {
+            win.document.write(`<img src="${b.deliveryPhoto}" style="max-width:100%; border-radius:12px;" alt="Bukti Pengantaran">`);
+            showToast("Foto Bukti Pengantaran berhasil dibuka untuk dibagikan!");
+          } else {
+            showToast("Izinkan pop-up untuk membagikan foto.", "error");
+          }
+        }
+      } catch (err) {
+        console.warn("Share image error:", err);
+        const win = window.open();
+        if (win) {
+          win.document.write(`<img src="${b.deliveryPhoto}" style="max-width:100%;" alt="Bukti Pengantaran">`);
+        }
+      }
     };
   }
 }
@@ -12269,7 +12339,7 @@ function renderPublicVendorPortal() {
     const muthawwifName = b.muthawwif || (group ? (group.mutawwif || (group.leaders ? group.leaders.join(', ') : 'Ust. Ahmad Saiful Haq')) : 'Ust. Ahmad Saiful Haq');
     const locationName = b.location || b.hotel || (group ? (group.makkahHotel || group.madinahHotel || 'Hotel Al Marwa Rayhaan Rotana (Bus 1)') : 'Hotel Al Marwa Rayhaan Rotana (Bus 1)');
     const activityTitle = (b.activityGoal || b.activity || b.notes || 'SNACK CITY TOUR MAKKAH').toUpperCase();
-    const dateFormatted = formatDateDisplay(b.dateStart || b.date);
+    const dateFormatted = formatDateIndonesian(b.dateStart || b.date);
     const timeFormatted = b.time ? b.time : '05:30';
 
     const productsList = (b.products && b.products.length > 0) ? b.products : [
@@ -12340,76 +12410,75 @@ function renderPublicVendorPortal() {
   };
 
   APP_CONTAINER.innerHTML = `
-    <div style="min-height:100vh; background:#f4f6f9; font-family:'Mulish', sans-serif; padding:12px 10px 60px 10px; box-sizing:border-box;">
-      <div style="max-width:700px; margin:0 auto;">
+    <div style="height:100vh; background:#f4f6f9; font-family:'Mulish', sans-serif; padding:12px 10px 12px 10px; box-sizing:border-box; overflow:hidden;">
+      <div style="max-width:700px; margin:0 auto; height:100%; display:flex; flex-direction:column;">
         
-        <!-- Header Bar: Soft UI / Glassmorphism -->
-        <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(16px); border-radius:18px; padding:12px 16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:10px;">
-          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
-            <img src="assets/logo.png" style="height:38px; object-fit:contain;" alt="Jejak Imani Logo" onerror="this.style.display='none';">
-            <div style="min-width:0;">
-              <div style="font-size:0.68rem; color:#b45309; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PORTAL MITRA VENDOR & SUPPLIER</div>
-              <div style="font-size:0.82rem; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PT. JEJAK IMANI BERKAH BERSAMA</div>
+        <!-- FIXED TOP HEADER & CONTROLS -->
+        <div style="flex-shrink:0;">
+          
+          <!-- Header Bar: Soft UI / Glassmorphism -->
+          <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(16px); border-radius:18px; padding:12px 16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+              <img src="assets/logo.png" style="height:38px; object-fit:contain;" alt="Jejak Imani Logo" onerror="this.style.display='none';">
+              <div style="min-width:0;">
+                <div style="font-size:0.68rem; color:#b45309; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PORTAL MITRA VENDOR & SUPPLIER</div>
+                <div style="font-size:0.82rem; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">PT. JEJAK IMANI BERKAH BERSAMA</div>
+              </div>
+            </div>
+
+            <!-- Real-Time Status Indicator -->
+            <div style="display:flex; align-items:center; padding-left:4px;">
+              <span style="width:12px; height:12px; background:#10b981; border-radius:50%; display:inline-block; box-shadow:0 0 10px #10b981;" title="Connected Real-Time"></span>
             </div>
           </div>
 
-          <!-- Real-Time Status Dot ONLY (Green / Red indicator) -->
-          <div style="display:flex; align-items:center; padding-left:4px;">
-            <span style="width:12px; height:12px; background:#10b981; border-radius:50%; display:inline-block; box-shadow:0 0 10px #10b981;" title="Connected Real-Time"></span>
-          </div>
-        </div>
+          <!-- Biodata Vendor -->
+          <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+              <div style="flex:1; min-width:180px;">
+                <span style="background:#fef3c7; color:#92400e; font-weight:900; font-size:0.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase;">${vendor.type || 'Mitra Layanan'}</span>
+                <h1 style="margin:4px 0 2px 0; font-size:1.3rem; font-weight:900; color:#0f172a;">${vendor.name}</h1>
+                <div style="font-size:0.82rem; color:#475569; margin-bottom:2px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
+                <div style="font-size:0.78rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
+              </div>
 
-        <!-- Biodata Vendor -->
-        <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:18px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
-            <div style="flex:1; min-width:200px;">
-              <span style="background:#fef3c7; color:#92400e; font-weight:900; font-size:0.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase;">${vendor.type || 'Mitra Layanan'}</span>
-              <h1 style="margin:6px 0 2px 0; font-size:1.4rem; font-weight:900; color:#0f172a;">${vendor.name}</h1>
-              <div style="font-size:0.82rem; color:#475569; margin-bottom:4px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
-              <div style="font-size:0.8rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
-            </div>
-
-            <!-- Tombol Cetak PDF dengan Background Letterhead -->
-            <div>
-              <button onclick="printPublicVendorPDF('${vendor.id}');" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
-                <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
-              </button>
+              <div>
+                <button onclick="printPublicVendorPDF('${vendor.id}');" class="btn btn-gold" style="width:auto; padding:8px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
+                  <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
+                </button>
+              </div>
             </div>
           </div>
+
+          <!-- Filter Tab Bar: Semua, Pesanan Baru, Proses, Selesai -->
+          <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; scrollbar-width:none;">
+            <button id="pv-tab-semua" class="pv-filter-btn active" data-filter="semua" style="flex:1; min-width:90px; padding:9px 6px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #0f172a; background:#0f172a; color:#ffffff; cursor:pointer; text-align:center; transition:all 0.2s;">
+              Semua (${totalOrders})
+            </button>
+            <button id="pv-tab-baru" class="pv-filter-btn" data-filter="baru" style="flex:1; min-width:110px; padding:9px 6px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#1d4ed8; cursor:pointer; text-align:center; transition:all 0.2s;">
+              Pesanan Baru (${newOrders})
+            </button>
+            <button id="pv-tab-proses" class="pv-filter-btn" data-filter="proses" style="flex:1; min-width:95px; padding:9px 6px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#d97706; cursor:pointer; text-align:center; transition:all 0.2s;">
+              Proses (${processOrders})
+            </button>
+            <button id="pv-tab-selesai" class="pv-filter-btn" data-filter="selesai" style="flex:1; min-width:95px; padding:9px 6px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#10b981; cursor:pointer; text-align:center; transition:all 0.2s;">
+              Selesai (${completedOrders})
+            </button>
+          </div>
+
+          <!-- Search Bar & Date Filter Row -->
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+            <input type="text" id="pv-search" class="form-input" placeholder="Cari pemesanan (kegiatan, grup, muthowwif)..." style="flex:1; font-size:0.85rem; padding:9px 12px; border-radius:12px; background:#fff; border:1px solid #cbd5e1; box-sizing:border-box;">
+            <input type="date" id="pv-date-filter" class="form-input" title="Filter Tanggal Pemesanan" style="width:135px; font-size:0.8rem; padding:8px 10px; border-radius:12px; background:#fff; border:1px solid #cbd5e1; box-sizing:border-box; color:#0f172a; font-weight:700;">
+          </div>
+
         </div>
 
-        <!-- Filter Tab Bar: Semua, Pesanan Baru, Proses, Selesai -->
-        <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; scrollbar-width:none;">
-          <button id="pv-tab-semua" class="pv-filter-btn active" data-filter="semua" style="flex:1; min-width:90px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #0f172a; background:#0f172a; color:#ffffff; cursor:pointer; text-align:center; transition:all 0.2s;">
-            Semua (${totalOrders})
-          </button>
-          <button id="pv-tab-baru" class="pv-filter-btn" data-filter="baru" style="flex:1; min-width:110px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#1d4ed8; cursor:pointer; text-align:center; transition:all 0.2s;">
-            Pesanan Baru (${newOrders})
-          </button>
-          <button id="pv-tab-proses" class="pv-filter-btn" data-filter="proses" style="flex:1; min-width:95px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#d97706; cursor:pointer; text-align:center; transition:all 0.2s;">
-            Proses (${processOrders})
-          </button>
-          <button id="pv-tab-selesai" class="pv-filter-btn" data-filter="selesai" style="flex:1; min-width:95px; padding:10px 8px; border-radius:12px; font-weight:800; font-size:0.78rem; border:1px solid #e2e8f0; background:#ffffff; color:#10b981; cursor:pointer; text-align:center; transition:all 0.2s;">
-            Selesai (${completedOrders})
-          </button>
-        </div>
-
-        <!-- Search Bar -->
-        <div style="margin-bottom:14px;">
-          <input type="text" id="pv-search" class="form-input" placeholder="Cari pemesanan (kegiatan, grup, muthowwif)..." style="width:100%; font-size:0.85rem; padding:10px 14px; border-radius:12px; background:#fff; border:1px solid #cbd5e1; box-sizing:border-box;">
-        </div>
-
-        <!-- Dynamic Cards Container -->
-        <div id="pv-cards-container">
+        <!-- ONLY THIS AREA CAN BE SCROLLED -->
+        <div id="pv-cards-container" style="flex:1; overflow-y:auto; padding-right:2px; scrollbar-width:thin;">
           ${vendorBookings.length === 0 ? `
             <div style="text-align:center; padding:30px; background:#fff; border-radius:14px; color:#94a3b8; font-size:0.85rem; border:1px solid #e2e8f0;">Belum ada jadwal pemesanan untuk vendor ini.</div>
           ` : vendorBookings.map(b => makeVendorBookingCard(b)).join('')}
-        </div>
-
-        <!-- Footer Contact Notice -->
-        <div style="margin-top:24px; background:#fffdf5; border:1px solid #fef3c7; border-radius:14px; padding:14px; text-align:center; font-size:0.8rem; color:#78350f;">
-          <div style="font-weight:800; margin-bottom:2px;">Ada Pertanyaan atau Perubahan Jadwal?</div>
-          <div>Silakan hubungi Tim Handling & Finance jejak imani Saudi Arabia via WhatsApp.</div>
         </div>
 
       </div>
@@ -12420,6 +12489,8 @@ function renderPublicVendorPortal() {
 
   const applyVendorFilters = () => {
     const q = (document.getElementById("pv-search")?.value || "").toLowerCase().trim();
+    const dateVal = document.getElementById("pv-date-filter")?.value || "";
+
     const filtered = vendorBookings.filter(b => {
       const st = b.status || "Pesanan Baru";
       let matchTab = true;
@@ -12433,7 +12504,13 @@ function renderPublicVendorPortal() {
       const notes = (b.notes || '').toLowerCase();
       const matchSearch = !q || (goal.includes(q) || grp.includes(q) || muth.includes(q) || notes.includes(q));
 
-      return matchTab && matchSearch;
+      let matchDate = true;
+      if (dateVal) {
+        const bDate = b.dateStart || b.date || "";
+        matchDate = bDate.startsWith(dateVal);
+      }
+
+      return matchTab && matchSearch && matchDate;
     });
 
     const container = document.getElementById("pv-cards-container");
@@ -12468,12 +12545,11 @@ function renderPublicVendorPortal() {
     };
   });
 
-  // Search Filter Handler
+  // Search & Date Filter Handlers
   const pvSearch = document.getElementById("pv-search");
-  if (pvSearch) {
-    pvSearch.oninput = () => {
-      applyVendorFilters();
-    };
-  }
+  if (pvSearch) pvSearch.oninput = () => applyVendorFilters();
+
+  const pvDateFilter = document.getElementById("pv-date-filter");
+  if (pvDateFilter) pvDateFilter.onchange = () => applyVendorFilters();
 }
 
