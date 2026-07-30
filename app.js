@@ -513,13 +513,14 @@ function getHexColor(colorName) {
 
 function formatDateDisplay(dateStr) {
   if (!dateStr) return "-";
-  if (dateStr.includes("-")) {
-    const parts = dateStr.split("-");
+  const str = String(dateStr);
+  if (str.includes("-")) {
+    const parts = str.split("-");
     if (parts.length === 3 && parts[0].length === 4) {
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
   }
-  return dateStr;
+  return str;
 }
 
 // --- 2. SAUDI TIME & CALENDAR HELPERS (GMT+3) ---
@@ -614,7 +615,9 @@ function initSuggestionInput(inputId, containerId, dataList, onSelect) {
   const container = document.getElementById(containerId);
   if (!inputEl || !container) return;
   
-  inputEl.parentNode.classList.add("suggestion-wrapper");
+  if (inputEl.parentNode && inputEl.parentNode.classList) {
+    inputEl.parentNode.classList.add("suggestion-wrapper");
+  }
   inputEl.setAttribute("autocomplete", "off");
   
   inputEl.onfocus = () => showList(inputEl.value);
@@ -2937,6 +2940,51 @@ function openUserLaporKasPopup(prefilledGroup = "") {
       
       <button type="submit" class="btn btn-primary">Submit Laporan</button>
     </form>
+    
+  <datalist id="exp-category-datalist">
+    <option value="Fee Kedatangan Bandara Jeddah - Terminal 1">
+    <option value="Fee Kepulangan Bandara Jeddah - Terminal 1">
+    <option value="Fee Kedatangan Bandara Jeddah - Terminal Haji">
+    <option value="Fee Kepulangan Bandara Jeddah - Terminal Haji">
+    <option value="Zamzam Kepulangan Jamaah">
+    <option value="Fee Check In & Check Out Hotel Jeddah">
+    <option value="Standby Restaurant">
+    <option value="Standby Istirohah">
+    <option value="Standby Stasiun Sulaimaniyah">
+    <option value="Fee Additional Pendampingan Jamaah">
+    <option value="Fee Kedatangan Bandara Madinah">
+    <option value="Fee Kepulangan Bandara Madinah">
+    <option value="Welcome Drink">
+    <option value="Zamzam Dalam Kamar Madinah">
+    <option value="Air Mineral Dalam Kamar Madinah">
+    <option value="Fee Check In Hotel Madinah">
+    <option value="Fee Check Out Hotel Madinah">
+    <option value="Bellboy Check In Hotel Madinah">
+    <option value="Bellboy Check Out Hotel Madinah">
+    <option value="Kunafe Reef">
+    <option value="Fee Pengantaran Kunafe Reef">
+    <option value="Fee Additional Kegiatan">
+    <option value="Fee Penjemputan Stasiun Madinah">
+    <option value="Fee Pembagian Snack City Tour Madinah">
+    <option value="Fee Pembagian Snack City Tour Al Ula">
+    <option value="Subsidi Transportasi">
+    <option value="Subsidi Overtime">
+    <option value="Zamzam Dalam Kamar Makkah">
+    <option value="Air Mineral Dalam Kamar Makkah">
+    <option value="Fee Check In Hotel Makkah">
+    <option value="Fee Check Out Hotel Makkah">
+    <option value="Bellboy Check In Hotel Makkah">
+    <option value="Bellboy Check Out Hotel Makkah">
+    <option value="Fee Penjemputan Stasiun Makkah">
+    <option value="Fee Pembagian Snack City Tour Makkah">
+    <option value="Fee Pembagian City Tour Thaif">
+    <option value="Fee Pembagian City Tour Khandama">
+    <option value="Operasional Muthawwif per Bus">
+    <option value="Zamzam Stock Kantor">
+    <option value="Truck Pengantaran Koper">
+    <option value="Additional Hotel Truck Koper">
+  </datalist>
+
   `;
   openModal("Tambah Pengeluaran Kas", popupHtml);
   
@@ -2989,16 +3037,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
       <div class="grid-3col" style="gap:8px;">
         <div class="form-group">
           <label class="form-label">Kategori</label>
-          <select class="form-select item-cat" required>
-            <option value="Fee Handling">Fee Handling</option>
-            <option value="Tip Bellboy">Tip Bellboy</option>
-            <option value="Zamzam">Zamzam</option>
-            <option value="Handling Jamaah">Handling Jamaah</option>
-            <option value="Transportasi">Transportasi</option>
-            <option value="Konsumsi">Konsumsi</option>
-            <option value="Lainnya">Lainnya</option>
-          </select>
-          <input type="text" class="form-input item-custom-cat hidden" placeholder="Kategori Kustom" style="margin-top:6px;">
+          <input type="text" class="form-input item-cat" list="exp-category-datalist" placeholder="Pilih / ketik kategori..." required>
         </div>
         <div class="form-group">
           <label class="form-label">Harga Satuan</label>
@@ -3016,21 +3055,10 @@ function openUserLaporKasPopup(prefilledGroup = "") {
     `;
     itemsContainer.appendChild(div);
     
-    const catSelect = div.querySelector(".item-cat");
-    const customInput = div.querySelector(".item-custom-cat");
+    const catInput = div.querySelector(".item-cat");
     const priceInput = div.querySelector(".item-price");
     const qtyInput = div.querySelector(".item-qty");
     const totalInput = div.querySelector(".item-total");
-    
-    catSelect.onchange = () => {
-      if (catSelect.value === "Lainnya") {
-        customInput.classList.remove("hidden");
-        customInput.required = true;
-      } else {
-        customInput.classList.add("hidden");
-        customInput.required = false;
-      }
-    };
     
     const updateRowTotal = () => {
       const price = parseFloat(priceInput.value) || 0;
@@ -3063,10 +3091,9 @@ function openUserLaporKasPopup(prefilledGroup = "") {
     
     const itemRows = itemsContainer.querySelectorAll(".exp-item-row-popup");
     const items = Array.from(itemRows).map(row => {
-      const cat = row.querySelector(".item-cat").value;
-      const customCat = row.querySelector(".item-custom-cat").value.trim();
+      const cat = row.querySelector(".item-cat").value.trim();
       return {
-        category: cat === "Lainnya" ? customCat : cat,
+        category: cat || "Operasional",
         price: parseInt(row.querySelector(".item-price").value) || 0,
         qty: parseInt(row.querySelector(".item-qty").value) || 1,
         total: parseInt(row.querySelector(".item-total").value) || 0
@@ -3084,7 +3111,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
         amount: grandTotal,
         description: desc,
         date: getSaudiDateTime().gregorianStr.split('/').reverse().join('-'),
-        receipt: receiptUrl || "struk_user_multi.jpg",
+        receipt: receiptUrl || "",
         status: "Pending",
         items
       };
@@ -3111,7 +3138,7 @@ function openUserLaporKasPopup(prefilledGroup = "") {
         saveAndSubmitExpense(evt.target.result);
       };
       reader.onerror = function() {
-        saveAndSubmitExpense("struk_user_multi.jpg");
+        saveAndSubmitExpense("");
       };
       reader.readAsDataURL(file);
     } else {
@@ -4957,8 +4984,32 @@ function openItineraryFormPopup(editIdx = null) {
       <button type="button" id="add-iti-row-btn-popup" class="btn btn-secondary" style="margin-bottom:20px; padding:6px; font-size:0.8rem; width:auto;">+ Tambah Kegiatan</button>
       <button type="submit" class="btn btn-gold">Simpan Itinerary</button>
     </form>
+    
+  <datalist id="agenda-options-list">
+    <option value="Kedatangan Bandara Jeddah">
+    <option value="Kedatangan Bandara Madinah">
+    <option value="Kepulangan Bandara Jeddah">
+    <option value="Kepulangan Bandara Madinah">
+    <option value="Check In Hotel Madinah">
+    <option value="Check Out Hotel Madinah">
+    <option value="Check In Hotel Makkah">
+    <option value="Check Out Hotel Makkah">
+    <option value="Check In Hotel Jeddah">
+    <option value="Check Out Hotel Jeddah">
+    <option value="City Tour Madinah">
+    <option value="City Tour Al Ula">
+    <option value="City Tour Makkah">
+    <option value="City Tour Thaif">
+    <option value="City Tour Khandama">
+    <option value="Romansiah Jeddah">
+    <option value="Romansiah Madinah">
+    <option value="Romansiah Makkah">
+    <option value="Penjemputan Stasiun Madinah">
+    <option value="Penjemputan Stasiun Makkah">
+  </datalist>
+
   `;
-  openModal(isEdit ? "Edit Itinerary (Pop Up)" : "Tambah Itinerary Baru (Pop Up)", popupHtml);
+  openModal(isEdit ? "Edit Itinerary" : "Tambah Itinerary Baru", popupHtml);
   
   if (!isEdit) {
     initSuggestionInput("iti-group-name-popup", "iti-form-group-suggestions-popup", groupNames);
@@ -4985,7 +5036,7 @@ function openItineraryFormPopup(editIdx = null) {
           <option value="Madinah" ${city === 'Madinah' ? 'selected' : ''}>Madinah</option>
           <option value="Makkah" ${city === 'Makkah' ? 'selected' : ''}>Makkah</option>
         </select>
-        <input type="text" class="form-input row-agenda" placeholder="Agenda Kegiatan" value="${agenda}" required style="grid-column: span 2;">
+        <input type="text" class="form-input row-agenda" list="agenda-options-list" placeholder="Agenda Kegiatan (pilih / ketik)..." value="${agenda}" required style="grid-column: span 2;">
       </div>
       <input type="text" class="form-input row-remarks" placeholder="Keterangan tambahan" value="${remarks}" style="margin-top:8px;">
     `;
@@ -5679,27 +5730,32 @@ function openPenjadwalanFormPopup(editId = null) {
         </div>
         <div class="form-group">
           <label class="form-label">Jenis Penugasan</label>
-          <select id="task-type" class="form-select" required>
-            <option value="Kedatangan Bandara Jeddah" ${isEdit && task.type === 'Kedatangan Bandara Jeddah' ? 'selected' : ''}>Kedatangan Bandara Jeddah</option>
-            <option value="Kepulangan Bandara Jeddah" ${isEdit && task.type === 'Kepulangan Bandara Jeddah' ? 'selected' : ''}>Kepulangan Bandara Jeddah</option>
-            <option value="Kedatangan Bandara Madinah" ${isEdit && task.type === 'Kedatangan Bandara Madinah' ? 'selected' : ''}>Kedatangan Bandara Madinah</option>
-            <option value="Kepulangan Bandara Madinah" ${isEdit && task.type === 'Kepulangan Bandara Madinah' ? 'selected' : ''}>Kepulangan Bandara Madinah</option>
-            <option value="Check In Hotel Madinah" ${isEdit && task.type === 'Check In Hotel Madinah' ? 'selected' : ''}>Check In Hotel Madinah</option>
-            <option value="Check In Hotel Makkah" ${isEdit && task.type === 'Check In Hotel Makkah' ? 'selected' : ''}>Check In Hotel Makkah</option>
-            <option value="Check In Hotel Jeddah" ${isEdit && task.type === 'Check In Hotel Jeddah' ? 'selected' : ''}>Check In Hotel Jeddah</option>
-            <option value="Check Out Hotel Madinah" ${isEdit && task.type === 'Check Out Hotel Madinah' ? 'selected' : ''}>Check Out Hotel Madinah</option>
-            <option value="Check Out Hotel Makkah" ${isEdit && task.type === 'Check Out Hotel Makkah' ? 'selected' : ''}>Check Out Hotel Makkah</option>
-            <option value="Check Out Hotel Jeddah" ${isEdit && task.type === 'Check Out Hotel Jeddah' ? 'selected' : ''}>Check Out Hotel Jeddah</option>
-            <option value="City Tour Madinah" ${isEdit && task.type === 'City Tour Madinah' ? 'selected' : ''}>City Tour Madinah</option>
-            <option value="City Tour Makkah" ${isEdit && task.type === 'City Tour Makkah' ? 'selected' : ''}>City Tour Makkah</option>
-            <option value="City Tour Thaif" ${isEdit && task.type === 'City Tour Thaif' ? 'selected' : ''}>City Tour Thaif</option>
-            <option value="City Tour Al Ula" ${isEdit && task.type === 'City Tour Al Ula' ? 'selected' : ''}>City Tour Al Ula</option>
-            <option value="Penjemputan Stasiun Madinah" ${isEdit && task.type === 'Penjemputan Stasiun Madinah' ? 'selected' : ''}>Penjemputan Stasiun Madinah</option>
-            <option value="Penjemputan Stasiun Makkah" ${isEdit && task.type === 'Penjemputan Stasiun Makkah' ? 'selected' : ''}>Penjemputan Stasiun Makkah</option>
-          </select>
+          <input type="text" id="task-type" class="form-input" list="task-type-datalist" value="${isEdit ? task.type : ''}" placeholder="Pilih / ketik jenis penugasan..." required>
+          <datalist id="task-type-datalist">
+            <option value="Kedatangan Bandara Jeddah">
+            <option value="Kedatangan Bandara Madinah">
+            <option value="Kepulangan Bandara Jeddah">
+            <option value="Kepulangan Bandara Madinah">
+            <option value="Check In Hotel Madinah">
+            <option value="Check Out Hotel Madinah">
+            <option value="Check In Hotel Makkah">
+            <option value="Check Out Hotel Makkah">
+            <option value="Check In Hotel Jeddah">
+            <option value="Check Out Hotel Jeddah">
+            <option value="City Tour Madinah">
+            <option value="City Tour Al Ula">
+            <option value="City Tour Makkah">
+            <option value="City Tour Thaif">
+            <option value="City Tour Khandama">
+            <option value="Romansiah Jeddah">
+            <option value="Romansiah Madinah">
+            <option value="Romansiah Makkah">
+            <option value="Penjemputan Stasiun Madinah">
+            <option value="Penjemputan Stasiun Makkah">
+          </datalist>
         </div>
         <div class="form-group">
-          <label class="form-label">Kebutuhan Personel (Petugas)</label>
+          <label class="form-label">KEBUTUHAN PETUGAS</label>
           <input type="number" id="task-required-staff" class="form-input" min="1" value="${isEdit ? (task.requiredStaff || 1) : 1}" required>
         </div>
       </div>
@@ -5743,24 +5799,29 @@ function openPenjadwalanFormPopup(editId = null) {
     const groupIti = state.itineraries.find(i => i.groupName === groupName);
     if (groupIti && groupIti.activities) {
       groupIti.activities.forEach(a => {
-        const titleText = a.title || a.agenda || 'Kegiatan';
+        const titleText = a.agenda || a.title || 'Kegiatan';
         const dateText = a.date ? ` (${formatDateDisplay(a.date)})` : '';
         kegiatanSelect.innerHTML += `<option value="${titleText}">${titleText}${dateText}</option>`;
       });
     }
+    kegiatanSelect.innerHTML += '<option value="Additional">Additional</option>';
   };
 
   kegiatanSelect.onchange = () => {
     const agenda = kegiatanSelect.value;
     const groupName = gInput.value;
     const groupIti = state.itineraries.find(i => i.groupName === groupName);
-    if (groupIti && groupIti.activities) {
+    if (groupIti && groupIti.activities && agenda !== "Additional") {
       const act = groupIti.activities.find(a => (a.title === agenda || a.agenda === agenda));
       if (act) {
         if (act.date) document.getElementById("task-date").value = act.date;
         if (act.time) {
           const tClean = act.time.replace(/[^0-9:]/g, '');
           if (tClean) document.getElementById("task-time").value = tClean;
+        }
+        if (act.city) {
+          const regEl = document.getElementById("task-region");
+          if (regEl) regEl.value = act.city;
         }
       }
     }
@@ -5779,84 +5840,149 @@ function openPenjadwalanFormPopup(editId = null) {
     }
     
     const group = state.groups.find(x => x.name === groupName);
-    const totalPaxVal = group ? group.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : '';
-    const etaVal = group ? group.flightArrival.map(f => `${f.code} ${f.takeoff}-${f.landing}`).join('; ') : '';
-    const etdVal = group ? group.flightDeparture.map(f => `${f.code} ${f.takeoff}-${f.landing}`).join('; ') : '';
-    const mealVal = group ? (group.mealArrival.join(', ') || group.mealDeparture.join(', ')) : '';
-    const hotelOptions = group ? group.hotels.map(h => `<option value="${h}">${h}</option>`).join('') : '';
+    const totalPaxVal = group ? (group.packages ? group.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : '') : '';
+    const etaVal = group ? (group.flightArrival ? group.flightArrival.map(f => `${f.code || ''} ${f.takeoff || ''}-${f.landing || ''}`).join('; ') : '') : '';
+    const etdVal = group ? (group.flightDeparture ? group.flightDeparture.map(f => `${f.code || ''} ${f.takeoff || ''}-${f.landing || ''}`).join('; ') : '') : '';
+    const mealArrVal = group ? (group.mealsArrival ? group.mealsArrival.join(', ') : (group.mealArrival ? group.mealArrival.join(', ') : '')) : '';
+    const mealDepVal = group ? (group.mealsDeparture ? group.mealsDeparture.join(', ') : (group.mealDeparture ? group.mealDeparture.join(', ') : '')) : '';
+    const hotelOptions = group ? (group.hotels ? group.hotels.map(h => `<option value="${h}">${h}</option>`).join('') : '') : '';
 
     if (type.startsWith("Kedatangan Bandara")) {
       conditionalBox.innerHTML = `
         <div class="grid-2col">
+          <div class="form-group">
+            <label class="form-label">Tujuan</label>
+            <select id="c-dest-target" class="form-select" required>
+              <option value="Hotel Madinah" ${isEdit && task.details.destinationTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
+              <option value="Hotel Makkah" ${isEdit && task.details.destinationTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mealplan Kedatangan (Auto Manifest)</label>
+            <input type="text" id="c-meal" class="form-input" value="${isEdit ? (task.details.meal || '') : mealArrVal}" placeholder="Auto dari manifest grup" required>
+          </div>
+        </div>
+        <div class="grid-2col" style="margin-top:8px;">
           <div class="form-group"><label class="form-label">Total Pax</label><input type="number" id="c-pax" class="form-input" value="${isEdit ? (task.details.totalPax || '') : totalPaxVal}" required></div>
           <div class="form-group"><label class="form-label">FLIGHT & ETA</label><input type="text" id="c-eta" class="form-input" value="${isEdit ? (task.details.eta || '') : etaVal}" required></div>
-        </div>
-        <div class="grid-2col">
-          <div class="form-group"><label class="form-label">Meal Kedatangan</label><input type="text" id="c-meal" class="form-input" value="${isEdit ? (task.details.meal || '') : mealVal}" required></div>
-          <div class="form-group"><label class="form-label">Jumlah Bus</label><input type="number" id="c-bus" class="form-input" value="${isEdit ? (task.details.busCount || '') : 1}" required></div>
         </div>
       `;
     } else if (type.startsWith("Kepulangan Bandara")) {
       conditionalBox.innerHTML = `
         <div class="grid-2col">
+          <div class="form-group">
+            <label class="form-label">Asal</label>
+            <select id="c-origin-target" class="form-select" required>
+              <option value="Hotel Madinah" ${isEdit && task.details.originTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
+              <option value="Hotel Makkah" ${isEdit && task.details.originTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mealplan Kepulangan (Auto Manifest)</label>
+            <input type="text" id="c-meal" class="form-input" value="${isEdit ? (task.details.meal || '') : mealDepVal}" placeholder="Auto dari manifest grup" required>
+          </div>
+        </div>
+        <div class="grid-2col" style="margin-top:8px;">
           <div class="form-group"><label class="form-label">Total Pax</label><input type="number" id="c-pax" class="form-input" value="${isEdit ? (task.details.totalPax || '') : totalPaxVal}" required></div>
           <div class="form-group"><label class="form-label">FLIGHT & ETD</label><input type="text" id="c-etd" class="form-input" value="${isEdit ? (task.details.eta || '') : etdVal}" required></div>
         </div>
-        <div class="grid-2col">
-          <div class="form-group"><label class="form-label">Meal Kepulangan</label><input type="text" id="c-meal" class="form-input" value="${isEdit ? (task.details.meal || '') : mealVal}" required></div>
-          <div class="form-group"><label class="form-label">Jumlah Bus</label><input type="number" id="c-bus" class="form-input" value="${isEdit ? (task.details.busCount || '') : 1}" required></div>
-        </div>
       `;
-    } else if (type.startsWith("Check In Hotel") || type.startsWith("Check Out Hotel")) {
+    } else if (type.startsWith("Check In Hotel")) {
       const selectedHotel = isEdit ? task.details.hotelName : "";
       const selectedPkgs = isEdit ? (task.details.packages || []) : [];
-      const isCheckIn = type.startsWith("Check In Hotel");
-      
-      const hotelSelectHtml = hotelOptions ? `
-        <select id="c-hotel" class="form-select" required>
-          <option value="">-- Pilih --</option>
-          ${hotelOptions}
-        </select>
-      ` : `
-        <input type="text" id="c-hotel" class="form-input" placeholder="Ketik nama hotel..." required>
-      `;
+      const hotelListDatalist = group ? (group.hotels || []) : [];
       
       conditionalBox.innerHTML = `
-        <div class="grid-3col">
+        <div class="grid-2col">
           <div class="form-group">
-            <label class="form-label">Nama Hotel</label>
-            ${hotelSelectHtml}
+            <label class="form-label">Hotel (Manifest Group Suggestion)</label>
+            <input type="text" id="c-hotel" class="form-input" list="c-hotel-datalist" value="${selectedHotel}" placeholder="Pilih / ketik nama hotel..." required>
+            <datalist id="c-hotel-datalist">
+              ${hotelListDatalist.map(h => `<option value="${h}">`).join('')}
+            </datalist>
           </div>
-          <div class="form-group"><label class="form-label">Total Pax</label><input type="number" id="c-pax" class="form-input" value="${isEdit ? (task.details.totalPax || '') : totalPaxVal}" required></div>
-          <div class="form-group"><label class="form-label">Total Room</label><input type="number" id="c-rooms" class="form-input" value="${isEdit ? (task.details.totalRoom || '') : ''}" required></div>
+          <div class="form-group">
+            <label class="form-label">Asal</label>
+            <select id="c-origin-target" class="form-select" required>
+              <option value="Bandara Madinah" ${isEdit && task.details.originTarget === 'Bandara Madinah' ? 'selected' : ''}>Bandara Madinah</option>
+              <option value="Bandara Jeddah" ${isEdit && task.details.originTarget === 'Bandara Jeddah' ? 'selected' : ''}>Bandara Jeddah</option>
+              <option value="Hotel Madinah" ${isEdit && task.details.originTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
+              <option value="Hotel Makkah" ${isEdit && task.details.originTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Pilihan Paket (Sapphire, Ruby, Onyx)</label>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            ${['Sapphire', 'Ruby', 'Onyx', 'Best Deal', 'Yaqin'].map(p => `
-              <label style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Paket (Multi Select)</label>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; background:#ffffff; padding:8px 12px; border-radius:8px; border:1px solid #cbd5e1;">
+            ${['Sapphire Plus', 'Sapphire', 'Ruby', 'Onyx', 'Best Deal', 'Yaqin'].map(p => `
+              <label style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; font-weight:700;">
                 <input type="checkbox" class="c-pkg-chk" value="${p}" ${selectedPkgs.includes(p) ? 'checked' : ''}> ${p}
               </label>
             `).join('')}
           </div>
         </div>
-        ${isCheckIn ? `
-          <div class="grid-2col">
-            <div class="form-group"><label class="form-label">Service (mis. Porter & Welcome Drink)</label><input type="text" id="c-service" class="form-input" value="${isEdit ? (task.details.service || '') : 'Welcome Drink'}" required></div>
-            <div class="form-group"><label class="form-label">ETA (24 Jam)</label><input type="time" id="c-eta-time" class="form-input" value="${isEdit ? (task.details.etaTime || '') : ''}" required></div>
-          </div>
-        ` : `
-          <div class="form-group"><label class="form-label">ETD (24 Jam)</label><input type="time" id="c-etd-time" class="form-input" value="${isEdit ? (task.details.etdTime || '') : ''}" required></div>
-        `}
+        <div class="grid-2col" style="margin-top:8px;">
+          <div class="form-group"><label class="form-label">Komposisi Kamar</label><input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)"></div>
+          <div class="form-group"><label class="form-label">Complimentary</label><input type="text" id="c-complimentary" class="form-input" value="${isEdit ? (task.details.complimentary || '') : ''}" placeholder="Isian singkat complimentary"></div>
+        </div>
       `;
-      const hotelEl = document.getElementById("c-hotel");
-      if (hotelEl) hotelEl.value = selectedHotel;
+    } else if (type.startsWith("Check Out Hotel")) {
+      const selectedHotel = isEdit ? task.details.hotelName : "";
+      const selectedPkgs = isEdit ? (task.details.packages || []) : [];
+      const hotelListDatalist = group ? (group.hotels || []) : [];
+      
+      conditionalBox.innerHTML = `
+        <div class="grid-2col">
+          <div class="form-group">
+            <label class="form-label">Hotel (Manifest Group Suggestion)</label>
+            <input type="text" id="c-hotel" class="form-input" list="c-hotel-datalist" value="${selectedHotel}" placeholder="Pilih / ketik nama hotel..." required>
+            <datalist id="c-hotel-datalist">
+              ${hotelListDatalist.map(h => `<option value="${h}">`).join('')}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tujuan</label>
+            <select id="c-dest-target" class="form-select" required>
+              <option value="Bandara Madinah" ${isEdit && task.details.destinationTarget === 'Bandara Madinah' ? 'selected' : ''}>Bandara Madinah</option>
+              <option value="Bandara Jeddah" ${isEdit && task.details.destinationTarget === 'Bandara Jeddah' ? 'selected' : ''}>Bandara Jeddah</option>
+              <option value="Hotel Madinah" ${isEdit && task.details.destinationTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
+              <option value="Hotel Makkah" ${isEdit && task.details.destinationTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Paket (Multi Select)</label>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; background:#ffffff; padding:8px 12px; border-radius:8px; border:1px solid #cbd5e1;">
+            ${['Sapphire Plus', 'Sapphire', 'Ruby', 'Onyx', 'Best Deal', 'Yaqin'].map(p => `
+              <label style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; font-weight:700;">
+                <input type="checkbox" class="c-pkg-chk" value="${p}" ${selectedPkgs.includes(p) ? 'checked' : ''}> ${p}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Komposisi Kamar</label>
+          <input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)">
+        </div>
+      `;
+    } else if (type.startsWith("Romansiah")) {
+      conditionalBox.innerHTML = `
+        <div class="grid-2col">
+          <div class="form-group">
+            <label class="form-label">Asal</label>
+            <input type="text" id="c-origin-route" class="form-input" value="${isEdit ? (task.details.originTarget || task.details.hotelPickup || '') : ''}" placeholder="Isi lokasi asal penjemputan/pemesanan..." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Jumlah Nampan</label>
+            <input type="number" id="c-nampan-count" class="form-input" min="1" value="${isEdit ? (task.details.nampanCount || '') : ''}" placeholder="Isi jumlah nampan..." required>
+          </div>
+        </div>
+      `;
     } else if (type.startsWith("City Tour") || type.startsWith("Penjemputan Stasiun")) {
       conditionalBox.innerHTML = `
-        <div class="grid-3col">
-          <div class="form-group"><label class="form-label">Tujuan Bus / Stasiun</label><input type="text" id="c-tour-dest" class="form-input" value="${isEdit ? (task.details.destinationBus || '') : ''}" required></div>
-          <div class="form-group"><label class="form-label">Rute / Tempat Penjemputan</label><input type="text" id="c-tour-route" class="form-input" value="${isEdit ? (task.details.hotelPickup || '') : ''}" required></div>
-          <div class="form-group"><label class="form-label">Total Pax</label><input type="number" id="c-pax" class="form-input" value="${isEdit ? (task.details.totalPax || '') : totalPaxVal}" required></div>
+        <div class="grid-2col">
+          <div class="form-group"><label class="form-label">Rute Penjemputan</label><input type="text" id="c-pickup-route" class="form-input" value="${isEdit ? (task.details.hotelPickup || '') : ''}" placeholder="Rute / tempat penjemputan" required></div>
+          <div class="form-group"><label class="form-label">Tujuan (Manual)</label><input type="text" id="c-tour-dest" class="form-input" value="${isEdit ? (task.details.destinationBus || '') : ''}" placeholder="Ketik tempat tujuan" required></div>
         </div>
       `;
     } else {
@@ -8621,6 +8747,7 @@ function renderAdminVendor() {
   });
   
   loadVendorTab("v-db");
+  setTimeout(() => lucide.createIcons(), 50);
 }
 
 function loadVendorTab(tab) {
@@ -8630,7 +8757,7 @@ function loadVendorTab(tab) {
     contents.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:16px;">
         <input type="text" id="vendor-search-input" class="form-input" placeholder="Cari nama, tipe, kontak vendor..." style="max-width:300px;">
-        <button id="add-vendor-popup-btn" class="btn btn-gold" title="Tambah Master Vendor" style="width:auto; padding:8px 12px;"><i data-lucide="plus-circle" style="width:16px; height:16px;"></i></button>
+        <button id="add-vendor-popup-btn" class="btn btn-gold" title="Tambah Master Vendor" style="width:auto; padding:8px 12px; display:inline-flex; align-items:center; justify-content:center; gap:6px; flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg></button>
       </div>
       
       <div class="table-card">
@@ -8751,7 +8878,7 @@ function loadVendorTab(tab) {
     contents.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:16px;">
         <input type="text" id="booking-search-input" class="form-input" placeholder="Cari booking grup, vendor..." style="max-width:300px;">
-        <button id="add-booking-popup-btn" class="btn btn-gold" title="Plot Pemesanan Vendor" style="width:auto; padding:8px 12px;"><i data-lucide="calendar-plus" style="width:16px; height:16px;"></i></button>
+        <button id="add-booking-popup-btn" class="btn btn-gold" title="Plot Pemesanan Booking Vendor Baru" style="width:auto; padding:8px 12px; display:inline-flex; align-items:center; justify-content:center; gap:6px; flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg></button>
       </div>
       
       <div class="table-card">
@@ -8846,10 +8973,11 @@ function openVendorFormPopup(editId = null) {
       <div class="form-group">
         <label class="form-label">Tipe Vendor</label>
         <select id="av-type" class="form-select" required>
-          <option value="Hotel" ${isEdit && v.type === 'Hotel' ? 'selected' : ''}>Hotel</option>
           <option value="Katering" ${isEdit && v.type === 'Katering' ? 'selected' : ''}>Katering</option>
+          <option value="Truck" ${isEdit && v.type === 'Truck' ? 'selected' : ''}>Truck</option>
           <option value="Transportasi" ${isEdit && v.type === 'Transportasi' ? 'selected' : ''}>Transportasi</option>
-          <option value="Mutawwif" ${isEdit && v.type === 'Mutawwif' ? 'selected' : ''}>Mutawwif</option>
+          <option value="Hotel" ${isEdit && v.type === 'Hotel' ? 'selected' : ''}>Hotel</option>
+          <option value="Lainnya" ${isEdit && v.type === 'Lainnya' ? 'selected' : ''}>Lainnya</option>
         </select>
       </div>
       <div class="form-group"><label class="form-label">Nama Vendor</label><input type="text" id="av-name" class="form-input" value="${isEdit ? v.name : ''}" required></div>
@@ -8866,7 +8994,7 @@ function openVendorFormPopup(editId = null) {
   openModal(isEdit ? "Sunting Master Vendor" : "Tambah Master Vendor", popupHtml);
   
   const prodContainer = document.getElementById("av-products-container");
-  const addProdRow = (name = "", type = "Layanan", price = 0) => {
+  const addProdRow = (name = "", type = "Pcs", price = 0) => {
     const rowId = `v-prod-${Date.now()}-${Math.random()}`;
     const div = document.createElement("div");
     div.className = "nested-form-row av-prod-row";
@@ -8874,8 +9002,9 @@ function openVendorFormPopup(editId = null) {
     div.innerHTML = `
       <input type="text" class="form-input prod-name" placeholder="Nama Produk" value="${name}" required>
       <select class="form-select prod-type" style="max-width:120px;" required>
-        <option value="Layanan" ${type === 'Layanan' ? 'selected' : ''}>Layanan</option>
-        <option value="Barang" ${type === 'Barang' ? 'selected' : ''}>Barang</option>
+        <option value="Pcs" ${type === 'Pcs' || type === 'Layanan' ? 'selected' : ''}>Pcs</option>
+        <option value="Box" ${type === 'Box' || type === 'Barang' ? 'selected' : ''}>Box</option>
+        <option value="Pack" ${type === 'Pack' ? 'selected' : ''}>Pack</option>
         <option value="Lainnya" ${type === 'Lainnya' ? 'selected' : ''}>Lainnya</option>
       </select>
       <input type="number" class="form-input prod-price" placeholder="Harga SAR" value="${price}" min="0" required style="max-width:100px;">
@@ -11688,8 +11817,9 @@ function renderUserTaskDetailFull() {
 
 function formatDateIndonesian(dateStr) {
   if (!dateStr) return "-";
+  const str = String(dateStr);
   let y, m, d;
-  if (dateStr.includes('-')) {
+  if (str.includes('-')) {
     const parts = dateStr.split('T')[0].split('-');
     if (parts.length === 3) {
       y = parts[0];
