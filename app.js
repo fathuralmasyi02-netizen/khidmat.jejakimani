@@ -151,6 +151,30 @@ function formatAbsenDateTime(dateStr, timeStr) {
   }
 }
 
+
+function sendPushNotification(title, bodyText) {
+  if (typeof window === 'undefined' || !("Notification" in window)) return;
+  try {
+    if (Notification.permission === "granted") {
+      new Notification(title, {
+        body: bodyText,
+        icon: "assets/icon.png"
+      });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification(title, {
+            body: bodyText,
+            icon: "assets/icon.png"
+          });
+        }
+      });
+    }
+  } catch(e) {
+    console.warn("Notification error:", e);
+  }
+}
+
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
     return Array.isArray(val) ? val.filter(x => x !== null && x !== undefined) : defaultVal;
@@ -1262,11 +1286,12 @@ function openUserWalletTransferPopup(callbackOnSuccess = null) {
         <select id="ut-destination-type" class="form-select" required>
           <option value="tim">Kirim ke Tim Lain</option>
           <option value="admin">Ke Dompet Utama Admin</option>
+          <option value="vendor">Kirim ke Mitra Vendor</option>
         </select>
       </div>
       
       <div class="form-group" id="ut-recipient-select-container">
-        <label class="form-label">Pilih Tim Penerima</label>
+        <label class="form-label" id="ut-recipient-label">Pilih Tim Penerima</label>
         <select id="ut-recipient" class="form-select">
           ${otherUsers.map(u => `<option value="${u.username}">${u.name}</option>`).join('')}
         </select>
@@ -1290,10 +1315,23 @@ function openUserWalletTransferPopup(callbackOnSuccess = null) {
   const destTypeSelect = document.getElementById("ut-destination-type");
   const recipContainer = document.getElementById("ut-recipient-select-container");
   destTypeSelect.onchange = () => {
+    const recipSelect = document.getElementById("ut-recipient");
+    const recipLabel = document.getElementById("ut-recipient-label");
     if (destTypeSelect.value === "admin") {
       recipContainer.classList.add("hidden");
+    } else if (destTypeSelect.value === "vendor") {
+      recipContainer.classList.remove("hidden");
+      if (recipLabel) recipLabel.textContent = "Pilih Mitra Vendor";
+      if (recipSelect) {
+        const vOptions = (state.vendors || []).map(v => `<option value="${v.name}">${v.name} (${v.category || 'Vendor'})</option>`).join('');
+        recipSelect.innerHTML = vOptions || '<option value="Vendor Umum">Vendor Umum</option>';
+      }
     } else {
       recipContainer.classList.remove("hidden");
+      if (recipLabel) recipLabel.textContent = "Pilih Tim Penerima";
+      if (recipSelect) {
+        recipSelect.innerHTML = otherUsers.map(u => `<option value="${u.username}">${u.name}</option>`).join('');
+      }
     }
   };
   
@@ -3158,7 +3196,11 @@ function loadUserTab(tab) {
     const renderIncList = () => {
       const query = document.getElementById("user-inc-search").value.toLowerCase().trim();
       const listEl = document.getElementById("user-inc-history-list");
-      const filtered = myIncidents.filter(i => 
+      
+      // Sort newest first
+      const sortedIncidents = myIncidents.slice().reverse();
+
+      const filtered = sortedIncidents.filter(i => 
         i.category.toLowerCase().includes(query) || 
         i.groupName.toLowerCase().includes(query) || 
         i.detail.toLowerCase().includes(query) || 
@@ -3166,32 +3208,39 @@ function loadUserTab(tab) {
       );
       
       if (filtered.length === 0) {
-        listEl.innerHTML = `<p style="text-align:center;color:var(--text-light);padding:14px;font-size:0.85rem;">Tidak ada laporan kejadian ditemukan.</p>`;
+        listEl.innerHTML = `<p style="text-align:center;color:var(--text-light);padding:14px;font-size:0.85rem;">Tidak ada riwayat laporan ditemukan.</p>`;
         return;
       }
       
       listEl.innerHTML = filtered.map(i => {
         const formattedDetail = i.detail.replace(/\n/g, '<br>');
+        const hasPhotos = Array.isArray(i.photos) && i.photos.length > 0;
+
         return `
-          <div class="activity-item" style="border-bottom:var(--border-light); padding:10px 0;">
+          <div class="activity-item" style="border:1px solid #e2e8f0; background:#ffffff; border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
             <div class="activity-body">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.85rem;">${i.category}</strong>
-                <span class="badge badge-gold">${i.status}</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <strong style="font-size:0.9rem; color:#0f172a;">${i.category}</strong>
+                <span class="badge badge-gold" style="font-size:0.72rem; padding:2px 8px;">${i.status}</span>
               </div>
-              <div style="font-size:0.8rem; margin:6px 0; line-height:1.4;">
-                Grup: <strong>${i.groupName}</strong><br>
-                ${formattedDetail}
+              <div style="font-size:0.82rem; color:#334155; margin-bottom:10px; line-height:1.5;">
+                Grup: <strong style="color:var(--primary-gold);">${i.groupName}</strong><br>
+                <div style="margin-top:6px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #f1f5f9; font-family:monospace; font-size:0.8rem; white-space:pre-wrap;">${formattedDetail}</div>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-light);">
-                <span>${i.date}</span>
-                <div style="display:flex; gap:8px;">
-                  <button class="btn btn-secondary copy-inc-text-btn" data-text="*LAPORAN OPERASIONAL TIM KHIDMAT*\nGrup: ${i.groupName}\nKategori: ${i.category}\nDetail: ${i.detail}\n---------------------------------\njejak imani - Saudi Handling" style="width:auto; padding:4px 8px; display:inline-flex; align-items:center; justify-content:center;" title="Salin Teks WA">
-                    <i data-lucide="copy" style="width:14px; height:14px;"></i>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:#64748b;">
+                <span>📅 ${i.date}</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  ${hasPhotos ? `
+                    <button class="btn btn-secondary preview-inc-photos-btn" data-id="${i.id}" style="width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid #cbd5e1; background:#f1f5f9; color:#0f172a;" title="Preview Foto Dokumentasi">
+                      <i data-lucide="image" style="width:16px; height:16px;"></i>
+                    </button>
+                  ` : ''}
+                  <button class="btn btn-gold share-inc-wa-btn" data-id="${i.id}" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:4px; border-radius:8px;" title="Share WhatsApp">
+                    <i data-lucide="share-2" style="width:14px; height:14px;"></i> Share WhatsApp
                   </button>
                   ${i.status !== 'Request Hapus' ? `
-                    <button class="btn btn-danger request-delete-inc-btn" data-id="${i.id}" style="width:auto; padding:4px 8px; display:inline-flex; align-items:center; justify-content:center;" title="Request Hapus">
-                      <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+                    <button class="btn btn-danger request-delete-inc-btn" data-id="${i.id}" style="width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:#ef4444; color:#fff;" title="Request Hapus">
+                      <i data-lucide="trash-2" style="width:16px; height:16px;"></i>
                     </button>
                   ` : ''}
                 </div>
@@ -3200,6 +3249,61 @@ function loadUserTab(tab) {
           </div>
         `;
       }).join('');
+
+      lucide.createIcons();
+
+      // Bind Preview Photos
+      listEl.querySelectorAll(".preview-inc-photos-btn").forEach(btn => {
+        btn.onclick = () => {
+          const incId = btn.getAttribute("data-id");
+          const inc = myIncidents.find(x => x.id === incId);
+          if (!inc || !inc.photos) return;
+
+          const photosHtml = `
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; max-height:400px; overflow-y:auto; padding:4px;">
+              ${inc.photos.map(p => `<img src="${p}" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; border:1px solid #cbd5e1;">`).join('')}
+            </div>
+            <div style="text-align:center; margin-top:14px;">
+              <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
+            </div>
+          `;
+          openModal("Preview Foto Dokumentasi", photosHtml);
+        };
+      });
+
+      // Bind Share WhatsApp button
+      listEl.querySelectorAll(".share-inc-wa-btn").forEach(btn => {
+        btn.onclick = () => {
+          const incId = btn.getAttribute("data-id");
+          const inc = myIncidents.find(x => x.id === incId);
+          if (!inc) return;
+
+          const textToShare = inc.detail;
+
+          if (navigator.share && Array.isArray(inc.photos) && inc.photos.length > 0) {
+            Promise.all(inc.photos.map((dataUrl, idx) => {
+              return fetch(dataUrl)
+                .then(res => res.blob())
+                .then(blob => new File([blob], `Foto_${idx+1}.jpg`, { type: 'image/jpeg' }));
+            })).then(files => {
+              navigator.share({
+                title: inc.category,
+                text: textToShare,
+                files: files.slice(0, 4)
+              }).catch(() => {
+                const waUrl = `https://wa.me/?text=${encodeURIComponent(textToShare)}`;
+                window.open(waUrl, '_blank');
+              });
+            }).catch(() => {
+              const waUrl = `https://wa.me/?text=${encodeURIComponent(textToShare)}`;
+              window.open(waUrl, '_blank');
+            });
+          } else {
+            const waUrl = `https://wa.me/?text=${encodeURIComponent(textToShare)}`;
+            window.open(waUrl, '_blank');
+          }
+        };
+      });
       
       listEl.querySelectorAll(".copy-inc-text-btn").forEach(btn => {
         btn.onclick = () => {
@@ -11403,7 +11507,7 @@ function renderUserApplyTugas() {
           <div style="display:flex; flex-direction:column; gap:3px; font-size:0.8rem; color:#475569;">
             ${hideGroupName ? '' : `<div><strong style="color:var(--text-main); font-size:0.85rem;">${t.groupName}</strong></div>`}
             ${hotelDisplayHtml}
-            <div><strong>${dayNameFormatted} | ${t.time} Saudi</strong> ${regionFormatted}</div>
+            <div><strong>${dayNameFormatted} | ${t.time}</strong> ${regionFormatted}</div>
           </div>
         </div>
       `;
@@ -12690,11 +12794,11 @@ function renderUserScanQr() {
         
         <div style="display:flex; justify-content:center; align-items:center; gap:8px; color:#b89230; font-weight:800; font-size:0.85rem; text-transform:uppercase; margin-bottom:12px;">
           <i data-lucide="qr-code" style="width:20px; height:20px; color:#b89230;"></i>
-          <span>PEMINDAI QR CODE KARTU JAMAAH / TUGAS</span>
+          <span></span>
         </div>
 
         <p style="font-size:0.78rem; color:#64748b; margin-top:0; margin-bottom:16px; line-height:1.5;">
-          Arahkan kamera HP Anda ke Kode QR pada Badge Jamaah atau Dokumen Penugasan untuk melihat data lengkap.
+          Arahkan kamera ke QR code pada luggage tag jamaah.
         </p>
 
         <!-- Camera Scanner Reader Container -->
@@ -13067,15 +13171,32 @@ function openTimerReportPopup() {
     const gName = document.getElementById("timer-group-input").value.trim();
     const cat = categorySelect.value;
     const isKedatangan = cat.toLowerCase().includes('kedatangan');
+    const catTitle = cat.toUpperCase();
 
-    const detailText = `${isKedatangan ? 'Landing' : 'Check Point'}: ${t1Val} | ${isKedatangan ? 'Keluar Imigrasi' : 'Bus Naik'}: ${t2Val} | ${isKedatangan ? 'Bus Berangkat' : 'Masuk Imigrasi'}: ${t3Val}\nDurasi: ${durationMinutes} Menit`;
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    const durationFormatted = `${hours} Jam ${mins} Menit`;
+
+    let waText = `*${catTitle}*\n`;
+    if (isKedatangan) {
+      waText += `Landing : ${t1Val || '12.00'}\n`;
+      waText += `Keluar Imigrasi : ${t2Val || '13.00'}\n`;
+      waText += `Bus Berangkat : ${t3Val || '14.00'}\n\n`;
+    } else {
+      waText += `Check Point Bus : ${t1Val || '12.00'}\n`;
+      waText += `Bus Naik : ${t2Val || '13.00'}\n`;
+      waText += `Masuk Imigrasi : ${t3Val || '14.00'}\n\n`;
+    }
+    waText += `Total Waktu : *${durationFormatted}*\n\n`;
+    waText += `Barokallahu fiikum\n`;
+    waText += `_*Pesan dikirim melalui sistem '''jejak imani'''*_`;
 
     const newInc = {
       id: `inc-${Date.now()}`,
       username,
       groupName: gName,
       category: `Timer: ${cat}`,
-      detail: detailText,
+      detail: waText,
       date: getSaudiDateTime().gregorianStr,
       status: "Diproses"
     };
@@ -13084,6 +13205,10 @@ function openTimerReportPopup() {
     saveState();
     closeModal();
     showToast("Laporan Timer Operasional disubmit!");
+    
+    // Push notification to device
+    const uName = state.currentUser ? state.currentUser.name : username;
+    sendPushNotification(`Timer ${cat}`, `${uName} berhasil kirim laporan ${cat} (${gName})\n${getSaudiDateTime().timeStr}`);
     loadUserTab("insiden");
   };
 }
@@ -13240,29 +13365,48 @@ function openChecklistFormPopup(groupName, category, targetNo, photos) {
 
   openModal(`Form Checklist ${category}`, popupHtml);
 
-  document.getElementById("grid-checklist-step2-form").onsubmit = (e) => {
-    e.preventDefault();
-    const username = state.currentUser ? state.currentUser.username : '';
-    const checked = Array.from(document.querySelectorAll(".chk-item:checked")).map(c => c.value);
-    const notes = document.getElementById("chk-notes-input").value.trim();
+  setTimeout(() => {
+    const formEl = document.getElementById("grid-checklist-step2-form");
+    if (formEl) {
+      formEl.onsubmit = (e) => {
+        e.preventDefault();
+        const username = state.currentUser ? state.currentUser.username : '';
+        const checkedItems = Array.from(document.querySelectorAll(".chk-item:checked")).map(c => c.value);
+        const notes = document.getElementById("chk-notes-input").value.trim();
 
-    const detailText = `${isBus ? 'No Bus' : 'No Kamar'}: ${targetNo || '-'}\nChecklist: ${checked.join(', ')}\n${isBus ? 'Catatan' : 'Keterangan'}: ${notes || '-'}`;
+        const allItems = isBus 
+          ? ["Bersih", "Wangi", "AC", "WC", "Mic"]
+          : ["Bersih", "Wangi", "AC", "WC", "TV", "Handuk", "Amenities"];
 
-    const newInc = {
-      id: `inc-${Date.now()}`,
-      username,
-      groupName,
-      category: `Grid Foto: ${category}`,
-      detail: detailText,
-      photos,
-      date: getSaudiDateTime().gregorianStr,
-      status: "Diproses"
-    };
+        let waText = `*${category.toUpperCase()}* (Nomor : ${targetNo || '-'})\n\n`;
+        allItems.forEach(item => {
+          const isChecked = checkedItems.includes(item);
+          waText += `${item} ${isChecked ? '✅' : '❌'}\n`;
+        });
+        waText += `Catatan : ${notes || '-'}\n\n`;
+        waText += `Barokallahu fiikum\n`;
+        waText += `_*Pesan dikirim melalui sistem '''jejak imani'''*_`;
 
-    state.reports.incidents.push(newInc);
-    saveState();
-    closeModal();
-    showToast("Laporan Grid Foto & Checklist disubmit!");
-    loadUserTab("insiden");
-  };
+        const newInc = {
+          id: `inc-${Date.now()}`,
+          username,
+          groupName,
+          category: `Grid Foto: ${category}`,
+          detail: waText,
+          photos,
+          date: getSaudiDateTime().gregorianStr,
+          status: "Diproses"
+        };
+
+        state.reports.incidents.push(newInc);
+        saveState();
+        closeModal();
+        showToast("Laporan Grid Foto & Checklist disubmit!");
+        
+        const uName = state.currentUser ? state.currentUser.name : username;
+        sendPushNotification(`Checklist ${category}`, `${uName} berhasil kirim laporan ${category} (${groupName})\n${getSaudiDateTime().timeStr}`);
+        loadUserTab("insiden");
+      };
+    }
+  }, 50);
 }
