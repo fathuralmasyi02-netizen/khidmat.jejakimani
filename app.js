@@ -1870,19 +1870,18 @@ function parseGroupFlightData(group, type = 'arrival') {
 
 
 function toggleUserFlightAccordion(taskId) {
-  const body = document.getElementById("user-flight-body-" + taskId);
-  const icon = document.getElementById("user-flight-icon-" + taskId);
+  const body = document.getElementById(`user-flight-body-${taskId}`);
+  const icon = document.getElementById(`user-flight-icon-${taskId}`);
   if (body && icon) {
-    if (body.style.display === "none") {
-      body.style.display = "block";
-      icon.style.transform = "rotate(0deg)";
+    if (body.style.display === 'none' || !body.style.display) {
+      body.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
     } else {
-      body.style.display = "none";
-      icon.style.transform = "rotate(180deg)";
+      body.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
     }
   }
 }
-
 
 function renderUserDashboard() {
   const container = document.getElementById("user-subview-content");
@@ -1901,7 +1900,7 @@ function renderUserDashboard() {
       <div style="font-family:'Mulish', sans-serif; padding-top:4px; padding-bottom:30px; max-width:600px; margin:0 auto;">
         
         <!-- Greeting Header -->
-        <h2 style="font-size:1.15rem; font-weight:800; color:#1e293b; margin-top:2px; margin-bottom:14px;">
+        <h2 style="font-size:1.05rem; font-weight:800; color:#1e293b; margin-top:2px; margin-bottom:12px;">
           Halo, ${nameStr}
         </h2>
 
@@ -2112,11 +2111,11 @@ function renderUserDashboard() {
                         ${routeSummaryStr}
                       </div>
                     </div>
-                    <i data-lucide="chevron-up" id="user-flight-icon-${task.id}" style="width:20px; height:20px; color:#b89230; transition:transform 0.25s ease;"></i>
+                    <i data-lucide="chevron-up" id="user-flight-icon-${task.id}" style="width:20px; height:20px; color:#b89230; transform:rotate(-90deg); transition:transform 0.25s ease;"></i>
                   </div>
 
                   <!-- Accordion Body (Expanded Detailed Flight Schedule from Manifest) -->
-                  <div id="user-flight-body-${task.id}" style="margin-top:14px; border-top:1px solid #fef08a; padding-top:14px;">
+                  <div id="user-flight-body-${task.id}" style="display:none; margin-top:14px; border-top:1px solid #fef08a; padding-top:14px;">
                     
                     <!-- FLIGHT BERANGKAT -->
                     <div style="margin-bottom:14px;">
@@ -12432,4 +12431,195 @@ function deleteGroupCascade(groupName) {
   
   // Save updated clean state to LocalStorage & Firebase Realtime DB
   saveState();
+}
+
+
+function renderUserScanQr() {
+  const container = document.getElementById("user-subview-content");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="font-family:'Mulish', sans-serif; padding:10px 4px 40px 4px; max-width:600px; margin:0 auto;">
+      
+      <!-- Top Scanner Card -->
+      <div style="background:#ffffff; border-radius:20px; border:1px solid #f1f5f9; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); margin-bottom:20px; text-align:center;">
+        
+        <div style="display:flex; justify-content:center; align-items:center; gap:8px; color:#b89230; font-weight:800; font-size:0.85rem; text-transform:uppercase; margin-bottom:12px;">
+          <i data-lucide="qr-code" style="width:20px; height:20px; color:#b89230;"></i>
+          <span>PEMINDAI QR CODE KARTU JAMAAH / TUGAS</span>
+        </div>
+
+        <p style="font-size:0.78rem; color:#64748b; margin-top:0; margin-bottom:16px; line-height:1.5;">
+          Arahkan kamera HP Anda ke Kode QR pada Badge Jamaah atau Dokumen Penugasan untuk melihat data lengkap.
+        </p>
+
+        <!-- Camera Scanner Reader Container -->
+        <div id="qr-reader" style="width:100%; max-width:340px; margin:0 auto 16px auto; border-radius:16px; overflow:hidden; border:2px dashed #c5a850; background:#f8fafc; min-height:220px; display:flex; flex-direction:column; justify-content:center; align-items:center;"></div>
+
+        <!-- Camera Toggle Controls -->
+        <div style="display:flex; gap:10px; justify-content:center; margin-bottom:12px;">
+          <button id="start-qr-btn" class="btn btn-gold" style="width:auto; padding:8px 18px; font-size:0.8rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px;">
+            <i data-lucide="camera" style="width:16px; height:16px;"></i> Buka Kamera
+          </button>
+          <button id="stop-qr-btn" class="btn btn-secondary" style="width:auto; padding:8px 16px; font-size:0.8rem; border-radius:10px; display:none;">
+            Tutup Kamera
+          </button>
+        </div>
+      </div>
+
+      <!-- Manual Input Code Alternative Card -->
+      <div style="background:#ffffff; border-radius:20px; border:1px solid #f1f5f9; padding:18px 20px; box-shadow:0 4px 16px rgba(0,0,0,0.03);">
+        <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:8px; text-transform:uppercase;">
+          Cari atau Input Kode Unik Manual
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="manual-qr-input" class="form-input" placeholder="Contoh: JIBB-0001 atau Kode Tugas" style="flex:1; padding:8px 12px; font-size:0.82rem; height:auto; margin:0;">
+          <button id="manual-qr-search-btn" class="btn btn-gold" style="width:auto; padding:8px 16px; font-size:0.8rem; font-weight:800; border-radius:8px;">
+            Cari Data
+          </button>
+        </div>
+      </div>
+
+      <!-- Result Container -->
+      <div id="qr-scan-result-container" style="margin-top:20px;"></div>
+
+    </div>
+  `;
+
+  lucide.createIcons();
+
+  let html5QrCodeScanner = null;
+
+  const processQrCodeResult = (decodedText) => {
+    const code = (decodedText || '').trim();
+    if (!code) return;
+
+    const resultEl = document.getElementById("qr-scan-result-container");
+    if (!resultEl) return;
+
+    // Search Jamaah by unique code or guestNo
+    let foundGuest = null;
+    let foundRoom = null;
+    (state.rooms || []).forEach(room => {
+      (room.guests || []).forEach(g => {
+        if (g && (g.uniqueCode === code || String(g.guestNo) === code || (g.name || '').toLowerCase().includes(code.toLowerCase()))) {
+          foundGuest = g;
+          foundRoom = room;
+        }
+      });
+    });
+
+    if (foundGuest) {
+      resultEl.innerHTML = `
+        <div style="background:#ffffff; border-radius:20px; border:2px solid #10b981; padding:20px; box-shadow:0 4px 16px rgba(16,185,129,0.1);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #f1f5f9; padding-bottom:8px;">
+            <span class="badge badge-success" style="font-size:0.75rem;">DATA JAMAAH DITEMUKAN</span>
+            <span style="font-size:0.75rem; font-weight:800; color:#64748b;">${foundGuest.uniqueCode || code}</span>
+          </div>
+          
+          <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 10px 0;">${foundGuest.name}</h3>
+          
+          <table style="width:100%; border-collapse:collapse; font-size:0.8rem; line-height:1.6;">
+            <tr><td style="color:#64748b; font-weight:700; width:110px;">Paspor:</td><td style="font-weight:800; color:#0f172a;">${foundGuest.passport || '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">No. Kamar:</td><td style="font-weight:800; color:#0f172a;">Kamar ${foundRoom ? foundRoom.roomNo : '-'} (${foundRoom ? foundRoom.type : '-'})</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Hotel:</td><td style="font-weight:800; color:#0f172a;">${foundRoom ? foundRoom.hotelName : '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Gender / Usia:</td><td style="font-weight:800; color:#0f172a;">${foundGuest.gender || '-'} / ${foundGuest.age ? foundGuest.age + ' Thn' : '-'}</td></tr>
+            <tr><td style="color:#64748b; font-weight:700;">Catatan Medis:</td><td style="font-weight:800; color:#ef4444;">${foundGuest.medicalNotes || 'Tidak ada'}</td></tr>
+          </table>
+        </div>
+      `;
+      showToast("Data Jamaah berhasil ditemukan!");
+      return;
+    }
+
+    // Search Assignment Task by ID
+    const foundTask = (state.assignments || []).find(a => a && (a.id === code || a.type.toLowerCase().includes(code.toLowerCase())));
+    if (foundTask) {
+      resultEl.innerHTML = `
+        <div style="background:#ffffff; border-radius:20px; border:2px solid #c5a850; padding:20px; box-shadow:0 4px 16px rgba(197,168,80,0.15);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #f1f5f9; padding-bottom:8px;">
+            <span class="badge badge-gold" style="font-size:0.75rem;">${foundTask.type}</span>
+            <span style="font-size:0.75rem; font-weight:800; color:#64748b;">${foundTask.groupName}</span>
+          </div>
+          
+          <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 10px 0;">${foundTask.groupName}</h3>
+          
+          <div style="font-size:0.8rem; color:#475569; margin-bottom:14px;">
+            <div>Waktu: <strong>${formatDateDisplay(foundTask.date)} | ${foundTask.time} Saudi</strong></div>
+            <div>Wilayah: <strong>${foundTask.region}</strong></div>
+          </div>
+
+          <button onclick="openUserTaskDetailPopup('${foundTask.id}')" class="btn btn-gold" style="width:100%; padding:10px; font-size:0.82rem; font-weight:800; border-radius:10px;">
+            Buka Detail Penugasan
+          </button>
+        </div>
+      `;
+      showToast("Data Penugasan ditemukan!");
+      return;
+    }
+
+    // Not found fallback
+    resultEl.innerHTML = `
+      <div style="background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; text-align:center; color:#64748b; font-size:0.82rem;">
+        Tidak ada data Jamaah atau Penugasan yang cocok dengan kode: <strong>"${code}"</strong>.
+      </div>
+    `;
+  };
+
+  const startCamera = () => {
+    const readerDiv = document.getElementById("qr-reader");
+    if (!readerDiv) return;
+
+    if (typeof Html5Qrcode !== 'undefined') {
+      try {
+        if (!html5QrCodeScanner) {
+          html5QrCodeScanner = new Html5Qrcode("qr-reader");
+        }
+        html5QrCodeScanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 200, height: 200 } },
+          (decodedText) => {
+            processQrCodeResult(decodedText);
+            stopCamera();
+          },
+          (errorMessage) => {}
+        ).then(() => {
+          document.getElementById("start-qr-btn").style.display = "none";
+          document.getElementById("stop-qr-btn").style.display = "inline-flex";
+        }).catch(err => {
+          console.warn("Camera access failed:", err);
+          readerDiv.innerHTML = `<p style="padding:20px; color:#ef4444; font-size:0.78rem; text-align:center;">Gagal mengaktifkan kamera HP. Gunakan pencarian manual di bawah.</p>`;
+        });
+      } catch(e) {
+        console.warn("QR Scanner error:", e);
+      }
+    } else {
+      readerDiv.innerHTML = `<p style="padding:20px; color:#64748b; font-size:0.78rem; text-align:center;">Komponen Kamera Scanner belum siap. Gunakan input manual di bawah.</p>`;
+    }
+  };
+
+  const stopCamera = () => {
+    if (html5QrCodeScanner) {
+      try {
+        html5QrCodeScanner.stop().then(() => {
+          document.getElementById("start-qr-btn").style.display = "inline-flex";
+          document.getElementById("stop-qr-btn").style.display = "none";
+        }).catch(err => console.warn(err));
+      } catch(e) {}
+    }
+  };
+
+  const startBtn = document.getElementById("start-qr-btn");
+  if (startBtn) startBtn.onclick = startCamera;
+
+  const stopBtn = document.getElementById("stop-qr-btn");
+  if (stopBtn) stopBtn.onclick = stopCamera;
+
+  const manualBtn = document.getElementById("manual-qr-search-btn");
+  if (manualBtn) {
+    manualBtn.onclick = () => {
+      const val = document.getElementById("manual-qr-input").value;
+      processQrCodeResult(val);
+    };
+  }
 }
