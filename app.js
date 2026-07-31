@@ -175,6 +175,26 @@ function sendPushNotification(title, bodyText) {
   }
 }
 
+
+function formatReportDateAbbrev(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const monthIdx = parseInt(parts[1]) - 1;
+      const day = parts[2].padStart(2, '0');
+      const monthsAbbrev = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agust", "Sep", "Okt", "Nov", "Des"];
+      if (monthsAbbrev[monthIdx]) {
+        return `${day} ${monthsAbbrev[monthIdx]} ${year}`;
+      }
+    }
+    return dateStr;
+  } catch(e) {
+    return dateStr;
+  }
+}
+
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
     return Array.isArray(val) ? val.filter(x => x !== null && x !== undefined) : defaultVal;
@@ -2061,7 +2081,7 @@ function renderUserDashboard() {
           
           <div onclick="window.location.hash='#user/laporan?tab=insiden'" class="glass-card" style="padding:16px 8px; text-align:center; cursor:pointer; border-radius:16px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 2px 6px rgba(0,0,0,0.02); transition:transform 0.15s ease;">
             <i data-lucide="alert-triangle" style="width:26px; height:26px; color:#c5a850; stroke-width:2; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;"></i>
-            <div style="font-size:0.82rem; font-weight:800; color:#1e293b;">Kejadian</div>
+            <div style="font-size:0.82rem; font-weight:800; color:#1e293b;">Laporan</div>
           </div>
         </div>
 
@@ -3215,6 +3235,7 @@ function loadUserTab(tab) {
       listEl.innerHTML = filtered.map(i => {
         const formattedDetail = i.detail.replace(/\n/g, '<br>');
         const hasPhotos = Array.isArray(i.photos) && i.photos.length > 0;
+        const abbrevDate = formatReportDateAbbrev(i.date);
 
         return `
           <div class="activity-item" style="border:1px solid #e2e8f0; background:#ffffff; border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
@@ -3228,15 +3249,15 @@ function loadUserTab(tab) {
                 <div style="margin-top:6px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #f1f5f9; font-family:monospace; font-size:0.8rem; white-space:pre-wrap;">${formattedDetail}</div>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:#64748b;">
-                <span>📅 ${i.date}</span>
+                <span style="font-weight:700; color:#475569;">${abbrevDate}</span>
                 <div style="display:flex; gap:8px; align-items:center;">
                   ${hasPhotos ? `
                     <button class="btn btn-secondary preview-inc-photos-btn" data-id="${i.id}" style="width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid #cbd5e1; background:#f1f5f9; color:#0f172a;" title="Preview Foto Dokumentasi">
                       <i data-lucide="image" style="width:16px; height:16px;"></i>
                     </button>
                   ` : ''}
-                  <button class="btn btn-gold share-inc-wa-btn" data-id="${i.id}" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:4px; border-radius:8px;" title="Share WhatsApp">
-                    <i data-lucide="share-2" style="width:14px; height:14px;"></i> Share WhatsApp
+                  <button class="btn btn-gold share-inc-wa-btn" data-id="${i.id}" style="width:34px; height:34px; padding:0; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; justify-content:center; border-radius:8px;" title="Share WhatsApp">
+                    <i data-lucide="share-2" style="width:16px; height:16px;"></i>
                   </button>
                   ${i.status !== 'Request Hapus' ? `
                     <button class="btn btn-danger request-delete-inc-btn" data-id="${i.id}" style="width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:#ef4444; color:#fff;" title="Request Hapus">
@@ -11699,10 +11720,17 @@ function renderUserTaskDetailFull() {
             <table style="width:100%; border-collapse:collapse;">
               <tr><td style="color:#64748b; font-weight:700; width:130px;">Jenis Kegiatan:</td><td style="font-weight:800; color:#0f172a;">${task.type || 'Handling Lapangan'}</td></tr>
               <tr><td style="color:#64748b; font-weight:700;">Status Task:</td><td><span class="badge badge-gold" style="font-size:0.7rem;">${task.status || 'Aktif'}</span></td></tr>
-              <tr><td style="color:#64748b; font-weight:700;">Waktu Saudi:</td><td style="font-weight:700;">${formatDateDisplay(task.date)} | Pukul ${task.time || '-'}</td></tr>
-              <tr><td style="color:#64748b; font-weight:700;">Wilayah Operasional:</td><td>${task.region || '-'}</td></tr>
-              ${details.hotelName ? `<tr><td style="color:#64748b; font-weight:700;">Nama Hotel:</td><td style="font-weight:800;">${details.hotelName}</td></tr>` : ''}
-              ${details.eta ? `<tr><td style="color:#64748b; font-weight:700;">Flight / ETA:</td><td>${details.eta}</td></tr>` : ''}
+              <tr><td style="color:#64748b; font-weight:700;">Waktu & Tanggal:</td><td style="font-weight:700;">${formatDateDisplay(task.date)} | Pukul ${task.time || '-'}</td></tr>
+              <tr><td style="color:#64748b; font-weight:700;">Wilayah:</td><td>${task.region || '-'}</td></tr>
+              ${details.origin || details.asal ? `<tr><td style="color:#64748b; font-weight:700;">Asal / Dari:</td><td>${details.origin || details.asal}</td></tr>` : ''}
+              ${details.destination || details.tujuan ? `<tr><td style="color:#64748b; font-weight:700;">Tujuan:</td><td>${details.destination || details.tujuan}</td></tr>` : ''}
+              ${details.hotelName || details.hotel ? `<tr><td style="color:#64748b; font-weight:700;">Nama Hotel:</td><td style="font-weight:800;">${details.hotelName || details.hotel}</td></tr>` : ''}
+              ${details.roomComposition || details.komposisiKamar || details.rooms ? `<tr><td style="color:#64748b; font-weight:700;">Komposisi Kamar:</td><td>${details.roomComposition || details.komposisiKamar || details.rooms}</td></tr>` : ''}
+              ${details.complimentary || details.comp ? `<tr><td style="color:#64748b; font-weight:700;">Complimentary:</td><td>${details.complimentary || details.comp}</td></tr>` : ''}
+              ${details.pickupRoute || details.rute ? `<tr><td style="color:#64748b; font-weight:700;">Rute Penjemputan:</td><td>${details.pickupRoute || details.rute}</td></tr>` : ''}
+              ${details.flight || details.eta ? `<tr><td style="color:#64748b; font-weight:700;">Flight & ETA:</td><td>${details.flight || details.eta}</td></tr>` : ''}
+              ${details.mealplan || details.meal ? `<tr><td style="color:#64748b; font-weight:700;">Mealplan:</td><td>${details.mealplan || details.meal}</td></tr>` : ''}
+              ${details.remarks || details.notes ? `<tr><td style="color:#64748b; font-weight:700;">Catatan Tambahan:</td><td>${details.remarks || details.notes}</td></tr>` : ''}
               ${group && group.leaders ? `<tr><td style="color:#64748b; font-weight:700;">Tour Leader:</td><td style="font-weight:800;">${group.leaders.join(', ')}</td></tr>` : ''}
               ${group && group.mutawwif ? `<tr><td style="color:#64748b; font-weight:700;">Muthowwif:</td><td>${group.mutawwif}</td></tr>` : ''}
               <tr><td style="color:#64748b; font-weight:700;">Tim Petugas:</td><td><strong style="color:#047857;">${staffNames || 'Tim Handling Lapangan'}</strong></td></tr>
