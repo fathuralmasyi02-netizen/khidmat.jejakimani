@@ -303,6 +303,20 @@ function mergeStates(remote, local) {
   return merged;
 }
 
+function saveStateNode(nodeKey) {
+  if (!nodeKey || nodeKey === 'currentUser') return;
+  localStorage.setItem("jejak_imani_v2_db", JSON.stringify(state));
+  
+  if (firebaseDb && isFirebaseRemoteLoaded && state[nodeKey] !== undefined) {
+    try {
+      firebaseDb.ref('jejak_imani_v2_db/' + nodeKey).set(state[nodeKey]);
+      console.log(`[Firebase Granular Sync] Successfully pushed node '${nodeKey}' to cloud.`);
+    } catch(e) {
+      console.warn(`[Firebase Granular Sync Error] Failed pushing '${nodeKey}':`, e);
+    }
+  }
+}
+
 function loadState() {
   const local = localStorage.getItem("jejak_imani_v2_db");
   if (local) {
@@ -336,10 +350,10 @@ function loadState() {
     state.currentUser = null;
   }
 
-  // Register real-time sync with Firebase
+  // Register real-time sync with Firebase (Granular & Smart Merge)
   if (firebaseDb && !isFirebaseListenerRegistered) {
     isFirebaseListenerRegistered = true;
-    console.log("Registering Firebase Realtime Database value listener...");
+    console.log("Registering Firebase Realtime Database granular value listener...");
     
     try {
       firebaseDb.ref('.info/connected').on('value', (snap) => {
@@ -354,10 +368,13 @@ function loadState() {
     firebaseDb.ref('jejak_imani_v2_db').on('value', (snapshot) => {
       const data = snapshot.val();
       isFirebaseRemoteLoaded = true;
-      console.log("Firebase database on('value') listener triggered. Data received:", data);
+      console.log("Firebase database on('value') listener triggered. Remote data received.");
       
       if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-        // Shallow clone local state (excluding currentUser) for comparison
+        // Smart Merge cloud state with local state to prevent overwrite conflicts
+        const mergedState = mergeStates(data, state);
+        
+        // Compare serialization to prevent unnecessary re-renders
         const localToCompare = {};
         for (let k in state) {
           if (k !== 'currentUser') {
@@ -366,31 +383,31 @@ function loadState() {
         }
         
         const serializedLocal = JSON.stringify(localToCompare);
-        const serializedRemote = JSON.stringify(data);
+        const serializedMerged = JSON.stringify(mergedState);
         
-        if (serializedLocal === serializedRemote) {
-          console.log("Received data is identical to local state. Skipping re-render.");
+        if (serializedLocal === serializedMerged) {
+          console.log("[Firebase Granular Sync] Remote & merged state identical to local. Skipping re-render.");
           return;
         }
         
-        // Prevent re-rendering / losing focus if the user is actively typing in a form field
+        // Prevent re-rendering / losing focus if user is actively typing in a form field
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
         const isEditing = activeTag === "input" || activeTag === "textarea" || activeTag === "select" || (document.activeElement && document.activeElement.isContentEditable);
-        if (isEditing) {
-          console.log("User is currently typing/editing in a form field. Skipping router() call to preserve focus.");
-          return;
-        }
         
-        console.log("Received data is different. Updating state from cloud.");
         const localCurrentUser = state.currentUser;
-        state = data;
+        state = mergedState;
         state.currentUser = localCurrentUser;
         ensureStateCompat();
         
-        // Immediately persist updated remote state to localStorage
+        // Persist merged state to localStorage
         localStorage.setItem("jejak_imani_v2_db", JSON.stringify(state));
         
-        // Preserve active modal if open
+        if (isEditing) {
+          console.log("[Firebase Granular Sync] User is typing in a form field. Updated state in memory, skipping router() call.");
+          return;
+        }
+        
+        console.log("[Firebase Granular Sync] Updated state from cloud via smart merge.");
         const modalContainer = document.getElementById("modal-container");
         const isModalOpen = modalContainer && !modalContainer.classList.contains("hidden");
         
@@ -401,7 +418,7 @@ function loadState() {
           modalContainer.classList.remove("hidden");
         }
       } else {
-        console.log("Firebase database node 'jejak_imani_v2_db' is empty on cloud. Checking local state before initializing...");
+        console.log("Firebase database node 'jejak_imani_v2_db' is empty on cloud. Pushing initial state...");
         const localData = localStorage.getItem("jejak_imani_v2_db");
         if (!localData) {
           const stateToSave = {};
@@ -427,8 +444,7 @@ function saveState() {
     localStorage.removeItem("jejak_imani_session");
   }
   
-  // CENTRALIZED FIREBASE RULE: Only push local state to Cloud Firebase if Firebase has already loaded its cloud state
-  // This prevents stale localStorage on secondary devices from overwriting clean Firebase cloud data upon login/load.
+  // GRANULAR FIREBASE SYNC: Pushes state nodes to Firebase Realtime Database
   if (firebaseDb && isFirebaseRemoteLoaded) {
     const stateToSave = {};
     for (let k in state) {
@@ -437,9 +453,9 @@ function saveState() {
       }
     }
     try {
-      firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
+      firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
     } catch(e) {
-      console.warn("Firebase save error:", e);
+      console.warn("Firebase saveState error:", e);
     }
   }
 }
@@ -470,6 +486,10 @@ function downloadDatabaseBackup() {
 }
 
 function restoreDatabaseBackup() {
+  if (!confirm("PERINGATAN PEMULIHAN DATA:\n\nApakah Anda yakin ingin memulihkan database dari file backup?\nProses ini akan menimpa seluruh data sistem saat ini dengan data dari file backup yang diunggah.")) {
+    return;
+  }
+
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.json';
@@ -480,7 +500,14 @@ function restoreDatabaseBackup() {
     reader.onload = (evt) => {
       try {
         const importedState = JSON.parse(evt.target.result);
-        if (importedState && typeof importedState === 'object') {
+        if (importedState && typeof importedState === 'object' && !Array.isArray(importedState)) {
+          // Verify presence of at least basic schema components
+          const hasKnownKey = importedState.users || importedState.groups || importedState.assignments || importedState.financial || importedState.vendors;
+          if (!hasKnownKey) {
+            showToast("File JSON bukan file backup valid Khidmat Jejak Imani!", "error");
+            return;
+          }
+
           const localUser = state.currentUser;
           state = importedState;
           state.currentUser = localUser;
