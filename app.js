@@ -392,50 +392,46 @@ function ensureStateCompat() {
 let isFirebaseRemoteLoaded = false;
 
 function mergeStates(remote, local) {
-  if (!remote || typeof remote !== 'object') return local || {};
-  if (!local || typeof local !== 'object') return remote || {};
+  if (!remote || typeof remote !== 'object') {
+    return {
+      currentUser: local ? local.currentUser : null,
+      users: (local && local.users) || [],
+      groups: [],
+      itineraries: [],
+      assignments: [],
+      assignmentOffers: [],
+      vendors: [],
+      bookings: [],
+      rooms: [],
+      documents: [],
+      financial: { mainBalance: 0, wallets: {}, expenses: [], deleteRequests: [], transactions: [] },
+      reports: { attendance: [], incidents: [] }
+    };
+  }
 
-  const merged = { ...remote };
-
-  const mergeArray = (remoteArr, localArr, keyFn) => {
-    // If remote array is explicitly provided from Firebase cloud, trust cloud state so deletions in Firebase Console are respected
-    if (Array.isArray(remoteArr)) {
-      return remoteArr.filter(item => item && typeof item === 'object');
+  return {
+    currentUser: local ? local.currentUser : null,
+    users: Array.isArray(remote.users) ? remote.users : ((local && local.users) || []),
+    groups: Array.isArray(remote.groups) ? remote.groups : [],
+    itineraries: Array.isArray(remote.itineraries) ? remote.itineraries : [],
+    assignments: Array.isArray(remote.assignments) ? remote.assignments : [],
+    assignmentOffers: Array.isArray(remote.assignmentOffers) ? remote.assignmentOffers : [],
+    vendors: Array.isArray(remote.vendors) ? remote.vendors : [],
+    bookings: Array.isArray(remote.bookings) ? remote.bookings : [],
+    rooms: Array.isArray(remote.rooms) ? remote.rooms : [],
+    documents: Array.isArray(remote.documents) ? remote.documents : [],
+    financial: {
+      mainBalance: (remote.financial && typeof remote.financial.mainBalance === 'number') ? remote.financial.mainBalance : 0,
+      wallets: (remote.financial && remote.financial.wallets) || {},
+      expenses: (remote.financial && Array.isArray(remote.financial.expenses)) ? remote.financial.expenses : [],
+      deleteRequests: (remote.financial && Array.isArray(remote.financial.deleteRequests)) ? remote.financial.deleteRequests : [],
+      transactions: (remote.financial && Array.isArray(remote.financial.transactions)) ? remote.financial.transactions : []
+    },
+    reports: {
+      attendance: (remote.reports && Array.isArray(remote.reports.attendance)) ? remote.reports.attendance : [],
+      incidents: (remote.reports && Array.isArray(remote.reports.incidents)) ? remote.reports.incidents : []
     }
-    return Array.isArray(localArr) ? localArr.filter(item => item && typeof item === 'object') : [];
   };
-
-  merged.users = mergeArray(remote.users, local.users, u => u.username || u.id);
-  merged.groups = mergeArray(remote.groups, local.groups, g => g.name);
-  merged.itineraries = mergeArray(remote.itineraries, local.itineraries, i => i.groupName);
-  merged.assignments = mergeArray(remote.assignments, local.assignments, a => a.id);
-  merged.assignmentOffers = mergeArray(remote.assignmentOffers, local.assignmentOffers, o => o.id);
-  merged.vendors = mergeArray(remote.vendors, local.vendors, v => v.id || v.name);
-  merged.bookings = mergeArray(remote.bookings, local.bookings, b => b.id);
-  merged.rooms = mergeArray(remote.rooms, local.rooms, r => r.id);
-
-  if (remote.financial || local.financial) {
-    const rf = remote.financial || {};
-    const lf = local.financial || {};
-    merged.financial = {
-      mainBalance: rf.mainBalance ?? lf.mainBalance ?? 0,
-      wallets: { ...(rf.wallets || {}), ...(lf.wallets || {}) },
-      expenses: mergeArray(rf.expenses, lf.expenses, e => e.id),
-      deleteRequests: mergeArray(rf.deleteRequests, lf.deleteRequests, d => d.id),
-      transactions: mergeArray(rf.transactions, lf.transactions, t => t.id)
-    };
-  }
-
-  if (remote.reports || local.reports) {
-    const rr = remote.reports || {};
-    const lr = local.reports || {};
-    merged.reports = {
-      attendance: mergeArray(rr.attendance, lr.attendance, a => a.id || JSON.stringify(a)),
-      incidents: mergeArray(rr.incidents, lr.incidents, i => i.id || JSON.stringify(i))
-    };
-  }
-
-  return merged;
 }
 
 function saveStateNode(nodeKey) {
@@ -506,73 +502,47 @@ function loadState() {
       isFirebaseRemoteLoaded = true;
       console.log("Firebase database on('value') listener triggered. Remote data received.");
       
-      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-        // Smart Merge cloud state with local state to prevent overwrite conflicts
-        const mergedState = mergeStates(data, state);
-        
-        // Compare serialization to prevent unnecessary re-renders
-        const localToCompare = {};
-        for (let k in state) {
-          if (k !== 'currentUser') {
-            localToCompare[k] = state[k];
-          }
+      const mergedState = mergeStates(data, state);
+      
+      const localToCompare = {};
+      for (let k in state) {
+        if (k !== 'currentUser') {
+          localToCompare[k] = state[k];
         }
-        
-        const serializedLocal = JSON.stringify(localToCompare);
-        const serializedMerged = JSON.stringify(mergedState);
-        
-        if (serializedLocal === serializedMerged) {
-          console.log("[Firebase Granular Sync] Remote & merged state identical to local. Skipping re-render.");
-          return;
-        }
-        
-        // Prevent re-rendering / losing focus if user is actively typing in a form field
-        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
-        const isEditing = activeTag === "input" || activeTag === "textarea" || activeTag === "select" || (document.activeElement && document.activeElement.isContentEditable);
-        
-        const localCurrentUser = state.currentUser;
-        state = mergedState;
-        state.currentUser = localCurrentUser;
-        ensureStateCompat();
-        
-        // Persist merged state to localStorage
-        localStorage.setItem("jejak_imani_v2_db", JSON.stringify(state));
-        
-        if (isEditing) {
-          console.log("[Firebase Granular Sync] User is typing in a form field. Updated state in memory, skipping router() call.");
-          return;
-        }
-        
-        console.log("[Firebase Granular Sync] Updated state from cloud via smart merge.");
-        const modalContainer = document.getElementById("modal-container");
-        const isModalOpen = modalContainer && !modalContainer.classList.contains("hidden");
-        
-        router();
-        updateDbStatusUI();
-        
-        if (isModalOpen && modalContainer) {
-          modalContainer.classList.remove("hidden");
-        }
-      } else {
-        console.log("Firebase database node 'jejak_imani_v2_db' is empty or reset on cloud.");
-        // If cloud node was completely wiped/reset in Firebase console, reset local state as well
-        if (isFirebaseRemoteLoaded) {
-          state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-          localStorage.removeItem("jejak_imani_v2_db");
-          router();
-          updateDbStatusUI();
-          return;
-        }
-        const localData = localStorage.getItem("jejak_imani_v2_db");
-        if (!localData) {
-          const stateToSave = {};
-          for (let k in DEFAULT_STATE) {
-            if (k !== 'currentUser') {
-              stateToSave[k] = DEFAULT_STATE[k];
-            }
-          }
-          firebaseDb.ref('jejak_imani_v2_db').set(stateToSave);
-        }
+      }
+      
+      const serializedLocal = JSON.stringify(localToCompare);
+      const serializedMerged = JSON.stringify(mergedState);
+      
+      if (serializedLocal === serializedMerged) {
+        console.log("[Firebase Sync] Remote & merged state identical to local. Skipping re-render.");
+        return;
+      }
+      
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      const isEditing = activeTag === "input" || activeTag === "textarea" || activeTag === "select" || (document.activeElement && document.activeElement.isContentEditable);
+      
+      const localCurrentUser = state.currentUser;
+      state = mergedState;
+      state.currentUser = localCurrentUser;
+      ensureStateCompat();
+      
+      localStorage.setItem("jejak_imani_v2_db", JSON.stringify(state));
+      
+      if (isEditing) {
+        console.log("[Firebase Sync] User is typing in a form field. Updated state in memory, skipping router() call.");
+        return;
+      }
+      
+      console.log("[Firebase Sync] Updated state strictly from cloud.");
+      const modalContainer = document.getElementById("modal-container");
+      const isModalOpen = modalContainer && !modalContainer.classList.contains("hidden");
+      
+      router();
+      updateDbStatusUI();
+      
+      if (isModalOpen && modalContainer) {
+        modalContainer.classList.remove("hidden");
       }
     }, (error) => {
       console.error("Firebase read/write database listener failed:", error);
