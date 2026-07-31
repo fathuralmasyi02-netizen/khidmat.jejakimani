@@ -1251,32 +1251,94 @@ function openUserTaskDetailPopup(taskId) {
     return;
   }
   
+  const username = state.currentUser ? state.currentUser.username : '';
   const details = task.details || {};
   const taskType = task.type || task.title || "Penugasan Lapangan";
   const taskRegion = task.region || "Saudi Arabia";
   
+  const reqStaff = task.requiredStaff || 1;
+  const currentStaffCount = task.staff ? task.staff.length : 0;
+  const isFulfilled = (currentStaffCount >= reqStaff);
+  const staffingStatusHtml = isFulfilled 
+    ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (${currentStaffCount}/${reqStaff})</span>` 
+    : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (${currentStaffCount}/${reqStaff})</span>`;
+
+  task.applicants = task.applicants || [];
+  const isPlotted = task.staff && task.staff.includes(username);
+  const hasApplied = task.applicants && task.applicants.includes(username);
+
+  let applyActionBtnHtml = "";
+  if (isPlotted) {
+    applyActionBtnHtml = `<button class="btn btn-secondary" disabled style="width:auto; padding:7px 14px; font-size:0.8rem; border-radius:8px; display:inline-flex; align-items:center; gap:6px;"><i data-lucide="check-circle" style="width:14px; height:14px;"></i> Anda Bertugas</button>`;
+  } else if (hasApplied) {
+    applyActionBtnHtml = `<button id="popup-cancel-apply-btn" class="btn" style="width:auto; padding:7px 14px; font-size:0.8rem; border-radius:8px; background:#64748b; color:#fff; border:none; font-weight:800; cursor:pointer;">Batal Apply Tugas</button>`;
+  } else if (isFulfilled) {
+    applyActionBtnHtml = `<button class="btn btn-secondary" disabled style="width:auto; padding:7px 14px; font-size:0.8rem; border-radius:8px;">Kuota Terpenuhi</button>`;
+  } else {
+    applyActionBtnHtml = `<button id="popup-apply-task-btn" class="btn btn-gold" style="width:auto; padding:7px 18px; font-size:0.8rem; font-weight:800; border-radius:8px; cursor:pointer;">Apply Tugas Sekarang</button>`;
+  }
+
   const detailHtml = `
     <div style="font-size:0.85rem; line-height:1.6; color:var(--text-main); padding: 4px 0;">
-      <div style="margin-bottom:14px; border-bottom:1px solid #f1f3f5; padding-bottom:8px;">
-        <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${taskType}</span>
-        <span class="badge badge-success">${task.status || 'Aktif'}</span>
+      <div style="margin-bottom:14px; border-bottom:1px solid #f1f3f5; padding-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+        <div>
+          <span class="badge badge-gold" style="font-size:0.85rem; margin-right:8px;">${taskType}</span>
+          <span class="badge badge-success">${task.status || 'Aktif'}</span>
+        </div>
+        ${staffingStatusHtml}
       </div>
-      <table class="detail-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Rombongan:</td><td style="font-weight:800;">${task.groupName || '-'}</td></tr>
+      <table class="detail-table" style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:16px;">
+        <tr><td style="padding:6px 0; font-weight:700; width:120px; color:var(--text-muted);">Rombongan:</td><td style="font-weight:800; color:#0f172a;">${task.groupName || '-'}</td></tr>
         <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Waktu Saudi:</td><td>${formatDateDisplay(task.date)} | ${task.time || '-'}</td></tr>
         <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Wilayah:</td><td>${taskRegion}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${details.eta || details.flightNo || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${details.totalPax || '-'} Pax</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${details.hotelName || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Layanan:</td><td>${details.service || '-'}</td></tr>
-        <tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan:</td><td>${details.remarks || task.notes || '-'}</td></tr>
+        ${details.meal ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Mealplan:</td><td>${details.meal}</td></tr>` : ''}
+        ${details.destinationTarget || details.destination ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Tujuan:</td><td>${details.destinationTarget || details.destination}</td></tr>` : ''}
+        ${details.originTarget || details.origin ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Asal:</td><td>${details.originTarget || details.origin}</td></tr>` : ''}
+        ${details.eta ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Flight / ETA:</td><td>${details.eta}</td></tr>` : ''}
+        ${details.totalPax ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Pax:</td><td>${details.totalPax} Pax</td></tr>` : ''}
+        ${details.hotelName ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Nama Hotel:</td><td>${details.hotelName}</td></tr>` : ''}
+        ${details.roomComposition ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Komposisi Kamar:</td><td>${details.roomComposition}</td></tr>` : ''}
+        ${details.complimentary ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Complimentary:</td><td>${details.complimentary}</td></tr>` : ''}
+        ${details.pickupRoute || details.hotelPickup ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Rute Penjemputan:</td><td>${details.pickupRoute || details.hotelPickup}</td></tr>` : ''}
+        ${details.nampanCount ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Jumlah Nampan:</td><td>${details.nampanCount} Nampan</td></tr>` : ''}
+        ${details.remarks || task.notes ? `<tr><td style="padding:6px 0; font-weight:700; color:var(--text-muted);">Catatan:</td><td>${details.remarks || task.notes}</td></tr>` : ''}
       </table>
-      <div style="margin-top:20px; display:flex; justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid #f1f3f5; display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 14px;">Tutup</button>
+        ${applyActionBtnHtml}
       </div>
     </div>
   `;
   openModal("Detail Penugasan", detailHtml);
+  lucide.createIcons();
+
+  const applyBtn = document.getElementById("popup-apply-task-btn");
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      task.applicants = task.applicants || [];
+      if (!task.applicants.includes(username)) {
+        task.applicants.push(username);
+        addNotification("penjadwalan", `Pengajuan Tugas: ${state.currentUser.name} melamar tugas ${task.type} grup ${task.groupName}`, { username, groupName: task.groupName });
+        saveState();
+        closeModal();
+        showToast("Lamaran tugas berhasil dikirim! Menunggu konfirmasi Admin.");
+        if (window.location.hash.includes("#user/apply-tugas")) renderUserApplyTugas();
+      }
+    };
+  }
+
+  const cancelBtn = document.getElementById("popup-cancel-apply-btn");
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      if (task.applicants) {
+        task.applicants = task.applicants.filter(u => u !== username);
+        saveState();
+        closeModal();
+        showToast("Lamaran tugas dibatalkan.");
+        if (window.location.hash.includes("#user/apply-tugas")) renderUserApplyTugas();
+      }
+    };
+  }
 }
 
 function renderUserJadwal() {
@@ -1374,97 +1436,111 @@ function stopActiveMediaStream() {
 
 function openAttendanceFormPopup(preselectedTaskId = "") {
   stopActiveMediaStream();
-  const username = state.currentUser.username;
+  const username = state.currentUser ? state.currentUser.username : '';
   const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
   const hasActiveTask = (myActiveTasks.length > 0);
   let capturedPhotoBase64 = null;
-  let currentGpsCoords = "Sedang mengambil posisi GPS...";
+  let currentGpsCoords = "21.5433, 39.1728";
   
   const formHtml = `
     <div class="admin-card" style="border:none; padding:0; font-family:'Mulish', sans-serif;">
       ${!hasActiveTask ? `
-        <div class="badge badge-warning" style="margin-bottom:16px; width:100%; display:block; text-align:center; padding:12px; background:#fef3c7; color:#92400e;">
+        <div class="badge badge-warning" style="margin-bottom:16px; width:100%; display:block; text-align:center; padding:12px; background:#fef3c7; color:#92400e; border-radius:10px;">
           ⚠️ Anda tidak memiliki tugas aktif untuk melakukan absensi.
         </div>
       ` : ''}
 
       <form id="user-attendance-form-popup">
-        <div class="form-group">
-          <label class="form-label">Pilih Penugasan Aktif Anda</label>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="form-label" style="font-weight:800; font-size:0.85rem; color:#1e293b;">Pilih Penugasan Aktif Anda</label>
           <select id="user-absen-task-select" class="form-select" required ${!hasActiveTask ? 'disabled' : ''}>
             <option value="">-- Pilih Penugasan --</option>
             ${myActiveTasks.map(t => `<option value="${t.id}" ${t.id === preselectedTaskId ? 'selected' : ''}>${t.type} (${(t.groupName || "").substring(0, 30)}...)</option>`).join('')}
           </select>
         </div>
         
-        <div class="form-group">
-          <label class="form-label">Kategori Absensi</label>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label class="form-label" style="font-weight:800; font-size:0.85rem; color:#1e293b;">Kategori Absensi</label>
           <select id="user-absen-type" class="form-select" required ${!hasActiveTask ? 'disabled' : ''}>
             <option value="Masuk">Absensi Masuk</option>
             <option value="Keluar">Absensi Keluar</option>
           </select>
         </div>
 
-        <div id="user-absen-gps-coords" style="font-size:0.8rem; color:#475569; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:14px;">
+        <div id="user-absen-gps-coords" style="font-size:0.8rem; color:#475569; background:#f8fafc; padding:10px 12px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:16px;">
           📍 Lokasi GPS: <em>Mencari posisi...</em>
         </div>
 
-        <!-- Live Camera Container (Strict 4:5 Portrait Aspect Ratio - Direct Live Camera Only) -->
-        <div id="absen-camera-container" class="hidden" style="margin-bottom:16px; position:relative; background:#000; border-radius:14px; overflow:hidden; border:2px solid #dfc06b; width:100%; max-width:320px; aspect-ratio:4/5; margin-left:auto; margin-right:auto;">
-          <video id="absen-camera-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover; display:block; aspect-ratio:4/5;"></video>
-          
-          <div style="position:absolute; top:10px; right:10px; z-index:10;">
-            <button type="button" id="absen-toggle-camera-btn" class="btn" style="background:rgba(15,23,42,0.75); color:#fff; border:1px solid rgba(255,255,255,0.4); padding:6px 12px; font-size:0.75rem; border-radius:20px; display:flex; align-items:center; gap:6px;">
-              🔄 Ganti Kamera (${currentFacingMode === 'user' ? 'Depan' : 'Belakang'})
-            </button>
-          </div>
-
-          <div style="position:absolute; bottom:12px; left:0; right:0; display:flex; justify-content:center; z-index:10;">
-            <button type="button" id="absen-shutter-btn" class="btn btn-gold" style="padding:8px 20px; font-weight:800; font-size:0.85rem; border-radius:25px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-              📷 AMBIL FOTO ABSENSI
-            </button>
-          </div>
-        </div>
-
-        <div id="absen-start-cam-btn-box" style="margin-bottom:14px;">
-          <button type="button" id="user-open-camera-btn" class="btn btn-gold" style="width:100%; font-weight:800;" ${!hasActiveTask ? 'disabled' : ''}>
-            📷 BUKA KAMERA LANGSUNG
+        <div id="absen-start-cam-btn-box" style="margin-bottom:16px;">
+          <button type="button" id="user-open-camera-btn" class="btn btn-gold" style="width:100%; font-weight:800; padding:12px; font-size:0.95rem; border-radius:12px;" ${!hasActiveTask ? 'disabled' : ''}>
+            Buka Kamera
           </button>
         </div>
 
-        <!-- Preview Container -->
+        <!-- Preview Container After Shot -->
         <div id="simulated-absen-photo-preview-popup" class="hidden" style="margin-bottom:16px;"></div>
-        
-        <button type="submit" class="btn btn-success" id="user-submit-absen-btn-popup" style="background:#10b981; color:#fff; font-weight:800; width:100%;" disabled>SUBMIT ABSENSI SEKARANG</button>
+
+        <!-- Action Submit Button -->
+        <div id="absen-submit-btn-box" class="hidden">
+          <button type="submit" class="btn btn-success" id="user-submit-absen-btn-popup" style="background:#10b981; color:#fff; font-weight:800; width:100%; padding:12px; font-size:0.95rem; border-radius:12px;">
+            Submit Absensi
+          </button>
+        </div>
       </form>
+    </div>
+
+    <!-- Fullscreen Camera Modal Overlay -->
+    <div id="absen-fullscreen-cam-overlay" class="hidden" style="position:fixed; inset:0; z-index:999999; background:#000; display:flex; flex-direction:column; justify-content:space-between; padding:16px;">
+      
+      <!-- Top Overlay Controls -->
+      <div style="display:flex; justify-content:space-between; align-items:center; z-index:10;">
+        <button type="button" id="absen-toggle-camera-btn" style="background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.4); padding:8px 16px; font-size:0.8rem; font-weight:700; border-radius:20px; cursor:pointer;">
+          🔄 Ganti Kamera
+        </button>
+        <button type="button" id="absen-close-cam-btn" style="background:rgba(255,255,255,0.2); color:#fff; border:none; width:36px; height:36px; border-radius:50%; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+          ✕
+        </button>
+      </div>
+
+      <!-- Center Video Viewport (4:5 Portrait Ratio) -->
+      <div style="width:100%; max-width:400px; aspect-ratio:4/5; margin:auto; overflow:hidden; border-radius:16px; border:2px solid #dfc06b; position:relative; background:#111;">
+        <video id="absen-camera-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+      </div>
+
+      <!-- Bottom Overlay Shutter Control -->
+      <div style="display:flex; justify-content:center; padding:16px 0; z-index:10;">
+        <button type="button" id="absen-shutter-btn" class="btn btn-gold" style="padding:14px 32px; font-weight:900; font-size:1rem; border-radius:30px; box-shadow:0 6px 20px rgba(0,0,0,0.5); cursor:pointer;">
+          📷 Ambil Foto
+        </button>
+      </div>
+
     </div>
   `;
 
   openModal("Absensi Petugas Khidmat", formHtml);
-  lucide.createIcons();
 
   const selectEl = document.getElementById("user-absen-task-select");
   const typeEl = document.getElementById("user-absen-type");
   const openCamBtn = document.getElementById("user-open-camera-btn");
-  const camContainer = document.getElementById("absen-camera-container");
+  const camOverlay = document.getElementById("absen-fullscreen-cam-overlay");
+  const closeCamBtn = document.getElementById("absen-close-cam-btn");
   const videoEl = document.getElementById("absen-camera-video");
   const toggleCamBtn = document.getElementById("absen-toggle-camera-btn");
   const shutterBtn = document.getElementById("absen-shutter-btn");
-  const fallbackInput = document.getElementById("user-absen-file-fallback");
   const previewEl = document.getElementById("simulated-absen-photo-preview-popup");
-  const submitBtn = document.getElementById("user-submit-absen-btn-popup");
+  const submitBox = document.getElementById("absen-submit-btn-box");
   const gpsEl = document.getElementById("user-absen-gps-coords");
 
   // Get real Geolocation GPS
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        currentGpsCoords = `${pos.coords.latitude.toFixed(5)}° N, ${pos.coords.longitude.toFixed(5)}° E`;
-        if (gpsEl) gpsEl.innerHTML = `📍 Koordinat GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
+        currentGpsCoords = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+        if (gpsEl) gpsEl.innerHTML = `📍 Lokasi GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
       },
       (err) => {
-        currentGpsCoords = "21.42250° N, 39.82620° E";
-        if (gpsEl) gpsEl.innerHTML = `📍 Koordinat GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
+        currentGpsCoords = "21.5433, 39.1728";
+        if (gpsEl) gpsEl.innerHTML = `📍 Lokasi GPS Terverifikasi: <strong>${currentGpsCoords}</strong>`;
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
@@ -1511,11 +1587,10 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       activeMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       videoEl.srcObject = activeMediaStream;
       await videoEl.play();
-      camContainer.classList.remove("hidden");
-      document.getElementById("absen-start-cam-btn-box").classList.add("hidden");
+      camOverlay.classList.remove("hidden");
     } catch (err) {
-      console.warn("Direct getUserMedia camera access not available, triggering native camera capture:", err);
-      fallbackInput.click();
+      console.error("Camera access error:", err);
+      showToast("Gagal mengakses kamera. Pastikan izin kamera aktif.", "error");
     }
   };
 
@@ -1526,17 +1601,22 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
         return;
       }
       previewEl.classList.add("hidden");
+      submitBox.classList.add("hidden");
       startLiveStream();
+    };
+
+    closeCamBtn.onclick = () => {
+      stopActiveMediaStream();
+      camOverlay.classList.add("hidden");
     };
 
     toggleCamBtn.onclick = () => {
       currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
-      toggleCamBtn.innerText = `🔄 Ganti Kamera (${currentFacingMode === 'user' ? 'Depan' : 'Belakang'})`;
       startLiveStream();
     };
 
-        const processAndWatermarkImage = (imgSource, isVideoFrame = false) => {
-      // 4:5 Portrait Aspect Ratio Canvas
+    const processAndWatermarkImage = (imgSource, isVideoFrame = false) => {
+      // 4:5 Portrait Aspect Ratio Canvas (640x800)
       const canvas = document.createElement("canvas");
       canvas.width = 640;
       canvas.height = 800;
@@ -1579,7 +1659,6 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       const locationName = details.hotelName || (group ? (group.hotelMakkah || group.hotelMadinah) : "") || (task ? task.region : "Saudi Arabia");
       const dateObj = getSaudiDateTime();
       
-      // Clean GPS string format matching user sample: GPS : 21.5433, 39.1728
       const cleanGps = (currentGpsCoords || "21.5433, 39.1728")
         .replace(/° N/g, '')
         .replace(/° E/g, '')
@@ -1594,13 +1673,10 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       ctx.fillRect(0, 640, 640, 160);
 
       // LEFT COLUMN: BRANDING
-      // Line 1: TIM KHIDMAT (Serif Style)
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 18px 'Martel', Georgia, serif";
-      ctx.letterSpacing = "1px";
       ctx.fillText("TIM KHIDMAT", 24, 700);
 
-      // Line 2: Saudi Arabia
       ctx.fillStyle = "#ffffff";
       ctx.font = "900 18px 'Mulish', sans-serif";
       ctx.fillText("Saudi Arabia", 24, 730);
@@ -1608,22 +1684,18 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       // RIGHT COLUMN: DYNAMIC ATTENDANCE INFO
       const rightColX = 240;
 
-      // Line 1: Activity / Task Title (Bold)
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 19px 'Mulish', sans-serif";
       ctx.fillText(taskTitle, rightColX, 680);
 
-      // Line 2: Hotel / Location
       ctx.fillStyle = "#ffffff";
       ctx.font = "600 15px 'Mulish', sans-serif";
       ctx.fillText(locationName, rightColX, 708);
 
-      // Line 3: Date & Time (e.g. 28 Juli 2026 | 12:30:25)
       ctx.fillStyle = "#ffffff";
       ctx.font = "500 15px 'Mulish', sans-serif";
       ctx.fillText(`${dateObj.gregorianLongStr} | ${dateObj.timeStr}`, rightColX, 734);
 
-      // Line 4: GPS Coordinates (e.g. GPS : 21.5433, 39.1728)
       ctx.fillStyle = "#ffffff";
       ctx.font = "500 15px 'Mulish', sans-serif";
       ctx.fillText(`GPS : ${cleanGps}`, rightColX, 760);
@@ -1631,27 +1703,31 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       capturedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
 
       stopActiveMediaStream();
-      camContainer.classList.add("hidden");
+      camOverlay.classList.add("hidden");
 
       previewEl.innerHTML = `
         <div style="margin-top:10px;">
-          <div style="font-size:0.8rem; font-weight:800; color:#1e293b; margin-bottom:6px;">Preview Hasil Foto Absensi (Watermark 4:5):</div>
-          <div style="width:100%; max-width:320px; aspect-ratio:4/5; margin:0 auto; overflow:hidden; border-radius:14px; border:2px solid #dfc06b; box-shadow:0 4px 14px rgba(0,0,0,0.15);">
+          <div style="font-size:0.85rem; font-weight:800; color:#1e293b; margin-bottom:8px; text-align:center;">Hasil Preview Foto Absensi:</div>
+          <div style="width:100%; max-width:320px; aspect-ratio:4/5; margin:0 auto 12px auto; overflow:hidden; border-radius:14px; border:2px solid #dfc06b; box-shadow:0 4px 14px rgba(0,0,0,0.15);">
             <img src="${capturedPhotoBase64}" style="width:100%; height:100%; object-fit:cover; display:block;" />
           </div>
-          <div style="display:flex; gap:8px; margin-top:10px;">
-            <button type="button" id="absen-retake-btn" class="btn btn-secondary" style="flex:1;">🔄 FOTO ULANG</button>
+          <div style="display:flex; gap:10px;">
+            <button type="button" id="absen-retake-btn" class="btn btn-secondary" style="flex:1; padding:10px; font-weight:800; border-radius:10px;">Foto Ulang</button>
+            <button type="button" id="absen-direct-submit-btn" class="btn btn-success" style="flex:1; background:#10b981; color:#fff; padding:10px; font-weight:800; border-radius:10px;">Submit Absensi</button>
           </div>
         </div>
       `;
       previewEl.classList.remove("hidden");
-      submitBtn.removeAttribute("disabled");
+      submitBox.classList.add("hidden");
 
       document.getElementById("absen-retake-btn").onclick = () => {
         previewEl.classList.add("hidden");
-        submitBtn.setAttribute("disabled", "true");
         capturedPhotoBase64 = null;
         startLiveStream();
+      };
+
+      document.getElementById("absen-direct-submit-btn").onclick = () => {
+        handleAttendanceSubmission();
       };
     };
 
@@ -1659,25 +1735,12 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       processAndWatermarkImage(videoEl, true);
     };
 
-    fallbackInput.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => processAndWatermarkImage(img, false);
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    };
-
-    document.getElementById("user-attendance-form-popup").onsubmit = (e) => {
-      e.preventDefault();
+    const handleAttendanceSubmission = () => {
       const selectedTaskId = selectEl.value;
       const type = typeEl.value;
 
       if (!selectedTaskId || !type || !capturedPhotoBase64) {
-        showToast("Ambil foto absensi terlebih dahulu.", "error");
+        showToast("Silakan ambil foto absensi terlebih dahulu.", "error");
         return;
       }
 
@@ -1699,1179 +1762,453 @@ function openAttendanceFormPopup(preselectedTaskId = "") {
       state.reports.attendance.push(newAtt);
 
       if (type === "Masuk") {
-        task.status = "Dalam Proses";
+        if (task) task.status = "Dalam Proses";
       } else if (type === "Keluar") {
-        task.status = "Selesai";
-        task.published = false;
+        if (task) {
+          task.status = "Selesai";
+          task.published = false;
+        }
       }
 
-      addNotification("penjadwalan", `Absensi ${type}: ${state.currentUser.name} melakukan ${type} untuk tugas ${task.type} (${groupName})`, { username, groupName });
+      addNotification("penjadwalan", `Absensi ${type}: ${state.currentUser.name} melakukan ${type} untuk tugas ${task ? task.type : 'Khidmat'} (${groupName})`, { username, groupName });
       saveState();
       stopActiveMediaStream();
       closeModal();
-      showToast(`Absensi ${type === 'Masuk' ? 'Masuk' : 'Keluar'} berhasil dikirim!`);
-      
-      if (window.location.hash.startsWith("#user/task-detail")) {
-        renderUserTaskDetailFull();
-      } else {
-        renderUserDashboard();
-      }
+      showToast(`Absensi ${type} Berhasil Disimpan!`, "success");
+
+      // Refresh current view if needed
+      const hash = window.location.hash;
+      if (hash.includes("#user/apply-tugas")) renderUserApplyTugas();
+      else if (hash.includes("#user/task-detail")) renderUserTaskDetailFull();
+      else if (hash.includes("#user/dashboard")) renderUserDashboard();
+    };
+
+    document.getElementById("user-attendance-form-popup").onsubmit = (e) => {
+      e.preventDefault();
+      handleAttendanceSubmission();
     };
   }
 }
 
 
-// --- USER SUB-VIEW: DASHBOARD ---
+
+
+
+function parseGroupFlightData(group, type = 'arrival') {
+  const list = type === 'arrival' ? (group ? group.flightArrival : null) : (group ? group.flightDeparture : null);
+  const defaultDate = type === 'arrival' ? (group ? group.dateStart : '2026-07-28') : (group ? group.dateEnd : '2026-08-04');
+  
+  if (Array.isArray(list) && list.length > 0 && list[0]) {
+    const f = list[0];
+    const rawDate = f.date || defaultDate;
+    const dateStr = rawDate ? formatDateShortMonth(rawDate).toUpperCase() : '-';
+    const codeStr = f.code || (type === 'arrival' ? 'SV-817' : 'SV-826');
+    const takeoffStr = f.takeoff || (type === 'arrival' ? '15:50:00' : '21:25:00');
+    const landingStr = f.landing || (type === 'arrival' ? '20:35:00' : '05:05:00');
+    
+    let originCode = type === 'arrival' ? 'CGK' : 'JED';
+    let destCode = type === 'arrival' ? (group && group.rute && group.rute.includes('Madinah') ? 'MED' : 'JED') : 'CGK';
+    let originCity = type === 'arrival' ? 'JAKARTA' : 'JEDDAH';
+    let destCity = type === 'arrival' ? (destCode === 'MED' ? 'MADINAH' : 'JEDDAH') : 'JAKARTA';
+
+    if (f.remarks && f.remarks.includes('-')) {
+      const parts = f.remarks.split('-');
+      originCode = parts[0].trim();
+      destCode = parts[1].trim();
+      if (originCode === 'CGK') originCity = 'JAKARTA';
+      if (originCode === 'JED') originCity = 'JEDDAH';
+      if (originCode === 'MED') originCity = 'MADINAH';
+      if (destCode === 'CGK') destCity = 'JAKARTA';
+      if (destCode === 'JED') destCity = 'JEDDAH';
+      if (destCode === 'MED') destCity = 'MADINAH';
+      if (destCode === 'BOM') destCity = 'MUMBAI';
+    }
+    
+    return { dateStr, codeStr, takeoffStr, landingStr, originCode, destCode, originCity, destCity };
+  }
+
+  const rawDate = defaultDate || (type === 'arrival' ? '2026-07-28' : '2026-08-04');
+  const formattedDate = rawDate ? formatDateShortMonth(rawDate).toUpperCase() : (type === 'arrival' ? '28 JUL 2026' : '4 AGU 2026');
+  return {
+    dateStr: formattedDate,
+    codeStr: type === 'arrival' ? '6E-1602' : '6E-62',
+    takeoffStr: type === 'arrival' ? '15:50:00' : '21:25:00',
+    landingStr: type === 'arrival' ? '20:35:00' : '05:05:00',
+    originCode: type === 'arrival' ? 'CGK' : 'JED',
+    destCode: 'BOM',
+    originCity: type === 'arrival' ? 'JAKARTA' : 'JEDDAH',
+    destCity: 'MUMBAI'
+  };
+}
+
+
+function toggleUserFlightAccordion(taskId) {
+  const body = document.getElementById("user-flight-body-" + taskId);
+  const icon = document.getElementById("user-flight-icon-" + taskId);
+  if (body && icon) {
+    if (body.style.display === "none") {
+      body.style.display = "block";
+      icon.style.transform = "rotate(0deg)";
+    } else {
+      body.style.display = "none";
+      icon.style.transform = "rotate(180deg)";
+    }
+  }
+}
+
+
 function renderUserDashboard() {
   const container = document.getElementById("user-subview-content");
-  const username = state.currentUser.username;
-  
-  const myWalletBal = state.financial.wallets[username] || 0;
-  const pendingCount = state.financial.expenses.filter(e => e.username === username && e.status === "Pending").length;
-  
-  const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
-  const myAppliedOffers = state.assignments.filter(t => t.published !== false && t.applicants && t.applicants.includes(username));
-  const pendingInflows = state.financial.transactions.filter(tx => tx.recipient === username && tx.status === "Pending Confirmation");
-  
-  container.innerHTML = `
-    <!-- Greeting Text (Clean text, not a widget) -->
-    <div style="margin-top: 6px; margin-bottom: 16px; font-size: 1.3rem; font-weight: 800; color: #1e293b; font-family:'Mulish', sans-serif;">
-      Halo, ${state.currentUser.name}
-    </div>
-
-    <!-- 1-Row White Card Wallet Widget (Matching User Screenshot) -->
-    <div class="wallet-box-simpel" style="margin-bottom: 20px; background: #ffffff; padding: 14px 18px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <div style="display:flex; justify-content:center; align-items:center; color:#1e293b; border: 1.5px solid #94a3b8; border-radius:8px; padding:6px;">
-          <i data-lucide="wallet" style="width:24px; height:24px; stroke-width:2.2;"></i>
-        </div>
-        <div style="font-size:1.35rem; font-weight:900; color:#0f172a; font-family:'Mulish', sans-serif; letter-spacing:-0.02em;">
-          SAR ${myWalletBal.toLocaleString('id-ID')}
-        </div>
-      </div>
-      
-      <div style="display:flex; align-items:center; gap:10px;">
-        <button id="user-wallet-transfer-btn" class="btn" style="width:40px; height:40px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Transfer Kas">
-          <i data-lucide="arrow-left-right" style="width:20px; height:20px; stroke-width:2.5;"></i>
-        </button>
-        <button id="user-wallet-add-exp-btn" class="btn" style="width:40px; height:40px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Tambah Pengeluaran (Lapor Kas)">
-          <i data-lucide="plus" style="width:22px; height:22px; stroke-width:3;"></i>
-        </button>
-        <button id="user-wallet-detail-btn" class="btn" style="width:40px; height:40px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Lihat Detail Kas">
-          <i data-lucide="more-horizontal" style="width:22px; height:22px; stroke-width:2.5;"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Inflow alert items -->
-    ${pendingInflows.map(inf => `
-      <div class="inflow-alert-item" style="background:rgba(16,185,129,0.12); border:1px solid #10b981; border-radius:10px; padding:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
-        <div>
-          <strong style="color:#065f46;">Dana dari ${inf.sender === 'Dompet Utama' ? 'Admin' : inf.sender}:</strong> SAR ${inf.amount.toLocaleString('id-ID')}<br>
-          <span style="font-size:0.75rem; color:#475569;">${inf.description}</span>
-        </div>
-        <button class="btn btn-gold confirm-inflow-btn" data-id="${inf.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px;">Konfirmasi Diterima</button>
-      </div>
-    `).join('')}
-
-    <!-- Main Menu Shortcut Buttons (3 Items Grid) -->
-    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:24px;">
-      <div onclick="window.location.hash='#user/apply-tugas'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
-        <i data-lucide="clipboard-list" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Daftar Tugas</div>
-      </div>
-      
-      <div onclick="window.location.hash='#user/laporan?tab=absensi'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
-        <i data-lucide="user-check" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Absensi</div>
-      </div>
-      
-      <div onclick="window.location.hash='#user/laporan?tab=insiden'" class="glass-card" style="padding:14px 8px; text-align:center; cursor:pointer; border-radius:12px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 1px 3px rgba(0,0,0,0.02); transition:all 0.2s ease;">
-        <i data-lucide="alert-triangle" style="width:24px; height:24px; color:#c5a850; stroke-width:2; margin-bottom:6px; display:block; margin-left:auto; margin-right:auto;"></i>
-        <div style="font-size:0.75rem; font-weight:800; color:#1e293b;">Kejadian</div>
-      </div>
-    </div>
-    
-    <!-- Active Tasks Today -->
-    <h3 class="user-section-title" style="text-transform:uppercase; letter-spacing:0.04em;">TUGAS AKTIF</h3>
-    <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px;">
-      ${myActiveTasks.length === 0 ? `
-        <p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:12px 0;">Tidak ada jadwal penugasan aktif hari ini.</p>
-      ` : myActiveTasks.map(task => {
-        const details = task.details || {};
-        const group = state.groups.find(g => g.name === task.groupName);
-        const tlName = group && group.leaders && group.leaders.length > 0 ? group.leaders.join(', ') : "Belum Ditentukan";
-        const muthawwifName = group && group.mutawwif ? group.mutawwif : "Belum Ditentukan";
-        const totalPaxVal = details.totalPax || (group ? group.packages.reduce((sum, p) => sum + (p.pax || 0), 0) : 0);
-        
-        let flightPath = "CGK ➔ MED • JED ➔ CGK";
-        if (group && group.flightArrival && group.flightArrival.length > 0) {
-          const arrCode = group.flightArrival[0].code || "";
-          const depCode = (group.flightDeparture && group.flightDeparture.length > 0) ? group.flightDeparture[0].code : "";
-          if (arrCode || depCode) {
-            flightPath = `${arrCode} ➔ MED • JED ➔ ${depCode || 'CGK'}`;
-          }
-        }
-        
-        let conditionalRow1 = "";
-        let subtitleHtml = "";
-        const type = task.type || task.title || "Penugasan Lapangan";
-        
-        if (type.startsWith("Kedatangan Bandara")) {
-          const meal = details.meal || "N/A";
-          const destination = details.destination || (group && group.hotels && group.hotels.length > 0 ? group.hotels[0] : "Hotel Madinah");
-          conditionalRow1 = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="utensils" style="width:12px; height:12px; color:var(--primary-gold);"></i> MEALPLAN KEDATANGAN</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${meal}</div>
-              </div>
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="map-pin" style="width:12px; height:12px; color:var(--primary-gold);"></i> TUJUAN</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${destination}</div>
-              </div>
-            </div>
-          `;
-        } else if (type.startsWith("Kepulangan Bandara")) {
-          const meal = details.meal || "N/A";
-          const source = details.source || (group && group.hotels && group.hotels.length > 0 ? group.hotels[group.hotels.length - 1] : "Hotel Makkah");
-          conditionalRow1 = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="utensils" style="width:12px; height:12px; color:var(--primary-gold);"></i> MEALPLAN KEPULANGAN</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${meal}</div>
-              </div>
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="map-pin" style="width:12px; height:12px; color:var(--primary-gold);"></i> ASAL</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${source}</div>
-              </div>
-            </div>
-          `;
-        } else if (type.startsWith("Check In Hotel") || type.startsWith("Check Out Hotel")) {
-          const hotel = details.hotelName || "Belum Ditentukan";
-          const pkgs = details.packages && details.packages.length > 0 ? details.packages.join(' • ') : "Sapphire • Ruby";
-          const rooms = details.totalRoom || 0;
-          const isCheckIn = type.startsWith("Check In Hotel");
-          
-          subtitleHtml = `
-            <div style="font-size:0.82rem; color:var(--text-muted); font-weight:600; margin-top:-6px; margin-bottom:10px;">
-              ${hotel} &bull; ${pkgs}
-            </div>
-          `;
-          
-          conditionalRow1 = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="bed" style="width:12px; height:12px; color:var(--primary-gold);"></i> KOMPOSISI KAMAR</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${rooms} Rooms | ${totalPaxVal} Pax</div>
-              </div>
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="gift" style="width:12px; height:12px; color:var(--primary-gold);"></i> ${isCheckIn ? 'COMPLIMENTARY' : 'TUJUAN'}</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${isCheckIn ? (details.service || '-') : 'Hotel Makkah'}</div>
-              </div>
-            </div>
-          `;
-        } else if (type.startsWith("City Tour")) {
-          const bus = details.destinationBus || "Bus 1";
-          const pkgs = group && group.packages && group.packages.length > 0 ? group.packages.join(' • ') : "Sapphire • Ruby • Onyx";
-          const pickup = details.hotelPickup || "Mukhtaro Al Gharbi ➔ Al Anshor Golden Tulip";
-          
-          conditionalRow1 = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="users" style="width:12px; height:12px; color:var(--primary-gold);"></i> JUMLAH JAMAAH</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${bus} &bull; ${totalPaxVal} Pax<br><span style="font-size:0.72rem; color:var(--text-muted);">${pkgs}</span></div>
-              </div>
-              <div>
-                <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="map-pin" style="width:12px; height:12px; color:var(--primary-gold);"></i> PENJEMPUTAN HOTEL</span>
-                <div style="color:var(--text-main); font-weight:600; margin-top:2px; font-size:0.75rem; max-height: 48px; overflow: hidden; text-overflow: ellipsis;">${pickup}</div>
-              </div>
-            </div>
-          `;
-        } else {
-          conditionalRow1 = `
-            <div style="margin-bottom:12px; font-size:0.8rem; line-height:1.4;">
-              <span style="font-weight:700; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase;">KETERANGAN</span>
-              <div style="color:var(--text-main); font-weight:600; margin-top:2px;">${details.remarks || details.customText || task.notes || '-'}</div>
-            </div>
-          `;
-        }
-        
-        return `
-          <div class="assignment-card" style="background:#ffffff; border-radius:16px; padding:16px; border:1px solid #f1f5f9; box-shadow: 0 1px 4px rgba(0,0,0,0.02); margin-bottom:16px; display:flex; flex-direction:column; position:relative;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
-              <span style="font-size:0.9rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.02em;">${type}</span>
-              <span style="font-size:0.8rem; font-weight:700; color:#64748b;">${formatDateDisplay(task.date)}</span>
-            </div>
-            
-            ${subtitleHtml}
-            ${conditionalRow1}
-            
-            <div style="border-top:1px solid #e9d5ff; border-top-color:var(--primary-gold); margin:8px 0 12px 0; opacity:0.35;"></div>
-            
-            <div style="font-size:0.88rem; font-weight:800; color:#0f172a; margin-bottom:4px; font-family:'Mulish', sans-serif;">
-              ${task.groupName || '-'}
-            </div>
-            <div style="font-size:0.8rem; color:#475569; margin-bottom:12px; line-height:1.45;">
-              <div>Tour Leader: <span style="font-weight:600; color:#1f2937;">${tlName}</span></div>
-              <div>Muthawwif: <span style="font-weight:600; color:#1f2937;">${muthawwifName}</span></div>
-            </div>
-            
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; font-size:0.8rem;">
-              <div>
-                <span style="font-weight:700; font-size:0.68rem; color:#94a3b8; text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="users" style="width:11px; height:11px;"></i> TOTAL JAMAAH</span>
-                <div style="font-weight:700; color:#1e293b; margin-top:2px;">${totalPaxVal} Pax</div>
-              </div>
-              <div>
-                <span style="font-weight:700; font-size:0.68rem; color:#94a3b8; text-transform:uppercase; display:flex; align-items:center; gap:4px;"><i data-lucide="bus" style="width:11px; height:11px;"></i> TOTAL BUS</span>
-                <div style="font-weight:700; color:#1e293b; margin-top:2px;">${details.busCount || 1} Bus</div>
-              </div>
-            </div>
-            
-            <div class="flight-schedule-toggle" data-target="flight-details-${task.id}" style="background:#f8fafc; border:1px solid #f1f5f9; border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:0.8rem; font-weight:700; margin-bottom:8px; user-select:none;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <i data-lucide="plane" style="width:16px; height:16px; color:#c5a850;"></i>
-                <span style="color:#c5a850; font-weight:800;">Jadwal Penerbangan</span>
-                <span style="color:#64748b; font-weight:600; margin-left:6px; font-size:0.75rem;">${flightPath}</span>
-              </div>
-              <i data-lucide="chevron-down" class="chevron-icon" style="width:14px; height:14px; color:#64748b; transition: transform 0.2s;"></i>
-            </div>
-            
-            <div id="flight-details-${task.id}" class="flight-details-body hidden" style="background:#fafafa; border:1px solid #f1f5f9; border-radius:8px; padding:12px; margin-bottom:16px; font-size:0.78rem; color:#475569; line-height:1.5;">
-              <div style="font-weight:700; color:#1e293b; margin-bottom:6px; text-transform:uppercase; font-size:0.72rem; letter-spacing:0.02em;">Rincian Penerbangan</div>
-              ${(group && group.flightArrival && group.flightArrival.length > 0) ? `
-                <div style="margin-bottom:8px;">
-                  <strong style="color:#0f172a;">Kedatangan (Arrival):</strong>
-                  ${group.flightArrival.map(f => `
-                    <div style="margin-top:2px; padding-left:8px; border-left:2px solid #cbd5e1;">
-                      <span style="font-weight:600; color:#1f2937;">${f.code || '-'}</span> | Tanggal: ${formatDateDisplay(f.date || '')} | Jam: ${f.takeoff || '-'} - ${f.landing || '-'} Saudi
-                      ${f.remarks ? `<div style="font-size:0.72rem; color:#94a3b8; font-style:italic;">Ket: ${f.remarks}</div>` : ''}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ''}
-              ${(group && group.flightDeparture && group.flightDeparture.length > 0) ? `
-                <div>
-                  <strong style="color:#0f172a;">Kepulangan (Departure):</strong>
-                  ${group.flightDeparture.map(f => `
-                    <div style="margin-top:2px; padding-left:8px; border-left:2px solid #cbd5e1;">
-                      <span style="font-weight:600; color:#1f2937;">${f.code || '-'}</span> | Tanggal: ${formatDateDisplay(f.date || '')} | Jam: ${f.takeoff || '-'} - ${f.landing || '-'} Saudi
-                      ${f.remarks ? `<div style="font-size:0.72rem; color:#94a3b8; font-style:italic;">Ket: ${f.remarks}</div>` : ''}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ''}
-              ${(!group || (!group.flightArrival?.length && !group.flightDeparture?.length)) ? '<div style="color:#94a3b8; font-style:italic;">Tidak ada data penerbangan detail.</div>' : ''}
-            </div>
-            
-            <div style="display:flex; gap:10px; margin-top:auto;">
-              <button class="btn user-task-detail-btn" data-id="${task.id}" style="flex:1; background:#c5a850; color:#ffffff; font-weight:700; font-size:0.8rem; padding:10px; border-radius:8px; border:none; text-transform:uppercase; cursor:pointer; text-align:center; transition:all 0.2s;">
-                LIHAT DETAIL
-              </button>
-              <button class="btn user-task-absen-btn" data-id="${task.id}" style="flex:1; background:#86efac; color:#14532d; font-weight:800; font-size:0.8rem; padding:10px; border-radius:8px; border:1.5px solid #22c55e; text-transform:uppercase; cursor:pointer; text-align:center; transition:all 0.2s;">
-                ABSENSI ${task.status === "Selesai" ? "KELUAR" : (task.status === "Dalam Proses" ? "KELUAR" : "MASUK")}
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-  
-  lucide.createIcons();
-
-  container.querySelectorAll(".flight-schedule-toggle").forEach(btn => {
-    btn.onclick = () => {
-      const targetId = btn.getAttribute("data-target");
-      const targetEl = document.getElementById(targetId);
-      if (targetEl) {
-        targetEl.classList.toggle("hidden");
-        const chevron = btn.querySelector(".chevron-icon");
-        if (chevron) {
-          if (targetEl.classList.contains("hidden")) {
-            chevron.style.transform = "rotate(0deg)";
-          } else {
-            chevron.style.transform = "rotate(180deg)";
-          }
-        }
-      }
-    };
-  });
-
-  // Inflow confirmations
-  container.querySelectorAll(".confirm-inflow-btn").forEach(btn => {
-    btn.onclick = () => {
-      const txId = btn.getAttribute("data-id");
-      const tx = state.financial.transactions.find(x => x.id === txId);
-      if (tx) {
-        tx.status = "Approved";
-        state.financial.wallets[username] = (state.financial.wallets[username] || 0) + tx.amount;
-        addNotification("financial", `Konfirmasi Penerimaan: ${state.currentUser.name} telah menerima transfer SAR ${tx.amount} dari ${tx.sender === 'Dompet Utama' ? 'Admin' : tx.sender}`, { username, groupName: '' });
-        saveState();
-        showToast("Transfer dana berhasil diterima!");
-        renderUserDashboard();
-      }
-    };
-  });
-
-  const transferBtn = document.getElementById("user-wallet-transfer-btn");
-  if (transferBtn) transferBtn.onclick = () => openUserWalletTransferPopup();
-  
-  const addExpBtn = document.getElementById("user-wallet-add-exp-btn");
-  if (addExpBtn) addExpBtn.onclick = () => openUserLaporKasPopup();
-  
-  const detailBtn = document.getElementById("user-wallet-detail-btn");
-  if (detailBtn) detailBtn.onclick = () => window.location.hash = '#user/laporan?tab=kas';
-
-  // Bind active task actions
-  container.querySelectorAll(".user-task-detail-btn").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-id");
-      window.location.hash = `#user/task-detail?id=${id}`;
-    };
-  });
-  container.querySelectorAll(".user-task-absen-btn").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-id");
-      openAttendanceFormPopup(id);
-    };
-  });
-
-  // Transfer popup
-  document.getElementById("user-wallet-transfer-btn").onclick = () => {
-    openUserWalletTransferPopup(() => renderUserDashboard());
-  };
-}
-// --- USER SUB-VIEW: ROOMLIST ---
-function renderUserRoomlist() {
-  const container = document.getElementById("user-subview-content");
-  const groupNames = state.groups.map(g => g.name);
-  const urlGroupParam = new URLSearchParams(window.location.hash.split("?")[1] || "").get("group") || "";
-  
-  container.innerHTML = `
-    <!-- Header Collapsible Filter Bar -->
-    <div style="background:#ffffff; border-radius:12px; padding:12px 14px; border:1px solid #cbd5e1; margin-top:8px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-      <div id="user-rl-filter-header" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
-        <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:0.85rem; color:#1e293b;">
-          <i data-lucide="filter" style="width:16px; height:16px; color:#c5a850;"></i>
-          <span>Filter & Pencarian Roomlist</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:4px; font-size:0.75rem; color:#64748b; font-weight:700;">
-          <span id="user-rl-filter-status-text">Buka/Tutup</span>
-          <i data-lucide="chevron-down" id="user-rl-filter-chevron" style="width:16px; height:16px; transition:transform 0.2s ease;"></i>
-        </div>
-      </div>
-
-      <!-- Collapsible Body (Tightly Spaced) -->
-      <div id="user-rl-filter-body" style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
-        <div style="position:relative;">
-          <input type="text" id="user-rl-group-search" class="form-input" placeholder="Cari / Pilih Rombongan Grup..." style="padding:6px 10px; font-size:0.85rem; height:auto;">
-          <div id="user-rl-group-suggestions" class="suggestion-list hidden"></div>
-        </div>
-
-        <div id="user-rl-hotel-container" class="hidden">
-          <select id="user-rl-hotel-select" class="form-select" style="padding:6px 10px; font-size:0.85rem; height:auto; margin:0;"></select>
-        </div>
-
-        <div>
-          <input type="text" id="user-rl-name-search" class="form-input" placeholder="Cari Nama Jamaah / No. Kamar / ID..." style="padding:6px 10px; font-size:0.85rem; height:auto;">
-        </div>
-      </div>
-    </div>
-    
-    <div id="user-rl-table-container"></div>
-  `;
-  
-  lucide.createIcons();
-
-  const filterHeader = document.getElementById("user-rl-filter-header");
-  const filterBody = document.getElementById("user-rl-filter-body");
-  const chevron = document.getElementById("user-rl-filter-chevron");
-  
-  if (filterHeader && filterBody) {
-    filterHeader.onclick = () => {
-      filterBody.classList.toggle("hidden");
-      if (filterBody.classList.contains("hidden")) {
-        chevron.style.transform = "rotate(-90deg)";
-      } else {
-        chevron.style.transform = "rotate(0deg)";
-      }
-    };
-  }
-
-  let selectedGroup = "";
-  let selectedHotel = "";
-
-  const nameSearchInput = document.getElementById("user-rl-name-search");
-  if (nameSearchInput) {
-    nameSearchInput.oninput = () => {
-      if (selectedGroup && selectedHotel) {
-        renderRoomlistTable(selectedGroup, selectedHotel, nameSearchInput.value.trim());
-      }
-    };
-  }
-
-  initSuggestionInput("user-rl-group-search", "user-rl-group-suggestions", groupNames, (groupName) => {
-    selectedGroup = groupName;
-    const group = state.groups.find(g => g.name === groupName);
-    if (!group) return;
-    
-    const hotelContainer = document.getElementById("user-rl-hotel-container");
-    const hotelSelect = document.getElementById("user-rl-hotel-select");
-    
-    hotelSelect.innerHTML = `<option value="">-- Pilih Hotel --</option>` + group.hotels.map(h => `<option value="${h}">${h}</option>`).join('');
-    hotelContainer.classList.remove("hidden");
-    
-    hotelSelect.onchange = () => {
-      selectedHotel = hotelSelect.value;
-      renderRoomlistTable(selectedGroup, selectedHotel, nameSearchInput ? nameSearchInput.value.trim() : "");
-    };
-  });
-}
-
-function findJamaahData(searchCode) {
-  if (!searchCode) return null;
-  const sUpper = searchCode.toUpperCase().trim();
-  const numOnly = sUpper.replace(/^JIBB-0*/, '').replace(/^JIBB-/, '');
-  
-  let foundGuest = null;
-  let roomsAllocated = [];
-  let groupName = "";
-  
-  for (const r of state.rooms) {
-    if (r && r.guests) {
-      const g = r.guests.find(x => {
-        if (!x) return false;
-        const gNo = String(x.guestNo || '').trim();
-        const uCode = (x.uniqueCode || '').toUpperCase().trim();
-        const expectedCode = "JIBB-" + String(gNo).padStart(4, "0");
-        
-        return (
-          uCode === sUpper ||
-          gNo === searchCode ||
-          gNo === numOnly ||
-          expectedCode === sUpper ||
-          (uCode && uCode.replace('-', '') === sUpper.replace('-', '')) ||
-          (x.name && x.name.toLowerCase().includes(searchCode.toLowerCase()))
-        );
-      });
-      if (g) {
-        foundGuest = g;
-        groupName = r.groupName;
-        roomsAllocated.push({
-          roomNumber: r.roomNumber,
-          hotelName: r.hotelName,
-          groupName: r.groupName
-        });
-      }
-    }
-  }
-  
-  if (!foundGuest) {
-    if (searchCode === "7" || sUpper.includes("AYU") || sUpper.includes("JIBB-0007")) {
-      return {
-        guestNo: "7",
-        uniqueCode: "JIBB-0007",
-        name: "AYU VIDYA PUTRI",
-        gender: "Perempuan",
-        bus: "Bus 1",
-        passport: "X8582843",
-        visa: "6168664007",
-        package: "Sapphire",
-        madinahRoom: "1007",
-        madinahHotel: "Maden Al Rawda",
-        makkahRoom: "2105",
-        makkahHotel: "Al Marwa Rayhaan Rotana",
-        luggage: "1 Koper Besar | 1 Koper Kecil | 1 Baby Stroller",
-        phone: "+628123456789"
-      };
-    }
-    return null;
-  }
-  
-  const nameUpper = foundGuest.name.toUpperCase();
-  const gender = (foundGuest.remark && foundGuest.remark.toLowerCase().includes("perempuan")) ? "Perempuan" : "Laki-laki";
-  
-  let hash = 0;
-  for (let i = 0; i < nameUpper.length; i++) {
-    hash = nameUpper.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const passport = "X" + Math.abs(hash % 9000000 + 1000000);
-  const visa = "616" + Math.abs(hash % 90000000 + 10000000);
-  
-  let madinahRoom = "-", madinahHotel = "-";
-  let makkahRoom = "-", makkahHotel = "-";
-  
-  const groupObj = state.groups.find(g => g.name === groupName);
-  const hotelsList = groupObj ? groupObj.hotels : [];
-  
-  roomsAllocated.forEach(alloc => {
-    const hName = alloc.hotelName.toLowerCase();
-    if (hName.includes("maden") || hName.includes("madinah") || hName.includes("obroy") || hName.includes("dallah")) {
-      madinahRoom = alloc.roomNumber;
-      madinahHotel = alloc.hotelName;
-    } else {
-      makkahRoom = alloc.roomNumber;
-      makkahHotel = alloc.hotelName;
-    }
-  });
-  
-  if (madinahHotel === "-" && hotelsList.length > 0) {
-    madinahHotel = hotelsList[0];
-  }
-  if (makkahHotel === "-" && hotelsList.length > 1) {
-    makkahHotel = hotelsList[1];
-  }
-  
-  const pkg = (groupObj && groupObj.packages && groupObj.packages.length > 0) ? groupObj.packages[0].name.split(' ')[0] : "Sapphire";
-  const uniqueCode = foundGuest.uniqueCode || ("JIBB-" + String(foundGuest.guestNo || "1").padStart(4, "0"));
-
-  return {
-    guestNo: foundGuest.guestNo || "1",
-    uniqueCode: uniqueCode,
-    name: nameUpper,
-    gender: gender,
-    bus: "Bus 1",
-    passport: passport,
-    visa: visa,
-    package: pkg,
-    madinahRoom: madinahRoom !== "-" ? madinahRoom : "1007",
-    madinahHotel: madinahHotel !== "-" ? madinahHotel : "Maden Al Rawda",
-    makkahRoom: makkahRoom !== "-" ? makkahRoom : "2105",
-    makkahHotel: makkahHotel !== "-" ? makkahHotel : "Al Marwa Rayhaan Rotana",
-    luggage: "1 Koper Besar | 1 Koper Kecil",
-    phone: "+628123456789"
-  };
-}
-
-function renderUserScanQr() {
-  const container = document.getElementById("user-subview-content");
-  
-  container.innerHTML = `
-    <div style="padding: 16px; display:flex; flex-direction:column; gap:16px;">
-      <!-- QR Scanner Viewfinder (Camera Preview Element) -->
-      <div style="position:relative; width:100%; aspect-ratio:1/1; background:#0f172a; border-radius:16px; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <!-- Real Camera Stream Container -->
-        <div id="html5-qr-reader-container" style="width:100%; height:100%;"></div>
-        
-        <!-- Viewfinder Overlay Box -->
-        <div style="width:55%; height:55%; border:3.5px solid #c5a850; border-radius:24px; position:absolute; pointer-events:none; z-index:10; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);">
-          <!-- Corner decorations -->
-          <div style="position:absolute; top:-3px; left:-3px; width:20px; height:20px; border-top:4px solid #c5a850; border-left:4px solid #c5a850; border-radius:4px 0 0 0;"></div>
-          <div style="position:absolute; top:-3px; right:-3px; width:20px; height:20px; border-top:4px solid #c5a850; border-right:4px solid #c5a850; border-radius:0 4px 0 0;"></div>
-          <div style="position:absolute; bottom:-3px; left:-3px; width:20px; height:20px; border-bottom:4px solid #c5a850; border-left:4px solid #c5a850; border-radius:0 0 0 4px;"></div>
-          <div style="position:absolute; bottom:-3px; right:-3px; width:20px; height:20px; border-bottom:4px solid #c5a850; border-right:4px solid #c5a850; border-radius:0 0 4px 0;"></div>
-        </div>
-        <div style="position:absolute; bottom:16px; color:#fff; font-size:0.75rem; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8); background:rgba(0,0,0,0.5); padding:4px 12px; border-radius:20px; z-index:11;">
-          Posisikan Kamera ke QR Code Jamaah
-        </div>
-      </div>
-
-      <!-- Search Input Bar -->
-      <div style="position:relative; display:flex; align-items:center; background:#ffffff; border-radius:12px; border:1px solid #cbd5e1; padding:10px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
-        <i data-lucide="search" style="width:18px; height:18px; color:#94a3b8; margin-right:10px;"></i>
-        <input type="text" id="qr-search-input" class="form-input" placeholder="Masukkan ID Kode Unik (mis. JIBB-0001)..." style="border:none; padding:0; margin:0; background:transparent; font-size:0.9rem; flex-grow:1; outline:none; height:auto; box-shadow:none;">
-        <i data-lucide="x-circle" id="qr-clear-btn" style="width:18px; height:18px; color:#94a3b8; cursor:pointer; display:none;"></i>
-      </div>
-
-      <!-- Result Card Container -->
-      <div id="qr-result-container"></div>
-    </div>
-  `;
-  
-  lucide.createIcons();
-  
-  const searchInput = document.getElementById("qr-search-input");
-  const clearBtn = document.getElementById("qr-clear-btn");
-  const resultContainer = document.getElementById("qr-result-container");
-  
-  // Attach html5-qrcode camera stream scanner
-  if (typeof Html5Qrcode !== "undefined") {
-    try {
-      const html5QrCode = new Html5Qrcode("html5-qr-reader-container");
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText) => {
-          if (decodedText) {
-            searchInput.value = decodedText;
-            performSearch();
-            showToast(`Scan QR ID Berhasil: ${decodedText}`);
-          }
-        },
-        () => {}
-      ).catch(err => {
-        console.log("Kamera streaming tidak diizinkan atau berjalan di peramban tanpa akses kamera.", err);
-      });
-    } catch(e) {
-      console.log("Error menginisialisasi kamera scanner:", e);
-    }
-  }
-  
-  const performSearch = () => {
-    const val = searchInput.value.trim();
-    if (!val) {
-      clearBtn.style.display = "none";
-      resultContainer.innerHTML = "";
-      return;
-    }
-    clearBtn.style.display = "block";
-    
-    const data = findJamaahData(val);
-    if (!data) {
-      resultContainer.innerHTML = `
-        <div style="text-align:center; padding:24px; background:#fff; border-radius:12px; border:1px solid #f1f5f9; color:var(--text-muted); font-size:0.85rem;">
-          Jamaah dengan Kode/ID "${val}" tidak ditemukan.
-        </div>
-      `;
-      return;
-    }
-    
-    resultContainer.innerHTML = `
-      <div class="glass-card" style="background:#ffffff; border-radius:16px; padding:16px; border:1px solid #f1f5f9; box-shadow: 0 1px 4px rgba(0,0,0,0.02); display:flex; flex-direction:column; gap:12px;">
-        
-        <!-- Header Info (Avatar, Name, Unique Code, Gender, Passport, Visa, Package Badge) -->
-        <div style="display:flex; gap:12px; align-items:flex-start;">
-          <div style="width:48px; height:48px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#64748b; font-size:1.4rem;">
-            <i data-lucide="user" style="width:24px; height:24px;"></i>
-          </div>
-          <div style="flex-grow:1; font-size:0.82rem; color:#475569; line-height:1.4;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
-              <div>
-                <span style="font-weight:900; color:#0f172a; font-size:0.95rem; display:block;">${data.name}</span>
-                <span style="font-size:0.75rem; font-weight:800; color:#0070f3; background:#eff6ff; padding:2px 6px; border-radius:4px;">${data.uniqueCode}</span>
-              </div>
-              <span class="badge badge-info" style="background:#0070f3; color:white; font-size:0.68rem; padding:3px 10px; border-radius:12px; font-weight:800;">${data.package}</span>
-            </div>
-            <div style="margin-top:4px;">${data.gender} | ${data.bus}</div>
-            <div style="color:#64748b;">Paspor: <span style="font-weight:600; color:#334155;">${data.passport}</span> &bull; Visa: <span style="font-weight:600; color:#334155;">${data.visa}</span></div>
-          </div>
-        </div>
-
-        <!-- Room Allocations Makkah & Madinah -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:4px;">
-          <!-- Madinah -->
-          <div style="border-radius:12px; border:1px solid #e2e8f0; overflow:hidden; background:#ffffff;">
-            <div style="background:#c5a850; color:#ffffff; text-align:center; font-size:0.75rem; font-weight:800; padding:6px 0;">Madinah</div>
-            <div style="padding:8px 6px; text-align:center;">
-              <div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.2;">${data.madinahRoom}</div>
-              <div style="font-size:0.7rem; color:#64748b; font-weight:600; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${data.madinahHotel}">${data.madinahHotel}</div>
-            </div>
-          </div>
-          <!-- Makkah -->
-          <div style="border-radius:12px; border:1px solid #e2e8f0; overflow:hidden; background:#ffffff;">
-            <div style="background:#c5a850; color:#ffffff; text-align:center; font-size:0.75rem; font-weight:800; padding:6px 0;">Makkah</div>
-            <div style="padding:8px 6px; text-align:center;">
-              <div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.2;">${data.makkahRoom}</div>
-              <div style="font-size:0.7rem; color:#64748b; font-weight:600; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${data.makkahHotel}">${data.makkahHotel}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Baggage info -->
-        <div style="background:#f8fafc; border-radius:8px; padding:10px 12px; font-size:0.78rem; border:1px solid #f1f5f9;">
-          <strong style="color:#475569; font-size:0.75rem; display:block; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.01em;">Barang Bawaan :</strong>
-          <span style="color:#0f172a; font-weight:700;">${data.luggage}</span>
-        </div>
-
-        <!-- Action Buttons -->
-        <div style="display:flex; gap:10px; margin-top:4px;">
-          <button class="btn" onclick="window.open('https://wa.me/${data.phone.replace(/[^0-9]/g, '')}', '_blank')" style="flex:1; background:#ef4444; color:#ffffff; font-weight:700; font-size:0.8rem; padding:10px; border-radius:8px; border:none; text-transform:uppercase; cursor:pointer; text-align:center;">
-            Kontak Jamaah
-          </button>
-          <button class="btn" onclick="showToast('Membuka profil detail dari ${data.name}')" style="flex:1; background:#0070f3; color:#ffffff; font-weight:700; font-size:0.8rem; padding:10px; border-radius:8px; border:none; text-transform:uppercase; cursor:pointer; text-align:center;">
-            Profil Jamaah
-          </button>
-        </div>
-
-      </div>
-    `;
-    lucide.createIcons();
-  };
-  
-  searchInput.oninput = performSearch;
-  clearBtn.onclick = () => {
-    searchInput.value = "";
-    performSearch();
-  };
-}
-
-function renderRoomlistTable(groupName, hotelName, searchQuery = "") {
-  const container = document.getElementById("user-rl-table-container");
-  if (!hotelName) {
-    container.innerHTML = "";
-    return;
-  }
-  
-  let filteredRooms = state.rooms.filter(r => r.groupName === groupName && r.hotelName === hotelName);
-
-  if (searchQuery !== "") {
-    const sLower = searchQuery.toLowerCase();
-    filteredRooms = filteredRooms.filter(r => {
-      const matchRoomNum = r.roomNumber && r.roomNumber.toLowerCase().includes(sLower);
-      const matchRoomlistNum = r.roomlistNumber && r.roomlistNumber.toLowerCase().includes(sLower);
-      const matchGuest = r.guests && r.guests.some(g => 
-        (g.name && g.name.toLowerCase().includes(sLower)) ||
-        (g.guestNo && g.guestNo.includes(sLower)) ||
-        (g.uniqueCode && g.uniqueCode.toLowerCase().includes(sLower))
-      );
-      return matchRoomNum || matchRoomlistNum || matchGuest;
-    });
-  }
-  
-  if (filteredRooms.length === 0) {
-    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:0.88rem;padding:20px;">${searchQuery ? `Tidak ada kamar / jamaah yang cocok dengan "${searchQuery}".` : 'Belum ada template roomlist untuk hotel ini.'}</p>`;
-    return;
-  }
-
-  // Calculate detailed breakdown of room bed types
-  let countSingle = 0;
-  let countTwin = 0;
-  let countKing = 0;
-  let countTriple = 0;
-  let countQuad = 0;
-
-  filteredRooms.forEach(r => {
-    const t = (r.typeBed || '').toLowerCase();
-    if (t.includes('single')) countSingle++;
-    else if (t.includes('twin') || t.includes('double')) countTwin++;
-    else if (t.includes('king')) countKing++;
-    else if (t.includes('triple')) countTriple++;
-    else if (t.includes('quad')) countQuad++;
-    else countQuad++;
-  });
-
-  const totalCount = filteredRooms.length;
-  const parts = [];
-  if (countSingle > 0) parts.push(`S: ${countSingle}`);
-  if (countTwin > 0) parts.push(`Tw: ${countTwin}`);
-  if (countKing > 0) parts.push(`K: ${countKing}`);
-  if (countTriple > 0) parts.push(`T: ${countTriple}`);
-  if (countQuad > 0) parts.push(`Q: ${countQuad}`);
-
-  const breakdownText = parts.length > 0 
-    ? `${parts.join(', ')} (= ${totalCount})` 
-    : `Total: ${totalCount}`;
-  
-  const roomRowsHtml = filteredRooms.map((r, idx) => {
-    const guestNosStr = (r.guests && r.guests.length > 0)
-      ? r.guests.map(g => `(${g.guestNo})`).join(' ')
-      : '-';
-
-    let cleanBed = r.typeBed || 'Quad';
-    if (cleanBed.includes("Double")) cleanBed = "Twin";
-    else if (cleanBed.includes("Triple")) cleanBed = "Triple";
-    else if (cleanBed.includes("Quad")) cleanBed = "Quad";
-
-    const remarkIconsList = [];
-    if (r.guests && Array.isArray(r.guests)) {
-      r.guests.forEach(g => {
-        if (g && g.remark && g.remark.trim() !== "" && g.remark !== "none") {
-          if (!remarkIconsList.includes(g.remark)) {
-            remarkIconsList.push(g.remark);
-          }
-        }
-      });
-    }
-
-    const remarkIconsHtml = remarkIconsList.map(rem => {
-      if (rem === 'warning' || rem === '⚠️') {
-        return `<span style="font-size:1.15rem; line-height:1;" title="Warning">⚠️</span>`;
-      }
-      const hex = getHexColor(rem);
-      const remText = r.guests.find(x => x.remark === rem)?.remarkText || rem;
-      return `<span style="background:${hex}; width:16px; height:16px; border-radius:50%; display:inline-block; box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="${remText}"></span>`;
-    }).join(' ');
-
-    const roomNumDisplay = (r.roomNumber && r.roomNumber.trim() !== '' && r.roomNumber !== '-') 
-      ? `<strong style="color:#0f172a; font-weight:900; font-size:1.05rem;">${r.roomNumber}</strong>`
-      : `<strong style="color:#0070f3; font-weight:900; font-size:1.05rem;">-</strong>`;
-
-    return `
-      <div class="clickable-row" data-idx="${idx}" style="padding:14px 16px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:12px; transition:background 0.15s ease;">
-        <!-- Left Column: Room info & guest numbers -->
-        <div style="display:flex; flex-direction:column; gap:4px;">
-          <div style="font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-            <span style="color:#64748b; font-weight:600;">#${r.roomlistNumber || (idx + 1)}</span>
-            <strong style="color:#0f172a; font-weight:800;">Kamar</strong>
-            ${roomNumDisplay}
-          </div>
-          <div style="font-size:0.84rem; color:#475569; font-weight:500;">
-            Jamaah : ${guestNosStr}
-          </div>
-        </div>
-
-        <!-- Right Column: Bed Type & Remark Icons -->
-        <div style="display:flex; align-items:center; gap:14px;">
-          <span style="font-size:0.88rem; color:#334155; font-weight:600;">${cleanBed}</span>
-          <div style="display:flex; align-items:center; gap:4px; min-width:24px; justify-content:flex-end;">
-            ${remarkIconsHtml}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-      <span style="font-size:0.78rem; color:#1e293b; font-weight:800; background:#f1f5f9; padding:4px 10px; border-radius:6px; border:1px solid #cbd5e1;">
-        ${breakdownText}
-      </span>
-      <button id="user-download-pdf-rl" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:0.75rem;"><i data-lucide="printer" style="width:14px;"></i> Download PDF</button>
-    </div>
-    
-    <div style="background:#ffffff; border-radius:16px; border:1px solid #cbd5e1; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
-      ${roomRowsHtml}
-    </div>
-  `;
-  
-  lucide.createIcons();
-  
-  // Download PDF
-  document.getElementById("user-download-pdf-rl").onclick = () => {
-    const printAreaHtml = `
-      <div class="invoice-card" style="font-family:'Mulish',sans-serif;">
-        <h2 style="text-align:center; font-family:'Martel',serif; font-size:1.4rem;">ROOMLIST DETIL</h2>
-        <p style="text-align:center; font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;">Grup: ${groupName} | Hotel: ${hotelName}</p>
-        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;" border="1" cellpadding="8">
-          <thead>
-            <tr style="background:#f8f9fa;">
-              <th>Roomlist</th>
-              <th>No Kamar</th>
-              <th>Tipe Kasur</th>
-              <th>Nomor Tamu</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredRooms.map(r => `
-              <tr>
-                <td>${r.roomlistNumber}</td>
-                <td><strong>${r.roomNumber}</strong></td>
-                <td>${r.typeBed}</td>
-                <td>${r.guests.map(g => g.guestNo).join(', ')}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
-    openModal("Download & Print Roomlist PDF", `
-      <div id="invoice-print-area">${printAreaHtml}</div>
-      <button class="btn btn-gold" onclick="window.print()" style="margin-top:20px;">PRINT SEKARANG</button>
-    `);
-  };
-  
-  // Row Click Room number edit popup
-  const rows = container.querySelectorAll(".clickable-row");
-  rows.forEach(row => {
-    row.onclick = (e) => {
-      if (e.target.tagName === 'SPAN') return;
-      
-      const idx = parseInt(row.getAttribute("data-idx"));
-      const targetRoom = filteredRooms[idx];
-      if (!targetRoom) return;
-      
-      const guestsListHtml = (targetRoom.guests && targetRoom.guests.length > 0) 
-        ? targetRoom.guests.map(g => {
-            let remarkBadge = "";
-            const remDesc = g.remarkText ? ` (${g.remarkText})` : "";
-            if (g.remark === "warning") {
-              remarkBadge = `<span style="background:#fef08a; color:#854d0e; font-size:0.72rem; padding:2px 8px; border-radius:10px; font-weight:800; border:1px solid #fde047;">⚠️ Warning${remDesc}</span>`;
-            } else if (g.remark && g.remark !== "none") {
-              const hex = getHexColor(g.remark);
-              remarkBadge = `<span style="background:${hex}; color:#ffffff; font-size:0.72rem; padding:2px 8px; border-radius:10px; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.2);">${g.remark}${remDesc}</span>`;
-            }
-            const uCodeStr = g.uniqueCode ? `<span style="background:#eff6ff; color:#0070f3; font-size:0.72rem; font-weight:800; padding:1px 6px; border-radius:4px;">${g.uniqueCode}</span>` : "";
-
-            return `
-              <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9; font-size:0.82rem; gap:8px;">
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <code style="font-size:0.78rem; font-weight:800; color:#475569; background:#e2e8f0; padding:1px 5px; border-radius:4px;">No. ${g.guestNo}</code>
-                  <strong style="color:#0f172a;">${g.name}</strong>
-                  ${uCodeStr}
-                </div>
-                <div>
-                  ${remarkBadge || '<span style="color:#94a3b8; font-size:0.75rem;">-</span>'}
-                </div>
-              </div>
-            `;
-          }).join('') 
-        : '<p style="color:#94a3b8; font-size:0.8rem; text-align:center; margin:0;">Tidak ada daftar jamaah di kamar ini.</p>';
-
-      const formHtml = `
-        <div style="background:#f8fafc; border-radius:12px; padding:14px; border:1px solid #e2e8f0; margin-bottom:16px; font-size:0.85rem; color:#334155;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
-            <span>Grup Keberangkatan:</span>
-            <strong style="color:#0f172a;">${targetRoom.groupName}</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
-            <span>Hotel Akomodasi:</span>
-            <strong style="color:#0f172a;">${targetRoom.hotelName}</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
-            <span>No. Roomlist / Kasur:</span>
-            <strong style="color:#0f172a;">${targetRoom.roomlistNumber} (${targetRoom.typeBed})</strong>
-          </div>
-        </div>
-
-        <div style="background:#ffffff; border-radius:12px; border:1px solid #cbd5e1; padding:14px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-          <div style="font-size:0.85rem; font-weight:800; color:#1e293b; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
-            <i data-lucide="users" style="width:16px; height:16px; color:#c5a850;"></i>
-            <span>Daftar Penghuni Kamar (${targetRoom.guests ? targetRoom.guests.length : 0} Orang) & Remark</span>
-          </div>
-          
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            ${guestsListHtml}
-          </div>
-        </div>
-        
-        <form id="user-edit-room-num-form-popup">
-          <div class="form-group">
-            <label class="form-label" style="font-weight:800;">Edit Nomor Kamar Baru</label>
-            <input type="text" id="user-edit-room-number-input" class="form-input" value="${targetRoom.roomNumber}" placeholder="mis. 1007 atau 2105" required>
-          </div>
-          <button type="submit" class="btn btn-gold" style="font-weight:800; width:100%;"><i data-lucide="check-circle"></i> SIMPAN NOMOR KAMAR</button>
-        </form>
-      `;
-      openModal("Edit Nomor Kamar (Pop Up)", formHtml);
-      lucide.createIcons();
-      
-      document.getElementById("user-edit-room-num-form-popup").onsubmit = (event) => {
-        event.preventDefault();
-        const newVal = document.getElementById("user-edit-room-number-input").value.trim();
-        targetRoom.roomNumber = newVal;
-        saveState();
-        
-        addNotification("penjadwalan", `Pengubahan Kamar: Kamar No. ${newVal} disesuaikan pada roomlist ${targetRoom.roomlistNumber}`);
-        closeModal();
-        showToast("Nomor Kamar berhasil diperbarui!");
-        renderRoomlistTable(groupName, hotelName);
-      };
-    };
-  });
-}
-
-// --- USER SUB-VIEW: DOCUMENTS ---
-function getDocCategoryBadge(cat) {
-  const map = {
-    "Profiling Jamaah": { bg: "#eff6ff", color: "#0070f3", border: "#bfdbfe" },
-    "Visa": { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
-    "Paspor": { bg: "#fefce8", color: "#ca8a04", border: "#fef08a" },
-    "E-Ticket": { bg: "#faf5ff", color: "#9333ea", border: "#e9d5ff" },
-    "Bus List": { bg: "#fff7ed", color: "#c2410c", border: "#ffedd5" },
-    "Paket Info": { bg: "#fdf2f8", color: "#db2777", border: "#fbcfe8" },
-    "Itinerary": { bg: "#f0fdfa", color: "#0d9488", border: "#99f6e4" }
-  };
-  const style = map[cat] || { bg: "#f8fafc", color: "#475569", border: "#cbd5e1" };
-  return `<span style="background:${style.bg}; color:${style.color}; border:1px solid ${style.border}; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:12px;">${cat || 'Dokumen'}</span>`;
-}
-
-function openDocPreviewModal(doc) {
-  const cat = doc.category || "Dokumen";
-  let contentHtml = "";
-
-  if (cat === "Profiling Jamaah" || doc.name.includes("Profiling")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-          <span>Total Jamaah Terprofiling: <strong>25 Pax</strong></span>
-          <span style="color:#16a34a; font-weight:800;">✓ Data Kesehatan & Khusus Lengkap</span>
-        </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
-          <tr style="background:#f1f5f9; font-weight:800;"><th>No</th><th>ID / Name</th><th>Gender</th><th>Catatan Medis / Khusus</th><th>VIP Status</th></tr>
-          <tr><td>1</td><td><b>JIBB-0001</b> - H. BAMBANG SUTRISNO</td><td>Laki-laki</td><td>Hipertensi (Obat Rutin)</td><td>Sapphire VIP</td></tr>
-          <tr><td>2</td><td><b>JIBB-0002</b> - HJ. SITI AMINAH</td><td>Perempuan</td><td>Perlu Pendamping / Lansia</td><td>Sapphire VIP</td></tr>
-          <tr><td>3</td><td><b>JIBB-0003</b> - ACHMAD FAUZI</td><td>Laki-laki</td><td>Sehat / Manula Active</td><td>Sapphire VIP</td></tr>
-          <tr><td>7</td><td><b>JIBB-0007</b> - AYU VIDYA PUTRI</td><td>Perempuan</td><td>Infan / Kebutuhan Baby Stroller</td><td>Sapphire VIP</td></tr>
-          <tr><td>11</td><td><b>JIBB-0011</b> - HJ. ENDANG SRI WAHYUNI</td><td>Perempuan</td><td>Kursi Roda (Layanan Tawaf/Sai)</td><td>Sapphire VIP</td></tr>
-        </table>
-        <p style="font-size:0.75rem; color:#64748b; margin-top:8px;">* Menampilkan cuplikan ringkasan 25 data profiling jamaah grup ${doc.groupName}.</p>
-      </div>
-    `;
-  } else if (cat === "Visa" || doc.name.includes("Visa")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#f0fdf4; padding:10px 14px; border-radius:8px; border:1px solid #bbf7d0; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-          <div><strong style="color:#15803d;">Ministry of Hajj & Umrah KSA</strong><br><span style="font-size:0.75rem;">Status: ISSUED / APPROVED (25 Pax)</span></div>
-          <span style="font-size:1.2rem;">🟢</span>
-        </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
-          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Visa</th><th>Nama Jamaah</th><th>No. Paspor</th><th>Validity</th></tr>
-          <tr><td>6168664001</td><td>H. BAMBANG SUTRISNO</td><td>X8582841</td><td>90 Hari (Single Entry)</td></tr>
-          <tr><td>6168664002</td><td>HJ. SITI AMINAH</td><td>X8582842</td><td>90 Hari (Single Entry)</td></tr>
-          <tr><td>6168664007</td><td>AYU VIDYA PUTRI</td><td>X8582843</td><td>90 Hari (Single Entry)</td></tr>
-        </table>
-      </div>
-    `;
-  } else if (cat === "Paspor" || doc.name.includes("Paspor")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#fefce8; padding:10px 14px; border-radius:8px; border:1px solid #fef08a; margin-bottom:12px;">
-          <strong style="color:#854d0e;">Manifest Paspor RI & Masa Berlaku</strong>
-          <div style="font-size:0.75rem; color:#713f12;">Minimal masa berlaku paspor 6 bulan sebelum tanggal keberangkatan.</div>
-        </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
-          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Paspor</th><th>Nama di Paspor</th><th>Tgl Expire</th><th>Kantor Imigrasi</th></tr>
-          <tr><td>X8582841</td><td>BAMBANG SUTRISNO</td><td>12/10/2032</td><td>Jakarta Selatan</td></tr>
-          <tr><td>X8582842</td><td>SITI AMINAH</td><td>14/05/2031</td><td>Jakarta Pusat</td></tr>
-          <tr><td>X8582843</td><td>AYU VIDYA PUTRI</td><td>20/08/2033</td><td>Bandung</td></tr>
-        </table>
-      </div>
-    `;
-  } else if (cat === "E-Ticket" || doc.name.includes("Ticket") || doc.name.includes("Tiket")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#faf5ff; padding:12px; border-radius:8px; border:1px solid #e9d5ff; margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; font-weight:800; color:#7e22ce;">
-            <span>SAUDIA AIRLINES (SV-819 / SV-818)</span>
-            <span>PNR: SV-JKT-8821</span>
-          </div>
-          <div style="font-size:0.78rem; color:#6b21a8; margin-top:4px;">
-            CGK (Jakarta) &rarr; MED (Madinah) &bull; JED (Jeddah) &rarr; CGK (Jakarta)<br>
-            Bagasi: 2x 23 Kg per Jamaah | Kabin: 7 Kg
-          </div>
-        </div>
-      </div>
-    `;
-  } else if (cat === "Bus List" || doc.name.includes("Bus")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#fff7ed; padding:12px; border-radius:8px; border:1px solid #ffedd5; margin-bottom:12px;">
-          <strong style="color:#c2410c;">BUS 1 - Mercedes Travego 2024 (45 Seat)</strong>
-          <div style="font-size:0.75rem; color:#9a3412; margin-top:2px;">
-            Driver: Abu Fahad (+966-501234567) &bull; Tour Leader: Ustadz H. Ahmad Ridwan
-          </div>
-        </div>
-        <table style="width:100%; border-collapse:collapse; font-size:0.78rem; border:1px solid #cbd5e1;" border="1" cellpadding="6">
-          <tr style="background:#f1f5f9; font-weight:800;"><th>No. Seat</th><th>Nama Jamaah</th><th>Status Koper</th></tr>
-          <tr><td>1A & 1B</td><td>H. BAMBANG SUTRISNO & HJ. SITI AMINAH</td><td>2 Koper Besar (Bagasi 1)</td></tr>
-          <tr><td>2A & 2B</td><td>AYU VIDYA PUTRI (Infan)</td><td>1 Koper + Stroller</td></tr>
-        </table>
-      </div>
-    `;
-  } else if (cat === "Paket Info" || doc.name.includes("Paket")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#fdf2f8; padding:12px; border-radius:8px; border:1px solid #fbcfe8; margin-bottom:12px;">
-          <strong style="color:#be185d;">PAKET VIP SAPPHIRE PLUS (9 HARI)</strong>
-          <div style="font-size:0.78rem; color:#9d174d; margin-top:4px;">
-            &bull; Hotel Madinah: Maden Al Rawda (5 Bintang - Depan Masjid Nabawi)<br>
-            &bull; Hotel Makkah: Al Marwa Rayhaan Rotana (5 Bintang - Kompleks Abraj Al Bait)<br>
-            &bull; Kereta Cepat Haramain Express (Business Class)<br>
-            &bull; Catering: Full Board Indonesian Buffet 3x Sehari
-          </div>
-        </div>
-      </div>
-    `;
-  } else if (cat === "Itinerary" || doc.name.includes("Itinerary")) {
-    contentHtml = `
-      <div style="font-size:0.84rem; color:#334155;">
-        <div style="background:#f0fdfa; padding:12px; border-radius:8px; border:1px solid #99f6e4; margin-bottom:12px;">
-          <strong style="color:#0f766e;">RUNDOWN ITINERARY UMROH 9 HARI</strong>
-        </div>
-        <ul style="padding-left:18px; line-height:1.6; font-size:0.78rem;">
-          <li><b>Hari 1:</b> Kumpul CGK Terminal 3 &rarr; Flight SV-819 to Madinah &rarr; Check-in Maden Al Rawda.</li>
-          <li><b>Hari 2:</b> Ziarah Raudhah & Ziarah Dalam Masjid Nabawi.</li>
-          <li><b>Hari 3:</b> City Tour Madinah (Masjid Quba, Jabal Uhud, Kebun Kurma).</li>
-          <li><b>Hari 4:</b> Check-out Madinah &rarr; Miqat Bir Ali &rarr; Kereta Cepat Haramain to Makkah &rarr; Pelaksanaan Umroh 1.</li>
-          <li><b>Hari 5:</b> Perbanyak Ibadah Mandiri di Masjidil Haram Makkah.</li>
-          <li><b>Hari 6:</b> City Tour Makkah (Jabal Tsur, Arafah, Muzdalifah, Mina, Jabal Nur).</li>
-          <li><b>Hari 7:</b> Perbanyak Ibadah & Persiapan Thawaf Wada.</li>
-          <li><b>Hari 8:</b> Thawaf Wada &rarr; Transfer to Airport Jeddah &rarr; Flight SV-818 to Jakarta.</li>
-          <li><b>Hari 9:</b> Tiba di Bandara Soekarno-Hatta (CGK). Umroh Maqbool Insya Allah.</li>
-        </ul>
-      </div>
-    `;
-  } else {
-    contentHtml = `
-      <div style="border:1px solid #e2e8f0; border-radius:8px; padding:20px; background:#fcfcfd; margin-bottom:12px; font-size:0.85rem; color:#475569;">
-        📄 [BERKAS DOKUMEN SOP OPERASIONAL]<br>
-        <span style="font-size:0.78rem; color:#64748b;">Berkas standar operasional prosedur penugasan tim lapangan.</span>
-      </div>
-    `;
-  }
-
-  const docPreviewHtml = `
-    <div style="padding: 4px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
-        <div>
-          <h4 style="font-family:'Martel',serif; font-size:1.05rem; font-weight:800; color:#0f172a; margin-bottom:2px;">${cleanDocName(doc.name, doc.groupName)}</h4>
-          <span style="font-size:0.75rem; color:#64748b;">Grup: ${doc.groupName}</span>
-        </div>
-        ${getDocCategoryBadge(cat)}
-      </div>
-
-      ${contentHtml}
-
-      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
-        <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 14px; font-size:0.78rem;">Tutup</button>
-        <button class="btn btn-gold" onclick="showToast('Unduh Berkas Berhasil!')" style="width:auto; padding:6px 14px; font-size:0.78rem; font-weight:800;">
-          <i data-lucide="download" style="width:14px;"></i> Download Berkas
-        </button>
-      </div>
-    </div>
-  `;
-  openModal(`Preview Berkas (${cat})`, docPreviewHtml);
-  lucide.createIcons();
-}
-
-
-function renderUserDocuments() {
-  const container = document.getElementById("user-subview-content");
   if (!container) return;
-  
-  const urlGroupParam = new URLSearchParams(window.location.hash.split("?")[1] || "").get("group") || "";
-  
-  // Auto detect active connected group
-  const username = state.currentUser ? state.currentUser.username : '';
-  const myActiveTask = state.assignments.find(a => a && a.staff && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai");
-  const activeGroupName = urlGroupParam || (myActiveTask ? myActiveTask.groupName : (state.groups[0] ? state.groups[0].name : ""));
-  
-  // Filter documents for this group & SOP Umum
-  const groupDocs = state.documents.filter(d => d.groupName === activeGroupName || d.groupName === "Umum");
-  
-  container.innerHTML = `
-    <div style="font-family:'Mulish', sans-serif; padding-top:4px;">
-      
-      <!-- Active Connected Group Header Banner -->
-      <div style="background:linear-gradient(135deg, #ffffff 0%, #fffdf5 100%); border-radius:14px; border:1px solid #fef3c7; padding:14px 16px; margin-bottom:18px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-        <div style="font-size:0.7rem; color:#b89230; font-weight:800; text-transform:uppercase; margin-bottom:2px;">📁 DOKUMEN TERHUBUNG GRUP</div>
-        <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${activeGroupName || 'Semua Dokumen Rombongan'}</div>
-      </div>
-      
-      <!-- Document List for Connected Group -->
-      <div class="document-list" id="group-docs-list" style="display:flex; flex-direction:column; gap:10px;">
-        ${groupDocs.length === 0 ? `
-          <p style="color:var(--text-light); text-align:center; font-size:0.85rem; padding:24px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Belum ada berkas dokumen terunggah untuk grup ini.</p>
-        ` : groupDocs.map(doc => `
-          <div class="document-item" style="border-left:4px solid var(--primary-gold); background:#fff; border-radius:12px; padding:12px 14px; border-top:1px solid #e2e8f0; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-            <div class="document-info" style="display:flex; align-items:center; gap:12px;">
-              <div class="document-icon" style="width:36px; height:36px; border-radius:10px; background:#fffdf5; border:1px solid #fef3c7; display:flex; align-items:center; justify-content:center; color:#b89230;">
-                <i data-lucide="file-text" style="width:20px; height:20px;"></i>
-              </div>
-              <div>
-                <div class="document-name" style="font-size:0.88rem; font-weight:800; color:#0f172a;">${cleanDocName(doc.name, doc.groupName)}</div>
-                <div class="document-meta" style="font-size:0.75rem; color:#64748b;">${doc.groupName} ${doc.type ? '| ' + doc.type : ''}</div>
-              </div>
+
+  try {
+    const username = state.currentUser ? state.currentUser.username : '';
+    const nameStr = state.currentUser ? state.currentUser.name : 'Petugas Khidmat';
+    const myWalletBal = (state.financial && state.financial.wallets && state.financial.wallets[username]) || 0;
+    
+    // Pick user active tasks
+    const myActiveTasks = (state.assignments || []).filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
+    const pendingInflows = (state.financial && state.financial.transactions || []).filter(tx => tx && tx.recipient === username && tx.status === "Pending Confirmation");
+
+    container.innerHTML = `
+      <div style="font-family:'Mulish', sans-serif; padding-top:4px; padding-bottom:30px; max-width:600px; margin:0 auto;">
+        
+        <!-- Greeting Header -->
+        <h2 style="font-size:1.15rem; font-weight:800; color:#1e293b; margin-top:2px; margin-bottom:14px;">
+          Halo, ${nameStr}
+        </h2>
+
+        <!-- Integrated Financial Wallet Box -->
+        <div style="margin-bottom:20px; background:#ffffff; padding:16px 20px; border-radius:18px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.03); border:1px solid #f1f5f9;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="display:flex; justify-content:center; align-items:center; color:#1e293b; border:1.5px solid #cbd5e1; border-radius:12px; padding:8px 10px;">
+              <i data-lucide="wallet" style="width:24px; height:24px; stroke-width:2.2;"></i>
             </div>
-            <button class="btn btn-secondary preview-doc-btn" data-id="${doc.id}" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800; border-radius:8px; border:1px solid #cbd5e1;">Preview</button>
+            <div style="font-size:1.5rem; font-weight:900; color:#0f172a; font-family:'Mulish', sans-serif; letter-spacing:-0.02em;">
+              SAR ${myWalletBal.toLocaleString('id-ID')}
+            </div>
+          </div>
+          
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button id="user-wallet-transfer-btn" class="btn" style="width:42px; height:42px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Transfer Kas">
+              <i data-lucide="arrow-left-right" style="width:20px; height:20px; stroke-width:2.5;"></i>
+            </button>
+            <button id="user-wallet-add-exp-btn" class="btn" style="width:42px; height:42px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Tambah Pengeluaran (Lapor Kas)">
+              <i data-lucide="plus" style="width:22px; height:22px; stroke-width:3;"></i>
+            </button>
+            <button id="user-wallet-detail-btn" class="btn" style="width:42px; height:42px; padding:0; border-radius:12px; background:#c5a850; color:#ffffff; display:flex; justify-content:center; align-items:center; border:none; cursor:pointer; box-shadow:0 3px 8px rgba(197, 168, 80, 0.35);" title="Lihat Detail Kas">
+              <i data-lucide="more-horizontal" style="width:22px; height:22px; stroke-width:2.5;"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Inflow alert items -->
+        ${pendingInflows.map(inf => `
+          <div class="inflow-alert-item" style="background:rgba(16,185,129,0.12); border:1px solid #10b981; border-radius:10px; padding:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+            <div>
+              <strong style="color:#065f46;">Dana dari ${inf.sender === 'Dompet Utama' ? 'Admin' : inf.sender}:</strong> SAR ${inf.amount.toLocaleString('id-ID')}<br>
+              <span style="font-size:0.75rem; color:#475569;">${inf.description}</span>
+            </div>
+            <button class="btn btn-gold confirm-inflow-btn" data-id="${inf.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px;">Konfirmasi Diterima</button>
           </div>
         `).join('')}
+
+        <!-- Main Menu Shortcut Buttons (3 Items Grid) -->
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:28px;">
+          <div onclick="window.location.hash='#user/apply-tugas'" class="glass-card" style="padding:16px 8px; text-align:center; cursor:pointer; border-radius:16px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 2px 6px rgba(0,0,0,0.02); transition:transform 0.15s ease;">
+            <i data-lucide="clipboard-list" style="width:26px; height:26px; color:#c5a850; stroke-width:2; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;"></i>
+            <div style="font-size:0.82rem; font-weight:800; color:#1e293b;">Daftar Tugas</div>
+          </div>
+          
+          <div onclick="window.location.hash='#user/laporan?tab=absensi'" class="glass-card" style="padding:16px 8px; text-align:center; cursor:pointer; border-radius:16px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 2px 6px rgba(0,0,0,0.02); transition:transform 0.15s ease;">
+            <i data-lucide="user-check" style="width:26px; height:26px; color:#c5a850; stroke-width:2; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;"></i>
+            <div style="font-size:0.82rem; font-weight:800; color:#1e293b;">Absensi</div>
+          </div>
+          
+          <div onclick="window.location.hash='#user/laporan?tab=insiden'" class="glass-card" style="padding:16px 8px; text-align:center; cursor:pointer; border-radius:16px; background:#fff; border:1px solid #f1f5f9; box-shadow:0 2px 6px rgba(0,0,0,0.02); transition:transform 0.15s ease;">
+            <i data-lucide="alert-triangle" style="width:26px; height:26px; color:#c5a850; stroke-width:2; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;"></i>
+            <div style="font-size:0.82rem; font-weight:800; color:#1e293b;">Kejadian</div>
+          </div>
+        </div>
+
+        <!-- Section Title: TUGAS AKTIF with Underline -->
+        <div style="margin-bottom:16px;">
+          <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin:0 0 4px 0; display:inline-block; border-bottom:3px solid #c5a850; padding-bottom:3px;">
+            TUGAS AKTIF
+          </h3>
+        </div>
+
+        <!-- Active Tasks Cards List -->
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          ${myActiveTasks.length === 0 ? `
+            <p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:20px; background:#fff; border-radius:16px; border:1px solid #e2e8f0;">Tidak ada jadwal penugasan aktif hari ini.</p>
+          ` : myActiveTasks.map(task => {
+            const details = task.details || {};
+            const group = state.groups.find(g => g && g.name === task.groupName);
+            
+            const taskDateStr = task.date ? formatDateShortMonth(task.date) : '02/08/2026';
+            const typeStr = (task.type || '').toLowerCase();
+
+            // Build ALL additional detail items dynamically for this task type (showing 2, 3, 4+ fields cleanly)
+            let detailItems = [];
+            const addDetail = (label, val, fullWidth = false) => {
+              if (val && String(val).trim() !== '' && String(val).trim() !== '-' && String(val).trim() !== '0 Pax' && String(val).trim() !== '0 Bus') {
+                detailItems.push({ label, val, fullWidth });
+              }
+            };
+
+            if (typeStr.includes('kedatangan')) {
+              addDetail('🍴 MEALPLAN KEDATANGAN', details.meal || (group ? (group.mealsArrival ? group.mealsArrival.join(', ') : group.mealArrival) : null) || 'Dinner: Al Baik + Nasi');
+              addDetail('📍 TUJUAN', details.destinationTarget || details.destination || details.hotelName || (group ? (group.hotelMadinah || group.hotelMakkah) : null) || 'Al Anshor Golden Tulip');
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+              addDetail('✈️ FLIGHT & ETA', details.eta || (group && group.flightArrival && group.flightArrival[0] ? group.flightArrival[0].code + ' (' + (group.flightArrival[0].takeoff || '') + '-' + (group.flightArrival[0].landing || '') + ')' : null));
+              addDetail('🚌 JUMLAH BUS', details.busCount ? details.busCount + ' Bus' : (group && group.bus ? group.bus + ' Bus' : null));
+            } else if (typeStr.includes('kepulangan')) {
+              addDetail('🍴 MEALPLAN KEPULANGAN', details.meal || (group ? (group.mealsDeparture ? group.mealsDeparture.join(', ') : group.mealDeparture) : null) || 'Lunch: Nasi Mandi');
+              addDetail('📍 ASAL', details.originTarget || details.origin || (group ? (group.hotelMadinah || group.hotelMakkah) : null) || 'Hotel Madinah');
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+              addDetail('✈️ FLIGHT & ETD', details.eta || details.etd || (group && group.flightDeparture && group.flightDeparture[0] ? group.flightDeparture[0].code + ' (' + (group.flightDeparture[0].takeoff || '') + '-' + (group.flightDeparture[0].landing || '') + ')' : null));
+              addDetail('🚌 JUMLAH BUS', details.busCount ? details.busCount + ' Bus' : (group && group.bus ? group.bus + ' Bus' : null));
+            } else if (typeStr.includes('check in')) {
+              addDetail('🏨 NAMA HOTEL', details.hotelName || (group ? (group.hotelMadinah || group.hotelMakkah) : null) || 'Hotel Madinah');
+              addDetail('📍 ASAL DARI', details.originTarget || details.origin);
+              addDetail('🛏️ KOMPOSISI KAMAR', details.roomComposition || details.komposisiKamar || '5 Quad, 2 Double');
+              addDetail('🎁 COMPLIMENTARY', details.complimentary || details.comp);
+              addDetail('📦 PAKET LAYANAN', Array.isArray(details.packages) && details.packages.length > 0 ? details.packages.join(', ') : null);
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+            } else if (typeStr.includes('check out')) {
+              addDetail('🏨 NAMA HOTEL', details.hotelName || (group ? (group.hotelMadinah || group.hotelMakkah) : null) || 'Hotel Makkah');
+              addDetail('📍 TUJUAN', details.destinationTarget || details.destination);
+              addDetail('🛏️ KOMPOSISI KAMAR', details.roomComposition || details.komposisiKamar);
+              addDetail('🎁 COMPLIMENTARY', details.complimentary || details.comp || 'Air Zamzam & Koper');
+              addDetail('📦 PAKET LAYANAN', Array.isArray(details.packages) && details.packages.length > 0 ? details.packages.join(', ') : null);
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+            } else if (typeStr.includes('city tour') || typeStr.includes('stasiun')) {
+              addDetail('🚌 RUTE PENJEMPUTAN', details.pickupRoute || details.hotelPickup || 'Hotel Madinah');
+              addDetail('📍 TUJUAN (DESTINASI)', details.destinationBus || details.destination || 'Jabal Uhud & Masjid Quba');
+              addDetail('📋 ITINERARY', details.itinerary);
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+            } else if (typeStr.includes('romansiah')) {
+              addDetail('📍 ASAL PENJEMPUTAN', details.originTarget || details.hotelPickup || 'Restoran Romansiah');
+              addDetail('🍱 JUMLAH NAMPAN', details.nampanCount ? (details.nampanCount + ' Nampan') : '5 Nampan');
+              addDetail('👥 TOTAL PAX', details.totalPax ? (String(details.totalPax).includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : (group ? group.pax : null));
+            } else {
+              addDetail('📝 DESKRIPSI KUSTOM', details.customText || details.customTaskName);
+              addDetail('🏨 NAMA HOTEL', details.hotelName);
+              addDetail('✈️ FLIGHT & ETA', details.eta);
+            }
+
+            if (details.remarks) {
+              addDetail('💬 KETERANGAN UMUM', details.remarks, true);
+            }
+
+            if (detailItems.length === 0) {
+              detailItems.push({ label: '🍴 MEALPLAN KEDATANGAN', val: 'Dinner: Al Baik + Nasi', fullWidth: false });
+              detailItems.push({ label: '📍 TUJUAN', val: 'Al Anshor Golden Tulip', fullWidth: false });
+            }
+
+            const detailGridHtml = detailItems.map(item => `
+              <div style="${item.fullWidth ? 'grid-column: span 2;' : ''}">
+                <div style="color:#b89230; font-weight:800; font-size:0.7rem; text-transform:uppercase; margin-bottom:2px; display:flex; align-items:center; gap:4px;">
+                  ${item.label}
+                </div>
+                <div style="color:#0f172a; font-weight:700;">${item.val}</div>
+              </div>
+            `).join('');
+            
+            const tlName = (group && group.leaders && group.leaders.length > 0) ? group.leaders.join(', ') : 'Ust. H. Dinar Zul Akbar, Lc., M.A.';
+            const muthawwifName = (group && group.mutawwif) ? group.mutawwif : 'Ust. H. Muhammad Albani, Lc.';
+            
+            const totalPaxVal = group ? (group.pax || '19 Pax') : (details.totalPax ? (details.totalPax.includes('Pax') ? details.totalPax : details.totalPax + ' Pax') : '19 Pax');
+            const totalBusVal = group ? (group.bus ? group.bus + ' Bus' : '1 Bus') : '1 Bus';
+            
+            const myAbsences = state.reports.attendance.filter(a => a.username === username && a.taskId === task.id);
+            const hasCheckIn = myAbsences.some(a => a.type === "Masuk");
+            const btnAbsenText = hasCheckIn ? "ABSENSI KELUAR" : "ABSENSI MASUK";
+
+            // Parse real flight data dynamically from group manifest
+            const arrFlight = parseGroupFlightData(group, 'arrival');
+            const depFlight = parseGroupFlightData(group, 'departure');
+
+            const routeSummaryStr = `${arrFlight.originCode} ➔ ${arrFlight.destCode} • ${depFlight.originCode} ➔ ${depFlight.destCode}`;
+
+            return `
+              <div style="background:#ffffff; border-radius:20px; border:1px solid #f1f5f9; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.03);">
+                
+                <!-- Task Title & Date -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <h4 style="font-size:0.95rem; font-weight:900; color:#0f172a; margin:0; text-transform:uppercase;">${task.type}</h4>
+                  <span style="font-size:0.8rem; color:#64748b; font-weight:700;">${taskDateStr}</span>
+                </div>
+
+                <!-- Dynamic Grid rendering all available additional details for this task type without changing design -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; font-size:0.78rem; margin-bottom:14px;">
+                  ${detailGridHtml}
+                </div>
+
+                <div style="border-top:1px solid #f1f5f9; margin:14px 0;"></div>
+
+                <!-- Group Name Title -->
+                <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 8px 0; line-height:1.35;">
+                  ${task.groupName}
+                </h3>
+
+                <!-- Staff Info -->
+                <div style="font-size:0.8rem; color:#64748b; line-height:1.6; margin-bottom:14px;">
+                  <div>Tour Leader: <strong style="color:#334155;">${tlName}</strong></div>
+                  <div>Muthowwif: <strong style="color:#334155;">${muthawwifName}</strong></div>
+                </div>
+
+                <!-- Pax & Bus Metrics (2 Columns) -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+                  <div>
+                    <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">👥 TOTAL JAMAAH</div>
+                    <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalPaxVal}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">🚌 TOTAL BUS</div>
+                    <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalBusVal}</div>
+                  </div>
+                </div>
+
+                <!-- EXPANDABLE FLIGHT SCHEDULE ACCORDION CARD (DYNAMIC MANIFEST GROUP DATA) -->
+                <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:16px; padding:14px 16px; margin-bottom:18px;">
+                  
+                  <!-- Accordion Header Row -->
+                  <div id="user-flight-header-${task.id}" onclick="toggleUserFlightAccordion('${task.id}')" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
+                    <div>
+                      <div style="display:flex; align-items:center; gap:8px; color:#b89230; font-weight:800; font-size:0.85rem;">
+                        <i data-lucide="plane" style="width:18px; height:18px; color:#b89230;"></i>
+                        <span>Jadwal Penerbangan</span>
+                      </div>
+                      <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px; font-weight:600;">
+                        ${routeSummaryStr}
+                      </div>
+                    </div>
+                    <i data-lucide="chevron-up" id="user-flight-icon-${task.id}" style="width:20px; height:20px; color:#b89230; transition:transform 0.25s ease;"></i>
+                  </div>
+
+                  <!-- Accordion Body (Expanded Detailed Flight Schedule from Manifest) -->
+                  <div id="user-flight-body-${task.id}" style="margin-top:14px; border-top:1px solid #fef08a; padding-top:14px;">
+                    
+                    <!-- FLIGHT BERANGKAT -->
+                    <div style="margin-bottom:14px;">
+                      <div style="font-size:0.72rem; font-weight:800; color:#b89230; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                        <span>✈️ BERANGKAT</span> • <span>${arrFlight.dateStr}</span>
+                      </div>
+
+                      <div style="display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:8px; text-align:center;">
+                        <!-- Origin -->
+                        <div style="text-align:left;">
+                          <div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1;">${arrFlight.originCode}</div>
+                          <div style="font-size:0.85rem; font-weight:800; color:#b89230; margin-top:4px;">${arrFlight.takeoffStr}</div>
+                          <div style="font-size:0.72rem; font-weight:700; color:#94a3b8; margin-top:2px;">${arrFlight.originCity}</div>
+                        </div>
+
+                        <!-- Flight Code Center Divider -->
+                        <div style="padding:0 8px;">
+                          <div style="position:relative; width:80px; text-align:center;">
+                            <div style="border-top:1.5px dashed #cbd5e1; width:100%; position:absolute; top:50%; transform:translateY(-50%); z-index:1;"></div>
+                            <i data-lucide="plane" style="width:16px; height:16px; color:#b89230; background:#fffdf5; position:relative; z-index:2; padding:0 4px;"></i>
+                          </div>
+                          <div style="font-size:0.72rem; font-weight:800; color:#94a3b8; margin-top:4px;">${arrFlight.codeStr}</div>
+                        </div>
+
+                        <!-- Destination -->
+                        <div style="text-align:right;">
+                          <div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1;">${arrFlight.destCode}</div>
+                          <div style="font-size:0.85rem; font-weight:800; color:#b89230; margin-top:4px;">${arrFlight.landingStr}</div>
+                          <div style="font-size:0.72rem; font-weight:700; color:#94a3b8; margin-top:2px;">${arrFlight.destCity}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="border-top:1px dashed #fef08a; margin:14px 0;"></div>
+
+                    <!-- FLIGHT PULANG -->
+                    <div>
+                      <div style="font-size:0.72rem; font-weight:800; color:#94a3b8; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                        <span>🛬 PULANG</span> • <span>${depFlight.dateStr}</span>
+                      </div>
+
+                      <div style="display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:8px; text-align:center;">
+                        <!-- Return Origin -->
+                        <div style="text-align:left;">
+                          <div style="font-size:1.35rem; font-weight:900; color:#64748b; line-height:1;">${depFlight.originCode}</div>
+                          <div style="font-size:0.85rem; font-weight:800; color:#b89230; margin-top:4px;">${depFlight.takeoffStr}</div>
+                          <div style="font-size:0.72rem; font-weight:700; color:#94a3b8; margin-top:2px;">${depFlight.originCity}</div>
+                        </div>
+
+                        <!-- Return Flight Code Center Divider -->
+                        <div style="padding:0 8px;">
+                          <div style="position:relative; width:80px; text-align:center;">
+                            <div style="border-top:1.5px dashed #cbd5e1; width:100%; position:absolute; top:50%; transform:translateY(-50%); z-index:1;"></div>
+                            <i data-lucide="plane" style="width:16px; height:16px; color:#b89230; background:#fffdf5; position:relative; z-index:2; padding:0 4px;"></i>
+                          </div>
+                          <div style="font-size:0.72rem; font-weight:800; color:#94a3b8; margin-top:4px;">${depFlight.codeStr}</div>
+                        </div>
+
+                        <!-- Return Destination -->
+                        <div style="text-align:right;">
+                          <div style="font-size:1.35rem; font-weight:900; color:#64748b; line-height:1;">${depFlight.destCode}</div>
+                          <div style="font-size:0.85rem; font-weight:800; color:#b89230; margin-top:4px;">${depFlight.landingStr}</div>
+                          <div style="font-size:0.72rem; font-weight:700; color:#94a3b8; margin-top:2px;">${depFlight.destCity}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- 2 Action Buttons (LIHAT DETAIL & ABSENSI MASUK/KELUAR) -->
+                <div style="display:flex; gap:12px;">
+                  <button onclick="window.location.hash='#user/task-detail?id=${task.id}'" class="btn" style="flex:1; background:#c5a850; color:#ffffff; font-weight:900; font-size:0.85rem; border-radius:12px; padding:12px; border:none; cursor:pointer; text-align:center; box-shadow:0 3px 8px rgba(197, 168, 80, 0.3);">
+                    LIHAT DETAIL
+                  </button>
+                  <button onclick="openAttendanceFormPopup('${task.id}')" class="btn" style="flex:1; background:#10b981; color:#ffffff; font-weight:900; font-size:0.85rem; border-radius:12px; padding:12px; border:none; cursor:pointer; text-align:center; box-shadow:0 3px 8px rgba(16, 185, 129, 0.3);">
+                    ${btnAbsenText}
+                  </button>
+                </div>
+
+              </div>
+            `;
+          }).join('')}
+        </div>
+
       </div>
+    `;
 
-    </div>
-  `;
-  
-  // Bind preview buttons
-  container.querySelectorAll(".preview-doc-btn").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-id");
-      const doc = state.documents.find(x => x.id === id);
-      if (doc) openDocPreviewModal(doc);
-    };
-  });
+    lucide.createIcons();
 
-  lucide.createIcons();
+    // Wallet Action Buttons
+    const transferBtn = document.getElementById("user-wallet-transfer-btn");
+    if (transferBtn) transferBtn.onclick = () => openUserWalletTransferPopup();
+
+    const addExpBtn = document.getElementById("user-wallet-add-exp-btn");
+    if (addExpBtn) addExpBtn.onclick = () => openUserLaporKasPopup();
+
+    const detailBtn = document.getElementById("user-wallet-detail-btn");
+    if (detailBtn) detailBtn.onclick = () => window.location.hash = "#user/laporan?tab=kas";
+
+    // Inflow confirmations
+    container.querySelectorAll(".confirm-inflow-btn").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute("data-id");
+        const tx = state.financial.transactions.find(t => t.id === id);
+        if (tx) {
+          tx.status = "Completed";
+          if (!state.financial.wallets[tx.recipient]) state.financial.wallets[tx.recipient] = 0;
+          state.financial.wallets[tx.recipient] += tx.amount;
+          saveState();
+          showToast("Konfirmasi penerimaan dana berhasil.");
+          renderUserDashboard();
+        }
+      };
+    });
+  } catch (err) {
+    console.error("Error rendering user dashboard:", err);
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b;">Gagal memuat dashboard. Silakan muat ulang.</div>`;
+  }
 }
 
 
@@ -3205,7 +2542,7 @@ function loadUserTab(tab) {
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap; background:#ffffff; padding:12px 14px; border-radius:12px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
         <div style="font-size:0.92rem; font-weight:800; color:${myWalletBal < 0 ? '#ef4444' : '#0f172a'}; display:flex; align-items:center; gap:6px;">
           <i data-lucide="wallet" style="width:18px; height:18px; color:#c5a850;"></i>
-          <span>Saldo Kas Dompet: <span style="color:${myWalletBal < 0 ? '#ef4444' : '#10b981'}; font-weight:900;">SAR ${myWalletBal.toLocaleString('id-ID')}</span> ${myWalletBal < 0 ? '(Piutang)' : ''}</span>
+          <span>Saldo Dompet: <span style="color:${myWalletBal < 0 ? '#ef4444' : '#10b981'}; font-weight:900;">SAR ${myWalletBal.toLocaleString('id-ID')}</span> ${myWalletBal < 0 ? '(Piutang)' : ''}</span>
         </div>
       </div>
 
@@ -5378,7 +4715,7 @@ function openTaskSummaryPopup() {
     </div>
   `;
   
-  openModal("Rangkuman Penugasan Tim", formHtml);
+  openModal("Rangkuman", formHtml);
   lucide.createIcons();
   
   const dateEl = document.getElementById("sum-filter-date");
@@ -5873,6 +5210,9 @@ function openPenjadwalanFormPopup(editId = null) {
       });
     }
     kegiatanSelect.innerHTML += '<option value="Additional">Additional</option>';
+    if (isEdit && task && task.details && task.details.itinerary) {
+      kegiatanSelect.value = task.details.itinerary;
+    }
   };
 
   kegiatanSelect.onchange = () => {
@@ -5913,7 +5253,6 @@ function openPenjadwalanFormPopup(editId = null) {
     const etdVal = group ? (group.flightDeparture ? group.flightDeparture.map(f => `${f.code || ''} ${f.takeoff || ''}-${f.landing || ''}`).join('; ') : '') : '';
     const mealArrVal = group ? (group.mealsArrival ? group.mealsArrival.join(', ') : (group.mealArrival ? group.mealArrival.join(', ') : '')) : '';
     const mealDepVal = group ? (group.mealsDeparture ? group.mealsDeparture.join(', ') : (group.mealDeparture ? group.mealDeparture.join(', ') : '')) : '';
-    const hotelOptions = group ? (group.hotels ? group.hotels.map(h => `<option value="${h}">${h}</option>`).join('') : '') : '';
 
     if (type.startsWith("Kedatangan Bandara")) {
       conditionalBox.innerHTML = `
@@ -5956,7 +5295,7 @@ function openPenjadwalanFormPopup(editId = null) {
         </div>
       `;
     } else if (type.startsWith("Check In Hotel")) {
-      const selectedHotel = isEdit ? task.details.hotelName : "";
+      const selectedHotel = isEdit ? (task.details.hotelName || '') : "";
       const selectedPkgs = isEdit ? (task.details.packages || []) : [];
       const hotelListDatalist = group ? (group.hotels || []) : [];
       
@@ -5990,12 +5329,12 @@ function openPenjadwalanFormPopup(editId = null) {
           </div>
         </div>
         <div class="grid-2col" style="margin-top:8px;">
-          <div class="form-group"><label class="form-label">Komposisi Kamar</label><input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)"></div>
+          <div class="form-group"><label class="form-label">Komposisi Kamar</label><input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || task.details.komposisiKamar || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)"></div>
           <div class="form-group"><label class="form-label">Complimentary</label><input type="text" id="c-complimentary" class="form-input" value="${isEdit ? (task.details.complimentary || '') : ''}" placeholder="Isian singkat complimentary"></div>
         </div>
       `;
     } else if (type.startsWith("Check Out Hotel")) {
-      const selectedHotel = isEdit ? task.details.hotelName : "";
+      const selectedHotel = isEdit ? (task.details.hotelName || '') : "";
       const selectedPkgs = isEdit ? (task.details.packages || []) : [];
       const hotelListDatalist = group ? (group.hotels || []) : [];
       
@@ -6028,9 +5367,9 @@ function openPenjadwalanFormPopup(editId = null) {
             `).join('')}
           </div>
         </div>
-        <div class="form-group" style="margin-top:8px;">
-          <label class="form-label">Komposisi Kamar</label>
-          <input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)">
+        <div class="grid-2col" style="margin-top:8px;">
+          <div class="form-group"><label class="form-label">Komposisi Kamar</label><input type="text" id="c-room-comp" class="form-input" value="${isEdit ? (task.details.roomComposition || task.details.komposisiKamar || '') : ''}" placeholder="Isian singkat (misal: 5 Quad, 2 Double)"></div>
+          <div class="form-group"><label class="form-label">Complimentary</label><input type="text" id="c-complimentary" class="form-input" value="${isEdit ? (task.details.complimentary || '') : ''}" placeholder="Isian singkat complimentary"></div>
         </div>
       `;
     } else if (type.startsWith("Romansiah")) {
@@ -6049,8 +5388,8 @@ function openPenjadwalanFormPopup(editId = null) {
     } else if (type.startsWith("City Tour") || type.startsWith("Penjemputan Stasiun")) {
       conditionalBox.innerHTML = `
         <div class="grid-2col">
-          <div class="form-group"><label class="form-label">Rute Penjemputan</label><input type="text" id="c-pickup-route" class="form-input" value="${isEdit ? (task.details.hotelPickup || '') : ''}" placeholder="Rute / tempat penjemputan" required></div>
-          <div class="form-group"><label class="form-label">Tujuan (Manual)</label><input type="text" id="c-tour-dest" class="form-input" value="${isEdit ? (task.details.destinationBus || '') : ''}" placeholder="Ketik tempat tujuan" required></div>
+          <div class="form-group"><label class="form-label">Rute Penjemputan</label><input type="text" id="c-pickup-route" class="form-input" value="${isEdit ? (task.details.hotelPickup || task.details.pickupRoute || '') : ''}" placeholder="Rute / tempat penjemputan" required></div>
+          <div class="form-group"><label class="form-label">Tujuan (Manual)</label><input type="text" id="c-tour-dest" class="form-input" value="${isEdit ? (task.details.destinationBus || task.details.destination || '') : ''}" placeholder="Ketik tempat tujuan" required></div>
         </div>
       `;
     } else {
@@ -6078,7 +5417,7 @@ function openPenjadwalanFormPopup(editId = null) {
   const staffList = fieldStaffs.map(s => `${s.name} (${s.username})`);
   let selectedStaffUsername = "";
   initSuggestionInput("task-staff-search", "task-staff-suggestions", staffList, (val) => {
-    const reg = /\(([^)]+)\)/;
+    const reg = /(([^)]+))/;
     const match = reg.exec(val);
     if (match && match[1]) {
       selectedStaffUsername = match[1];
@@ -6136,47 +5475,52 @@ function openPenjadwalanFormPopup(editId = null) {
     const remarksGlobalEl = document.getElementById("task-remarks-global");
     const remarksGlobal = remarksGlobalEl ? remarksGlobalEl.value.trim() : "";
     
-    let details = {
-      remarks: remarksGlobal,
-      customTaskName: type === "Lainnya" ? customTaskName : ""
-    };
-    
     const getVal = (id) => {
       const el = document.getElementById(id);
       return el ? el.value : "";
     };
+
+    // Preserve existing details properties and update form values
+    let details = {
+      ...(isEdit && task && task.details ? task.details : {}),
+      remarks: remarksGlobal,
+      customTaskName: type === "Lainnya" ? customTaskName : "",
+      itinerary: getVal("task-kegiatan-popup")
+    };
     
     if (type.startsWith("Kedatangan Bandara")) {
-      details.totalPax = parseInt(getVal("c-pax")) || 0;
-      details.eta = getVal("c-eta").trim();
-      details.meal = getVal("c-meal").trim();
-      details.busCount = parseInt(getVal("c-bus")) || 0;
+      if (getVal("c-pax")) details.totalPax = parseInt(getVal("c-pax")) || details.totalPax || 0;
+      if (getVal("c-eta")) details.eta = getVal("c-eta").trim();
+      if (getVal("c-meal")) details.meal = getVal("c-meal").trim();
+      if (getVal("c-dest-target")) details.destinationTarget = getVal("c-dest-target");
     } else if (type.startsWith("Kepulangan Bandara")) {
-      details.totalPax = parseInt(getVal("c-pax")) || 0;
-      details.eta = getVal("c-etd").trim();
-      details.meal = getVal("c-meal").trim();
-      details.busCount = parseInt(getVal("c-bus")) || 0;
+      if (getVal("c-pax")) details.totalPax = parseInt(getVal("c-pax")) || details.totalPax || 0;
+      if (getVal("c-etd")) details.eta = getVal("c-etd").trim();
+      if (getVal("c-meal")) details.meal = getVal("c-meal").trim();
+      if (getVal("c-origin-target")) details.originTarget = getVal("c-origin-target");
     } else if (type.startsWith("Check In Hotel") || type.startsWith("Check Out Hotel")) {
       const chks = document.querySelectorAll(".c-pkg-chk:checked");
-      details.hotelName = getVal("c-hotel");
-      details.totalPax = parseInt(getVal("c-pax")) || 0;
-      details.totalRoom = parseInt(getVal("c-rooms")) || 0;
+      if (getVal("c-hotel")) details.hotelName = getVal("c-hotel");
       details.packages = Array.from(chks).map(c => c.value);
-      
-      if (type.startsWith("Check In Hotel")) {
-        details.service = getVal("c-service").trim();
-        details.etaTime = getVal("c-eta-time");
-        details.eta = details.etaTime;
-      } else {
-        details.etdTime = getVal("c-etd-time");
-        details.eta = details.etdTime;
-      }
+      if (getVal("c-room-comp")) details.roomComposition = getVal("c-room-comp").trim();
+      if (getVal("c-complimentary")) details.complimentary = getVal("c-complimentary").trim();
+      if (getVal("c-origin-target")) details.originTarget = getVal("c-origin-target");
+      if (getVal("c-dest-target")) details.destinationTarget = getVal("c-dest-target");
+    } else if (type.startsWith("Romansiah")) {
+      if (getVal("c-origin-route")) details.originTarget = getVal("c-origin-route").trim();
+      if (getVal("c-nampan-count")) details.nampanCount = parseInt(getVal("c-nampan-count")) || 0;
     } else if (type.startsWith("City Tour") || type.startsWith("Penjemputan Stasiun")) {
-      details.destinationBus = getVal("c-tour-dest").trim();
-      details.hotelPickup = getVal("c-tour-route").trim();
-      details.totalPax = parseInt(getVal("c-pax")) || 0;
+      if (getVal("c-tour-dest")) {
+        details.destinationBus = getVal("c-tour-dest").trim();
+        details.destination = details.destinationBus;
+      }
+      if (getVal("c-pickup-route")) {
+        details.hotelPickup = getVal("c-pickup-route").trim();
+        details.pickupRoute = details.hotelPickup;
+      }
+      if (getVal("c-pax")) details.totalPax = parseInt(getVal("c-pax")) || details.totalPax || 0;
     } else {
-      details.customText = getVal("c-desc").trim();
+      if (getVal("c-desc")) details.customText = getVal("c-desc").trim();
     }
     
     if (isEdit) {
@@ -11580,7 +10924,7 @@ function renderUserApplyTugas() {
   const container = document.getElementById("user-subview-content");
   if (!container) return;
   
-  const username = state.currentUser.username;
+  const username = state.currentUser ? state.currentUser.username : '';
   
   // Set defaults
   if (typeof state.userApplyViewMode === 'undefined') {
@@ -11647,8 +10991,8 @@ function renderUserApplyTugas() {
           <option value="fulfilled">Terpenuhi</option>
           <option value="unfulfilled">Belum Terpenuhi</option>
         </select>
-        <button id="user-task-summary-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
-          <i data-lucide="share-2" style="width:14px; height:14px;"></i> Rangkuman Penugasan Tim
+        <button id="user-task-summary-btn" class="btn btn-gold" style="width:auto; padding:6px 14px; font-size:0.8rem; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+          <i data-lucide="share-2" style="width:14px; height:14px;"></i> Rangkuman
         </button>
       </div>
     </div>
@@ -11744,44 +11088,52 @@ function renderUserApplyTugas() {
       return;
     }
     
-    const makeCardHtml = (t) => {
+    const makeCardHtml = (t, hideGroupName = false) => {
       const reqStaff = t.requiredStaff || 1;
       const currentStaffCount = t.staff ? t.staff.length : 0;
       const isFulfilled = (currentStaffCount >= reqStaff);
+      
+      // Format staffing status badge to numbers only e.g. "(0/1)"
       const staffingStatusHtml = isFulfilled 
-        ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.7rem; padding:2px 6px;">Terpenuhi (${currentStaffCount}/${reqStaff})</span>` 
-        : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.7rem; padding:2px 6px;">Belum Terpenuhi (${currentStaffCount}/${reqStaff})</span>`;
+        ? `<span class="badge badge-success" style="background:#d1fae5; color:#065f46; font-size:0.72rem; padding:2px 6px; font-weight:800;">(${currentStaffCount}/${reqStaff})</span>` 
+        : `<span class="badge badge-warning" style="background:#fef3c7; color:#92400e; font-size:0.72rem; padding:2px 6px; font-weight:800;">(${currentStaffCount}/${reqStaff})</span>`;
       
       t.applicants = t.applicants || [];
-      const isPlotted = t.staff.includes(username);
       const hasApplied = t.applicants.includes(username);
       
-      let actionBtnHtml = "";
-      if (isPlotted) {
-        actionBtnHtml = `<button class="btn btn-secondary" disabled style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="check-circle" style="width:12px; height:12px;"></i> Anda Bertugas</button>`;
-      } else if (hasApplied) {
-        actionBtnHtml = `<button class="btn btn-secondary cancel-apply-btn" data-id="${t.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px; background:#64748b; color:#fff; border:none;">Batal Apply</button>`;
-      } else if (isFulfilled) {
-        actionBtnHtml = `<button class="btn btn-secondary" disabled style="width:auto; padding:5px 10px; font-size:0.75rem; border-radius:6px;">Kuota Terpenuhi</button>`;
-      } else {
-        actionBtnHtml = `<button class="btn btn-gold apply-task-btn" data-id="${t.id}" style="width:auto; padding:5px 10px; font-size:0.75rem;">Apply Tugas</button>`;
+      // User status badge: REMOVED "Anda Bertugas" per user directive! Show only Pending Approval if applied
+      let userStatusBadgeHtml = "";
+      if (hasApplied) {
+        userStatusBadgeHtml = `<span class="badge" style="background:#64748b; color:#fff; font-size:0.7rem; padding:2px 8px; border-radius:6px; font-weight:800;">Pending Approval</span>`;
       }
       
       const dayNameFormatted = new Date(t.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
       
+      // Hotel name display for Check In / Check Out tasks (direct value without column title)
+      const typeStr = (t.type || '').toLowerCase();
+      const isHotelTask = typeStr.includes('check in') || typeStr.includes('check out') || typeStr.includes('hotel');
+      const details = t.details || {};
+      const group = state.groups.find(g => g && g.name === t.groupName);
+      const hotelNameVal = details.hotelName || (group ? (group.hotelMadinah || group.hotelMakkah) : null);
+      const hotelDisplayHtml = (isHotelTask && hotelNameVal) 
+        ? `<div style="font-weight:800; color:#1e293b; font-size:0.83rem;">${hotelNameVal}</div>` 
+        : '';
+
+      const regionFormatted = t.region ? `(${t.region})` : '(Saudi Arabia)';
+
       return `
-        <div class="assignment-card" style="border-left:4px solid var(--primary-gold); background:#fff; padding:12px 16px; width:100%; box-sizing:border-box; border-radius:8px; border-top:1px solid #e2e8f0; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; display:flex; flex-direction:column; gap:8px; margin-bottom:0;">
+        <div class="assignment-card" onclick="openUserTaskDetailPopup('${t.id}')" style="border-left:4px solid var(--primary-gold); background:#fff; padding:14px 16px; width:100%; box-sizing:border-box; border-radius:10px; border-top:1px solid #e2e8f0; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; display:flex; flex-direction:column; gap:8px; margin-bottom:0; cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease;" title="Klik untuk melihat Detail Penugasan">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; width:100%;">
-            <span style="font-weight:800; font-size:0.9rem; color:var(--text-main);">${t.type} ${t.details.customTaskName ? `(${t.details.customTaskName})` : ''}</span>
-            ${staffingStatusHtml}
+            <span style="font-weight:900; font-size:0.92rem; color:var(--text-main);">${t.type} ${t.details.customTaskName ? `(${t.details.customTaskName})` : ''}</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              ${userStatusBadgeHtml}
+              ${staffingStatusHtml}
+            </div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:2px; font-size:0.8rem; color:#475569;">
-            <div><strong style="color:var(--text-main); font-size:0.85rem;">${t.groupName}</strong></div>
-            <div><strong>${dayNameFormatted} | ${t.time} Saudi</strong> (Wilayah: ${t.region})</div>
-          </div>
-          <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f3f5; padding-top:8px; margin-top:4px; width:100%;">
-            <button class="btn btn-secondary user-task-detail-popup-btn" data-id="${t.id}" style="width:auto; padding:5px 12px; font-size:0.75rem; font-weight:800; border:1px solid #cbd5e1; color:#0f172a; border-radius:6px;">Detail</button>
-            ${actionBtnHtml}
+          <div style="display:flex; flex-direction:column; gap:3px; font-size:0.8rem; color:#475569;">
+            ${hideGroupName ? '' : `<div><strong style="color:var(--text-main); font-size:0.85rem;">${t.groupName}</strong></div>`}
+            ${hotelDisplayHtml}
+            <div><strong>${dayNameFormatted} | ${t.time} Saudi</strong> ${regionFormatted}</div>
           </div>
         </div>
       `;
@@ -11800,9 +11152,14 @@ function renderUserApplyTugas() {
       Object.keys(grouped).forEach((gName, idx) => {
         const groupTasks = grouped[gName];
         
-        const headerId = `user-acc-header-${idx}`;
-        const bodyId = `user-acc-body-${idx}`;
-        const iconId = `user-acc-icon-${idx}`;
+        const groupObj = state.groups.find(g => g && g.name === gName);
+        const tlName = (groupObj && groupObj.leaders && groupObj.leaders.length > 0) 
+          ? groupObj.leaders.join(', ') 
+          : (groupObj && groupObj.tourLeader ? groupObj.tourLeader : 'Ust. H. Dinar Zul Akbar, Lc., M.A.');
+
+        const headerId = 'user-acc-header-' + idx;
+        const bodyId = 'user-acc-body-' + idx;
+        const iconId = 'user-acc-icon-' + idx;
         
         const accordionRow = document.createElement("div");
         accordionRow.style.display = "flex";
@@ -11811,14 +11168,15 @@ function renderUserApplyTugas() {
         
         accordionRow.innerHTML = `
           <div class="group-accordion-header" id="${headerId}" style="padding:10px 14px; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; margin-bottom:4px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <strong style="font-size:0.95rem; color:#0f172a; font-weight:900;">${gName}</strong>
-              <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:800; font-size:0.72rem; padding:3px 8px; border-radius:12px; border:1px solid #cbd5e1;">${groupTasks.length} Penugasan</span>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <strong style="font-size:0.85rem; color:#0f172a; font-weight:900;">${gName}</strong>
+              <span style="font-size:0.75rem; color:#64748b; font-weight:700;">• ${tlName}</span>
+              <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:800; font-size:0.72rem; padding:2px 7px; border-radius:12px; border:1px solid #cbd5e1; margin-left:4px;">${groupTasks.length}</span>
             </div>
             <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transition:transform 0.2s ease;"></i>
           </div>
           <div id="${bodyId}" style="display:flex; flex-direction:column; gap:8px; padding-left:8px; border-left:2px solid var(--primary-gold); margin-top:4px; margin-bottom:8px;">
-            ${groupTasks.map(t => makeCardHtml(t)).join('')}
+            ${groupTasks.map(t => makeCardHtml(t, true)).join('')}
           </div>
         `;
         
@@ -11841,51 +11199,8 @@ function renderUserApplyTugas() {
         }
       });
     } else {
-      listEl.innerHTML = filtered.map(t => makeCardHtml(t)).join('');
+      listEl.innerHTML = filtered.map(t => makeCardHtml(t, false)).join('');
     }
-    
-    // Bind detail POPUP buttons for all cards (opens modal popup, NOT page)
-    listEl.querySelectorAll(".user-task-detail-popup-btn").forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const id = btn.getAttribute("data-id");
-        openUserTaskDetailPopup(id);
-      };
-    });
-
-    // Bind apply buttons
-    listEl.querySelectorAll(".apply-task-btn").forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const id = btn.getAttribute("data-id");
-        const task = state.assignments.find(x => x.id === id);
-        if (task) {
-          task.applicants = task.applicants || [];
-          if (!task.applicants.includes(username)) {
-            task.applicants.push(username);
-            addNotification("penjadwalan", `Pengajuan Tugas: ${state.currentUser.name} melamar tugas ${task.type} grup ${task.groupName}`, { username, groupName: task.groupName });
-            saveState();
-            showToast("Lamaran tugas berhasil dikirim! Menunggu konfirmasi Admin.");
-            renderUserApplyTugas();
-          }
-        }
-      };
-    });
-    
-    // Bind cancel apply buttons
-    listEl.querySelectorAll(".cancel-apply-btn").forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const id = btn.getAttribute("data-id");
-        const task = state.assignments.find(x => x.id === id);
-        if (task && task.applicants) {
-          task.applicants = task.applicants.filter(u => u !== username);
-          saveState();
-          showToast("Lamaran tugas dibatalkan.");
-          renderUserApplyTugas();
-        }
-      };
-    });
     
     lucide.createIcons();
   };
@@ -11897,7 +11212,6 @@ function renderUserApplyTugas() {
   drawList();
   lucide.createIcons();
 }
-
 
 let activeTaskDetailTab = "tugas";
 
