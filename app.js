@@ -195,6 +195,73 @@ function formatReportDateAbbrev(dateStr) {
   }
 }
 
+
+function generateComposite2x2Grid(photoDataUrls, callback) {
+  const validPhotos = (photoDataUrls || []).filter(p => !!p);
+  if (validPhotos.length === 0) {
+    callback([]);
+    return;
+  }
+  
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 600;
+    canvas.height = 600;
+    const ctx = canvas.getContext("2d");
+    
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 600, 600);
+
+    const tileSize = 297;
+    const coords = [
+      [0, 0, tileSize, tileSize],
+      [303, 0, tileSize, tileSize],
+      [0, 303, tileSize, tileSize],
+      [303, 303, tileSize, tileSize]
+    ];
+
+    let loadedCount = 0;
+    const targetCount = Math.min(validPhotos.length, 4);
+    const loadedImgs = [];
+
+    validPhotos.slice(0, 4).forEach((src, idx) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        loadedImgs[idx] = img;
+        loadedCount++;
+        if (loadedCount === targetCount) {
+          loadedImgs.forEach((im, i) => {
+            if (im && coords[i]) {
+              const [dx, dy, dw, dh] = coords[i];
+              const sw = im.naturalWidth || im.width;
+              const sh = im.naturalHeight || im.height;
+              const minDim = Math.min(sw, sh);
+              const sx = (sw - minDim) / 2;
+              const sy = (sh - minDim) / 2;
+              ctx.drawImage(im, sx, sy, minDim, minDim, dx, dy, dw, dh);
+            }
+          });
+          
+          try {
+            const compositeDataUrl = canvas.toDataURL("image/jpeg", 0.90);
+            callback([compositeDataUrl]);
+          } catch(e) {
+            callback(validPhotos);
+          }
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === targetCount) callback(validPhotos);
+      };
+      img.src = src;
+    });
+  } catch(e) {
+    callback(validPhotos);
+  }
+}
+
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
     return Array.isArray(val) ? val.filter(x => x !== null && x !== undefined) : defaultVal;
@@ -1092,7 +1159,7 @@ function renderUserPortal(subView) {
     else if (activeSubView === "laporan") {
       const tab = new URLSearchParams(window.location.hash.split("?")[1] || "").get("tab");
       if (tab === "absensi") subViewTitle = "Absensi";
-      else if (tab === "insiden") subViewTitle = "Kejadian";
+      else if (tab === "insiden") subViewTitle = "Laporan";
       else subViewTitle = "Riwayat Transaksi";
     }
     else if (activeSubView === "scan-qr") subViewTitle = "Scan QR";
@@ -1279,7 +1346,14 @@ function renderUserPortal(subView) {
   } else {
     const backBtn = document.getElementById("user-back-btn");
     if (backBtn) {
-      backBtn.onclick = () => window.location.hash = "#user/dashboard";
+      backBtn.onclick = (e) => {
+        e.preventDefault();
+        if (window.history && window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.location.hash = "#user/apply-tugas";
+        }
+      };
     }
   }
   
@@ -1997,6 +2071,21 @@ function parseGroupFlightData(group, type = 'arrival') {
 }
 
 
+
+function toggleUserGroupBioAccordion(taskId) {
+  const body = document.getElementById(`user-bio-body-${taskId}`);
+  const icon = document.getElementById(`user-bio-icon-${taskId}`);
+  if (body && icon) {
+    if (body.style.display === 'none' || !body.style.display) {
+      body.style.display = 'block';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      body.style.display = 'none';
+      icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+}
+
 function toggleUserFlightAccordion(taskId) {
   const body = document.getElementById(`user-flight-body-${taskId}`);
   const icon = document.getElementById(`user-flight-icon-${taskId}`);
@@ -2202,26 +2291,31 @@ function renderUserDashboard() {
 
                 <div style="border-top:1px solid #f1f5f9; margin:14px 0;"></div>
 
-                <!-- Group Name Title -->
-                <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 8px 0; line-height:1.35;">
-                  ${task.groupName}
-                </h3>
-
-                <!-- Staff Info -->
-                <div style="font-size:0.8rem; color:#64748b; line-height:1.6; margin-bottom:14px;">
-                  <div>Tour Leader: <strong style="color:#334155;">${tlName}</strong></div>
-                  <div>Muthowwif: <strong style="color:#334155;">${muthawwifName}</strong></div>
-                </div>
-
-                <!-- Pax & Bus Metrics (2 Columns) -->
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
-                  <div>
-                    <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">👥 TOTAL JAMAAH</div>
-                    <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalPaxVal}</div>
+                <!-- EXPANDABLE BIODATA GRUP ACCORDION -->
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px 16px; margin-bottom:14px;">
+                  <div id="user-bio-header-${task.id}" onclick="toggleUserGroupBioAccordion('${task.id}')" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
+                    <div>
+                      <div style="font-size:0.68rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">BIODATA & RINCIAN GRUP</div>
+                      <h3 style="font-size:0.95rem; font-weight:900; color:#0f172a; margin:2px 0 0 0;">${task.groupName}</h3>
+                    </div>
+                    <i data-lucide="chevron-down" id="user-bio-icon-${task.id}" style="width:18px; height:18px; color:#64748b; transform:rotate(-90deg); transition:transform 0.2s;"></i>
                   </div>
-                  <div>
-                    <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">🚌 TOTAL BUS</div>
-                    <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalBusVal}</div>
+                  
+                  <div id="user-bio-body-${task.id}" style="display:none; margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+                    <div style="font-size:0.8rem; color:#64748b; line-height:1.6; margin-bottom:12px;">
+                      <div>Tour Leader: <strong style="color:#334155;">${tlName}</strong></div>
+                      <div>Muthowwif: <strong style="color:#334155;">${muthawwifName}</strong></div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                      <div>
+                        <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">👥 TOTAL JAMAAH</div>
+                        <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalPaxVal}</div>
+                      </div>
+                      <div>
+                        <div style="font-size:0.68rem; color:#64748b; font-weight:800; text-transform:uppercase;">🚌 TOTAL BUS</div>
+                        <div style="font-size:1.05rem; font-weight:900; color:#0f172a;">${totalBusVal}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -13348,8 +13442,10 @@ function openGridPhotoReportPopup() {
       return;
     }
 
-    // Move to Step 2: Form Checklist
-    openChecklistFormPopup(gName, cat, cat === "Kondisi Bus" ? busNo : roomNo, uploadedPhotos);
+    showToast("Menggabungkan 4 foto menjadi 1 Grid Composite 1:1...");
+    generateComposite2x2Grid(uploadedPhotos, (compositePhotos) => {
+      openChecklistFormPopup(gName, cat, cat === "Kondisi Bus" ? busNo : roomNo, compositePhotos);
+    });
   };
 }
 
@@ -13437,4 +13533,206 @@ function openChecklistFormPopup(groupName, category, targetNo, photos) {
       };
     }
   }, 50);
+}
+
+
+
+function renderUserRoomlist() {
+  const container = document.getElementById("user-subview-content");
+  if (!container) return;
+
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const groupNameParam = params.get("group") || (state.groups.length > 0 ? state.groups[0].name : "");
+
+  const groupObj = state.groups.find(g => g && g.name === groupNameParam) || (state.groups.length > 0 ? state.groups[0] : null);
+  const selectedGroupName = groupObj ? groupObj.name : "";
+
+  const tlName = groupObj ? (Array.isArray(groupObj.leaders) ? groupObj.leaders.join(', ') : (groupObj.tourLeader || 'Belum diisi')) : 'Belum diisi';
+  const hotelMadinah = groupObj ? (groupObj.hotelMadinah || 'Hotel Madinah') : 'Hotel Madinah';
+  const hotelMakkah = groupObj ? (groupObj.hotelMakkah || 'Hotel Makkah') : 'Hotel Makkah';
+
+  container.innerHTML = `
+    <div style="font-family:'Mulish', sans-serif; padding-top:4px; padding-bottom:40px; max-width:600px; margin:0 auto;">
+      
+      <!-- Group Info Header -->
+      <div style="background:#ffffff; border-radius:18px; border:1px solid #e2e8f0; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+        <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:4px;">ROOMLIST JAMAAH (ADMIN SYNC)</div>
+        <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0 0 6px 0;">${selectedGroupName || 'Pilih Rombongan Grup'}</h3>
+        <div style="font-size:0.8rem; color:#64748b; font-weight:700;">👨‍💼 Tour Leader: ${tlName}</div>
+      </div>
+
+      <!-- Hotel Selector Tabs -->
+      <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <button id="user-rl-tab-madinah" class="btn btn-gold" style="flex:1; padding:10px; font-size:0.8rem; font-weight:800; border-radius:12px;">🏨 Madinah: ${hotelMadinah}</button>
+        <button id="user-rl-tab-makkah" class="btn btn-secondary" style="flex:1; padding:10px; font-size:0.8rem; font-weight:800; border-radius:12px;">🕋 Makkah: ${hotelMakkah}</button>
+      </div>
+
+      <!-- Search bar & Summary -->
+      <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:14px; margin-bottom:16px;">
+        <input type="text" id="user-rl-search" class="form-input" placeholder="Cari nama jamaah, no kamar, atau tipe..." style="padding:8px 12px; font-size:0.85rem; margin-bottom:10px;">
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; text-align:center; font-size:0.75rem;">
+          <div style="background:#fffdf5; border:1px solid #fef3c7; padding:8px; border-radius:10px;">
+            <div style="color:#64748b; font-weight:700;">QUAD</div>
+            <div id="rl-cnt-quad" style="font-size:1rem; font-weight:900; color:#b89230;">0</div>
+          </div>
+          <div style="background:#fffdf5; border:1px solid #fef3c7; padding:8px; border-radius:10px;">
+            <div style="color:#64748b; font-weight:700;">TRIPLE</div>
+            <div id="rl-cnt-triple" style="font-size:1rem; font-weight:900; color:#b89230;">0</div>
+          </div>
+          <div style="background:#fffdf5; border:1px solid #fef3c7; padding:8px; border-radius:10px;">
+            <div style="color:#64748b; font-weight:700;">DOUBLE</div>
+            <div id="rl-cnt-double" style="font-size:1rem; font-weight:900; color:#b89230;">0</div>
+          </div>
+          <div style="background:#fffdf5; border:1px solid #fef3c7; padding:8px; border-radius:10px;">
+            <div style="color:#64748b; font-weight:700;">TOTAL</div>
+            <div id="rl-cnt-total" style="font-size:1rem; font-weight:900; color:#0f172a;">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Room Cards List -->
+      <div id="user-rl-cards-container" style="display:flex; flex-direction:column; gap:12px;"></div>
+    </div>
+  `;
+
+  let activeHotel = hotelMadinah;
+  const btnMadinah = document.getElementById("user-rl-tab-madinah");
+  const btnMakkah = document.getElementById("user-rl-tab-makkah");
+
+  if (btnMadinah && btnMakkah) {
+    btnMadinah.onclick = () => {
+      activeHotel = hotelMadinah;
+      btnMadinah.className = "btn btn-gold";
+      btnMakkah.className = "btn btn-secondary";
+      renderRooms();
+    };
+    btnMakkah.onclick = () => {
+      activeHotel = hotelMakkah;
+      btnMakkah.className = "btn btn-gold";
+      btnMadinah.className = "btn btn-secondary";
+      renderRooms();
+    };
+  }
+
+  const renderRooms = () => {
+    const q = (document.getElementById("user-rl-search")?.value || "").toLowerCase().trim();
+    const containerEl = document.getElementById("user-rl-cards-container");
+    if (!containerEl) return;
+
+    // Filter strictly REAL ADMIN DATA from state.rooms
+    const allRooms = (state.rooms || []).filter(r => 
+      r && r.groupName && r.groupName.toLowerCase() === selectedGroupName.toLowerCase() &&
+      (!activeHotel || (r.hotelName || '').toLowerCase().includes(activeHotel.toLowerCase()))
+    );
+
+    // Calculate room type counters dynamically
+    let cntQuad = 0, cntTriple = 0, cntDouble = 0;
+    allRooms.forEach(r => {
+      const type = (r.typeBed || r.type || '').toLowerCase();
+      if (type.includes('quad')) cntQuad++;
+      else if (type.includes('triple')) cntTriple++;
+      else if (type.includes('double')) cntDouble++;
+    });
+
+    if (document.getElementById("rl-cnt-quad")) document.getElementById("rl-cnt-quad").textContent = cntQuad;
+    if (document.getElementById("rl-cnt-triple")) document.getElementById("rl-cnt-triple").textContent = cntTriple;
+    if (document.getElementById("rl-cnt-double")) document.getElementById("rl-cnt-double").textContent = cntDouble;
+    if (document.getElementById("rl-cnt-total")) document.getElementById("rl-cnt-total").textContent = allRooms.length;
+
+    const filtered = allRooms.filter(r => {
+      const roomNum = (r.roomNumber || r.roomNo || '').toLowerCase();
+      const typeBed = (r.typeBed || r.type || '').toLowerCase();
+      const guests = Array.isArray(r.guests) ? r.guests.join(' ').toLowerCase() : (r.occupants ? r.occupants.join(' ').toLowerCase() : '');
+      return roomNum.includes(q) || typeBed.includes(q) || guests.includes(q);
+    });
+
+    if (filtered.length === 0) {
+      containerEl.innerHTML = `<div style="text-align:center; padding:28px 16px; color:#64748b; background:#fff; border-radius:16px; border:1px solid #e2e8f0; font-size:0.85rem;">
+        <i data-lucide="hotel" style="width:32px; height:32px; color:#cbd5e1; display:block; margin:0 auto 8px auto;"></i>
+        Belum ada data template roomlist yang diunggah Admin untuk hotel dan grup ini.
+      </div>`;
+      lucide.createIcons();
+      return;
+    }
+
+    containerEl.innerHTML = filtered.map(r => {
+      const occupantsList = Array.isArray(r.guests) ? r.guests : (r.occupants || []);
+      return `
+        <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:14px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:900; font-size:0.95rem; color:#0f172a;">Kamar No. ${r.roomNumber || r.roomNo || '-'}</div>
+            <span class="badge badge-gold" style="font-size:0.75rem; padding:3px 8px;">Tipe ${r.typeBed || r.type || 'Standard'}</span>
+          </div>
+          <div style="font-size:0.8rem; color:#475569; line-height:1.6;">
+            ${occupantsList.length > 0 ? occupantsList.map((occ, i) => `<div>${i+1}. <strong>${occ}</strong></div>`).join('') : '<div style="color:#94a3b8; font-style:italic;">Belum ada nama penghuni di-plot</div>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const sInp = document.getElementById("user-rl-search");
+  if (sInp) sInp.oninput = renderRooms;
+  renderRooms();
+  lucide.createIcons();
+}
+
+function renderUserDocuments() {
+  const container = document.getElementById("user-subview-content");
+  if (!container) return;
+
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const groupNameParam = params.get("group") || (state.groups.length > 0 ? state.groups[0].name : "");
+
+  const groupObj = state.groups.find(g => g && g.name === groupNameParam) || (state.groups.length > 0 ? state.groups[0] : null);
+  const selectedGroupName = groupObj ? groupObj.name : "";
+
+  // Filter strictly REAL ADMIN DATA from state.documents
+  const realDocs = (state.documents || []).filter(d => 
+    d && d.groupName && d.groupName.toLowerCase() === selectedGroupName.toLowerCase()
+  );
+
+  let docListHtml = "";
+  if (realDocs.length === 0) {
+    docListHtml = `
+      <div style="text-align:center; padding:32px 16px; color:#64748b; background:#fff; border-radius:16px; border:1px solid #e2e8f0; font-size:0.85rem;">
+        <i data-lucide="folder-open" style="width:36px; height:36px; color:#cbd5e1; display:block; margin:0 auto 10px auto;"></i>
+        Belum ada dokumen yang diunggah Admin untuk rombongan grup ini.
+      </div>
+    `;
+  } else {
+    docListHtml = realDocs.map(d => `
+      <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:16px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:42px; height:42px; border-radius:12px; background:#fffdf5; border:1px solid #fef3c7; display:flex; align-items:center; justify-content:center; color:#b89230;">
+            <i data-lucide="file-text" style="width:22px; height:22px;"></i>
+          </div>
+          <div>
+            <strong style="font-size:0.9rem; color:#0f172a;">${d.name || 'Dokumen Rombongan'}</strong>
+            <div style="font-size:0.75rem; color:#64748b;">${d.category || 'Dokumen'} • ${d.date || 'Tersedia'}</div>
+          </div>
+        </div>
+        <a href="${d.fileUrl || '#'}" download="${d.name || 'Dokumen.pdf'}" class="btn btn-gold" onclick="if(!${d.fileUrl ? 'true' : 'false'}) showToast('Mengunduh berkas dokumen...');" style="width:auto; padding:6px 14px; font-size:0.75rem; font-weight:800; border-radius:8px; text-decoration:none;">Unduh</a>
+      </div>
+    `).join('');
+  }
+
+  container.innerHTML = `
+    <div style="font-family:'Mulish', sans-serif; padding-top:4px; padding-bottom:40px; max-width:600px; margin:0 auto;">
+      
+      <!-- Group Info Header -->
+      <div style="background:#ffffff; border-radius:18px; border:1px solid #e2e8f0; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+        <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:4px;">DOKUMEN PENUGASAN & ROMBONGAN (ADMIN SYNC)</div>
+        <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0;">${selectedGroupName || 'Pilih Rombongan Grup'}</h3>
+      </div>
+
+      <!-- Document Cards List -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${docListHtml}
+      </div>
+
+    </div>
+  `;
+
+  lucide.createIcons();
 }
