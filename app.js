@@ -558,8 +558,8 @@ function saveState() {
     localStorage.removeItem("jejak_imani_session");
   }
   
-  // GRANULAR FIREBASE SYNC: Pushes state nodes to Firebase Realtime Database
-  if (firebaseDb && isFirebaseRemoteLoaded) {
+  // STRICT CLOUD CENTRALIZATION: Pushes user-initiated mutations directly to Firebase Realtime Database
+  if (firebaseDb && isFirebaseRemoteLoaded && isFirebaseConnected) {
     const stateToSave = {};
     for (let k in state) {
       if (k !== 'currentUser') {
@@ -569,7 +569,7 @@ function saveState() {
     try {
       firebaseDb.ref('jejak_imani_v2_db').update(stateToSave);
     } catch(e) {
-      console.warn("Firebase saveState error:", e);
+      console.warn("Firebase saveState update error:", e);
     }
   }
 }
