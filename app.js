@@ -129,6 +129,28 @@ function applyGlobalFontSize(size = null) {
   return preferredSize;
 }
 
+
+function formatAbsenDateTime(dateStr, timeStr) {
+  if (!dateStr) return '-';
+  try {
+    const parts = dateStr.split('-');
+    let dateFormatted = dateStr;
+    if (parts.length === 3) {
+      const year = parts[0];
+      const monthIdx = parseInt(parts[1]) - 1;
+      const day = parseInt(parts[2]);
+      const monthsShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+      if (monthsShort[monthIdx]) {
+        dateFormatted = `${day} ${monthsShort[monthIdx]} ${year}`;
+      }
+    }
+    const finalTime = timeStr ? (timeStr.includes(':') && timeStr.split(':').length === 2 ? `${timeStr}:00` : timeStr) : '00:00:00';
+    return `${dateFormatted} | ${finalTime}`;
+  } catch(e) {
+    return `${dateStr} | ${timeStr || '00:00:00'}`;
+  }
+}
+
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
     return Array.isArray(val) ? val.filter(x => x !== null && x !== undefined) : defaultVal;
@@ -3026,7 +3048,7 @@ function loadUserTab(tab) {
             <div class="activity-body">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span class="badge" style="background:${badgeBg}; color:${badgeColor}; font-weight:800; font-size:0.75rem; padding:3px 8px;">${typeLabel}</span>
-                <span style="font-size:0.75rem; color:#64748b; font-weight:600;">📅 ${formatDateDisplay(a.date)} | Pukul ${a.time} Saudi</span>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:700;">📅 ${formatAbsenDateTime(a.date, a.time)}</span>
               </div>
               <div style="font-size:0.85rem; color:#1e293b; font-weight:700; margin-bottom:2px;">
                 ${task ? task.type : 'Penjadwalan Tim'}
@@ -3039,7 +3061,7 @@ function loadUserTab(tab) {
               ${a.photo ? `
                 <div style="display:flex; justify-content:flex-end;">
                   <button class="btn btn-secondary view-absen-photo-btn" data-id="${a.id}" style="width:auto; padding:5px 12px; font-size:0.75rem; border-radius:6px; font-weight:700; border:1px solid #cbd5e1;">
-                    🔍 Lihat Foto Absensi & Watermark
+                    LIHAT FOTO
                   </button>
                 </div>
               ` : ''}
@@ -3057,12 +3079,45 @@ function loadUserTab(tab) {
           const photoHtml = `
             <div style="text-align:center; padding:4px 0;">
               <img src="${absRecord.photo}" style="width:100%; border-radius:10px; border:2px solid #dfc06b; box-shadow:0 6px 16px rgba(0,0,0,0.15); margin-bottom:12px;">
-              <div style="display:flex; justify-content:center;">
+              <div style="display:flex; justify-content:center; gap:10px;">
+                <button class="btn btn-gold" id="share-absen-photo-btn" style="width:auto; padding:6px 16px; font-size:0.8rem; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+                  <i data-lucide="share-2" style="width:14px; height:14px;"></i> Share Foto
+                </button>
                 <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
               </div>
             </div>
           `;
-          openModal("Foto Absensi & Stempel Watermark", photoHtml);
+          openModal("Foto Absensi", photoHtml);
+          
+          const shareBtn = document.getElementById("share-absen-photo-btn");
+          if (shareBtn) {
+            shareBtn.onclick = () => {
+              if (navigator.share) {
+                fetch(absRecord.photo)
+                  .then(res => res.blob())
+                  .then(blob => {
+                    const file = new File([blob], "Foto_Absensi.jpg", { type: "image/jpeg" });
+                    navigator.share({
+                      title: "Foto Absensi Khidmat",
+                      text: `Foto Absensi: ${absRecord.username} - ${absRecord.date}`,
+                      files: [file]
+                    }).catch(err => console.warn(err));
+                  })
+                  .catch(() => {
+                    const a = document.createElement("a");
+                    a.href = absRecord.photo;
+                    a.download = "Foto_Absensi.jpg";
+                    a.click();
+                  });
+              } else {
+                const a = document.createElement("a");
+                a.href = absRecord.photo;
+                a.download = "Foto_Absensi.jpg";
+                a.click();
+                showToast("Foto Absensi di-download.");
+              }
+            };
+          }
         };
       });
     };
@@ -3077,18 +3132,28 @@ function loadUserTab(tab) {
   } else if (tab === "insiden") {
     const myIncidents = state.reports.incidents.filter(i => i.username === username);
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:16px;">
-        <button id="add-inc-user-popup-btn" class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:0.8rem;"><i data-lucide="plus"></i> Tambah Laporan</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; margin-top:6px;">
+        <h3 class="user-section-title" style="margin:0; font-size:1.05rem; font-weight:900; color:#0f172a;">Riwayat Laporan</h3>
+        <div style="display:flex; gap:8px;">
+          <button id="open-timer-report-btn" class="btn btn-gold" style="width:38px; height:38px; padding:0; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;" title="Timer Operational">
+            <i data-lucide="timer" style="width:20px; height:20px;"></i>
+          </button>
+          <button id="open-grid-report-btn" class="btn btn-gold" style="width:38px; height:38px; padding:0; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;" title="Grid Foto & Checklist">
+            <i data-lucide="grid" style="width:20px; height:20px;"></i>
+          </button>
+        </div>
       </div>
 
       <div class="form-group" style="margin-bottom:16px;">
-        <input type="text" id="user-inc-search" class="form-input" placeholder="Cari Laporan Kejadian (grup, kategori, detail)...">
+        <input type="text" id="user-inc-search" class="form-input" placeholder="Cari Riwayat Laporan (grup, kategori, detail)...">
       </div>
       
-      <!-- List History -->
-      <h3 class="user-section-title">Riwayat Kejadian</h3>
       <div class="activity-list" id="user-inc-history-list"></div>
     `;
+
+    lucide.createIcons();
+    document.getElementById("open-timer-report-btn").onclick = () => openTimerReportPopup();
+    document.getElementById("open-grid-report-btn").onclick = () => openGridPhotoReportPopup();
     
     const renderIncList = () => {
       const query = document.getElementById("user-inc-search").value.toLowerCase().trim();
@@ -4759,61 +4824,75 @@ function openTaskSummaryPopup() {
   
   const formHtml = `
     <div class="admin-card" style="border:none; padding:0;">
-      <div class="grid-3col" style="gap:10px; margin-bottom:14px;">
+      <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; margin-bottom:14px;">
         <div class="form-group" style="margin:0;">
-          <label class="form-label" style="font-size:0.75rem;">Filter Tanggal</label>
-          <input type="date" id="sum-filter-date" class="form-input" value="${defaultDate}" style="padding:6px 10px; font-size:0.8rem;">
+          <label class="form-label" style="font-size:0.75rem;">1. Filter Kota</label>
+          <select id="sum-filter-city" class="form-select" style="padding:6px 10px; font-size:0.8rem; height:auto;">
+            <option value="all">Semua Kota</option>
+            <option value="Jeddah">Jeddah</option>
+            <option value="Madinah">Madinah</option>
+            <option value="Makkah">Makkah</option>
+          </select>
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label" style="font-size:0.75rem;">Filter Rombongan</label>
+          <label class="form-label" style="font-size:0.75rem;">2. Filter Kegiatan</label>
+          <select id="sum-filter-type" class="form-select" style="padding:6px 10px; font-size:0.8rem; height:auto;">
+            <option value="all">Semua Kegiatan</option>
+            ${types.map(t => `<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:0.75rem;">3. Filter Rombongan / Grup</label>
           <select id="sum-filter-group" class="form-select" style="padding:6px 10px; font-size:0.8rem; height:auto;">
             <option value="all">Semua Grup</option>
             ${state.groups.map(g => `<option value="${g.name}">${g.name}</option>`).join('')}
           </select>
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label" style="font-size:0.75rem;">Filter Kegiatan</label>
-          <select id="sum-filter-type" class="form-select" style="padding:6px 10px; font-size:0.8rem; height:auto;">
-            <option value="all">Semua Kegiatan</option>
-            ${types.map(t => `<option value="${t}">${t}</option>`).join('')}
-          </select>
+          <label class="form-label" style="font-size:0.75rem;">4. Filter Tanggal</label>
+          <input type="date" id="sum-filter-date" class="form-input" value="${defaultDate}" style="padding:6px 10px; font-size:0.8rem;">
         </div>
       </div>
       
       <div class="form-group">
-        <label class="form-label">Format Teks WhatsApp</label>
-        <textarea id="sum-whatsapp-text" class="form-textarea" rows="12" readonly style="font-family:monospace; font-size:0.8rem; background:#f8fafc; color:#0f172a; padding:10px; border:1px solid #cbd5e1;"></textarea>
+        <label class="form-label">Format Teks WhatsApp Rangkuman Penugasan</label>
+        <textarea id="sum-whatsapp-text" class="form-textarea" rows="15" readonly style="font-family:monospace; font-size:0.8rem; background:#f8fafc; color:#0f172a; padding:10px; border:1px solid #cbd5e1; white-space:pre-wrap;"></textarea>
       </div>
       
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
-        <button id="sum-copy-btn" class="btn btn-gold" style="width:auto; padding:6px 16px;"><i data-lucide="copy" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Salin Teks</button>
+        <button id="sum-copy-btn" class="btn btn-gold" style="width:auto; padding:6px 16px;"><i data-lucide="copy" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Salin Teks WA</button>
         <button class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 16px;">Tutup</button>
       </div>
     </div>
   `;
   
-  openModal("Rangkuman", formHtml);
+  openModal("Rangkuman Penugasan Tim", formHtml);
   lucide.createIcons();
   
-  const dateEl = document.getElementById("sum-filter-date");
-  const groupEl = document.getElementById("sum-filter-group");
+  const cityEl = document.getElementById("sum-filter-city");
   const typeEl = document.getElementById("sum-filter-type");
+  const groupEl = document.getElementById("sum-filter-group");
+  const dateEl = document.getElementById("sum-filter-date");
   const textEl = document.getElementById("sum-whatsapp-text");
   
   const updateSummaryText = () => {
-    const dVal = dateEl.value;
-    const gVal = groupEl.value;
+    const cVal = cityEl.value;
     const tVal = typeEl.value;
+    const gVal = groupEl.value;
+    const dVal = dateEl.value;
     
-    let filtered = state.assignments;
+    let filtered = state.assignments || [];
     if (dVal) {
       filtered = filtered.filter(t => t.date === dVal);
     }
-    if (gVal !== "all") {
-      filtered = filtered.filter(t => t.groupName === gVal);
+    if (cVal && cVal !== "all") {
+      filtered = filtered.filter(t => (t.region || '').toLowerCase().includes(cVal.toLowerCase()) || (t.type || '').toLowerCase().includes(cVal.toLowerCase()));
     }
-    if (tVal !== "all") {
+    if (tVal && tVal !== "all") {
       filtered = filtered.filter(t => t.type === tVal);
+    }
+    if (gVal && gVal !== "all") {
+      filtered = filtered.filter(t => t.groupName === gVal);
     }
     
     filtered.sort((a, b) => a.time.localeCompare(b.time));
@@ -4827,45 +4906,160 @@ function openTaskSummaryPopup() {
       }
     }
     
+    const kotaLabel = (cVal && cVal !== "all") ? cVal : "Semua Kota";
+    
     let wText = `*PETUGAS TIM KHIDMAT*\n`;
-    wText += `🗓️ Tanggal: ${dateStr}\n\n`;
+    wText += `🗓️ Tanggal: ${dateStr}\n`;
+    wText += `📍 Kota ${kotaLabel}\n\n`;
     
     if (filtered.length === 0) {
-      wText += `(Tidak ada jadwal penugasan untuk filter terpilih)\n`;
+      wText += `(Tidak ada jadwal penugasan untuk filter terpilih)\n\n`;
     } else {
-      filtered.forEach((t, i) => {
-        const staffNames = t.staff.map(s => state.users.find(u => u.username === s)?.name || s).join(', ');
-        wText += `*${i + 1}. ${t.type}* ${t.details.customTaskName ? `(${t.details.customTaskName})` : ''}\n`;
-        wText += `   • Grup: *${t.groupName}*\n`;
-        wText += `   • Waktu: ${t.time} Saudi\n`;
-        wText += `   • Wilayah: ${t.region}\n`;
-        wText += `   • Petugas: *${staffNames || 'Belum diplot'}*\n`;
-        
-        if (t.details.hotelName) {
-          wText += `   • Hotel: ${t.details.hotelName}\n`;
-        }
-        if (t.details.eta) {
-          wText += `   • Flight/ETA: ${t.details.eta}\n`;
-        }
-        if (t.details.totalPax) {
-          wText += `   • Pax: ${t.details.totalPax} Jamaah\n`;
-        }
-        if (t.details.remarks) {
-          wText += `   • Catatan: ${t.details.remarks}\n`;
-        }
+      // Group tasks by Task Type
+      const groupedByType = {};
+      filtered.forEach(t => {
+        const typeName = t.type || 'Penugasan Lapangan';
+        if (!groupedByType[typeName]) groupedByType[typeName] = [];
+        groupedByType[typeName].push(t);
+      });
+
+      let overallGroupCount = 1;
+
+      Object.keys(groupedByType).forEach(typeKey => {
+        const tasksInType = groupedByType[typeKey];
+        wText += `🔻 *${typeKey}*\n`;
+
+        // Deduplicate group names inside this activity type
+        const groupedByGroupName = {};
+        tasksInType.forEach(t => {
+          const gName = t.groupName || 'Grup Khidmat';
+          if (!groupedByGroupName[gName]) groupedByGroupName[gName] = [];
+          groupedByGroupName[gName].push(t);
+        });
+
+        Object.keys(groupedByGroupName).forEach(gName => {
+          const tasksForThisGroup = groupedByGroupName[gName];
+          const grpObj = (state.groups || []).find(g => g && g.name === gName);
+          const firstTaskDetails = tasksForThisGroup[0]?.details || {};
+
+          // Robust Tour Leader resolution
+          let tourLeaderName = "";
+          if (grpObj) {
+            if (Array.isArray(grpObj.leaders) && grpObj.leaders.length > 0) {
+              tourLeaderName = grpObj.leaders.filter(x => x).join(', ');
+            } else if (grpObj.tourLeader) {
+              tourLeaderName = grpObj.tourLeader;
+            } else if (grpObj.leader) {
+              tourLeaderName = grpObj.leader;
+            } else if (grpObj.mutawwif) {
+              tourLeaderName = grpObj.mutawwif;
+            }
+          }
+          if (!tourLeaderName && firstTaskDetails) {
+            tourLeaderName = firstTaskDetails.tourLeader || firstTaskDetails.leader || firstTaskDetails.muthawwif || firstTaskDetails.tl || "";
+          }
+
+          wText += `${overallGroupCount}. *${gName}*\n`;
+          if (tourLeaderName) {
+            wText += `   ${tourLeaderName}\n`;
+          }
+
+          if (firstTaskDetails.origin) {
+            wText += `   Asal : ${firstTaskDetails.origin}\n`;
+          }
+          if (firstTaskDetails.destination && !typeKey.toLowerCase().includes('city tour') && !typeKey.toLowerCase().includes('kedatangan')) {
+            wText += `   Tujuan : ${firstTaskDetails.destination}\n`;
+          }
+
+          wText += `\n`;
+
+          const typeLower = typeKey.toLowerCase();
+
+          // Process all entries/hotels for this group without repeating the group name
+          tasksForThisGroup.forEach(t => {
+            const details = t.details || {};
+
+            if (typeLower.includes('kedatangan')) {
+              const staffList = (t.staff || []).map(s => {
+                const u = (state.users || []).find(x => x && x.username === s);
+                return `@${(u ? u.name : s).replace(/\s+/g, '')}`;
+              }).join(' ');
+
+              wText += `   • Tujuan : ${details.destination || details.target || ''}\n`;
+              wText += `   • Total Pax : ${details.totalPax || ''}\n`;
+              wText += `   • Flight & ETA : ${details.eta || details.flight || ''}\n`;
+              wText += `   • Mealplan Kedatangan : ${details.mealplan || details.meal || ''}\n`;
+              wText += `   • Petugas: *${staffList ? staffList : '@Belumdiplot'}*\n\n`;
+            } 
+            else if (typeLower.includes('check in') || typeLower.includes('check out')) {
+              if (Array.isArray(details.hotels) && details.hotels.length > 0) {
+                details.hotels.forEach(h => {
+                  const staffList = (h.staff && h.staff.length > 0 ? h.staff : t.staff || []).map(s => {
+                    const u = (state.users || []).find(x => x && x.username === s);
+                    return `@${(u ? u.name : s).replace(/\s+/g, '')}`;
+                  }).join(' ');
+
+                  wText += `   • Hotel : ${h.name}${h.pax ? ` (${h.pax} Pax)` : ''}\n`;
+                  wText += `   • Komposisi Kamar : ${h.rooms || h.roomComposition || ''}\n`;
+                  if (typeLower.includes('check in')) {
+                    wText += `   • Complimentary : ${h.complimentary || h.service || details.complimentary || ''}\n`;
+                  }
+                  wText += `   • Petugas: *${staffList ? staffList : '@Belumdiplot'}*\n\n`;
+                });
+              } else {
+                const staffList = (t.staff || []).map(s => {
+                  const u = (state.users || []).find(x => x && x.username === s);
+                  return `@${(u ? u.name : s).replace(/\s+/g, '')}`;
+                }).join(' ');
+
+                const hotelName = details.hotelName || 'Hotel Main';
+                const paxVal = details.totalPax ? ` (${details.totalPax} Pax)` : '';
+                wText += `   • Hotel : ${hotelName}${paxVal}\n`;
+                wText += `   • Komposisi Kamar : ${details.roomComposition || details.komposisiKamar || ''}\n`;
+                if (typeLower.includes('check in')) {
+                  wText += `   • Complimentary : ${details.complimentary || ''}\n`;
+                }
+                wText += `   • Petugas: *${staffList ? staffList : '@Belumdiplot'}*\n\n`;
+              }
+            }
+            else if (typeLower.includes('city tour')) {
+              const staffList = (t.staff || []).map(s => {
+                const u = (state.users || []).find(x => x && x.username === s);
+                return `@${(u ? u.name : s).replace(/\s+/g, '')}`;
+              }).join(' ');
+
+              wText += `   • Rute Penjemputan : ${details.pickupRoute || details.origin || ''}\n`;
+              wText += `   • Tujuan : ${details.destination || typeKey}\n`;
+              wText += `   • Petugas: *${staffList ? staffList : '@Belumdiplot'}*\n\n`;
+            }
+            else {
+              const staffList = (t.staff || []).map(s => {
+                const u = (state.users || []).find(x => x && x.username === s);
+                return `@${(u ? u.name : s).replace(/\s+/g, '')}`;
+              }).join(' ');
+
+              wText += `   • Rute / Keterangan : ${details.pickupRoute || details.remarks || ''}\n`;
+              wText += `   • Petugas: *${staffList ? staffList : '@Belumdiplot'}*\n\n`;
+            }
+          });
+
+          overallGroupCount++;
+        });
+
         wText += `\n`;
       });
     }
-    
+
     wText += `Barakallahu fiikum\n`;
     wText += `_*Pesan dikirim melalui sistem jejak imani*_`;
     
     textEl.value = wText;
   };
   
-  dateEl.onchange = updateSummaryText;
-  groupEl.onchange = updateSummaryText;
+  cityEl.onchange = updateSummaryText;
   typeEl.onchange = updateSummaryText;
+  groupEl.onchange = updateSummaryText;
+  dateEl.onchange = updateSummaryText;
   
   updateSummaryText();
   
@@ -4880,7 +5074,6 @@ function openTaskSummaryPopup() {
       });
   };
 }
-
 
 function renderAdminPenjadwalan() {
   const container = document.getElementById("admin-subview-content");
@@ -11250,9 +11443,9 @@ function renderUserApplyTugas() {
               <span style="font-size:0.75rem; color:#64748b; font-weight:700;">• ${tlName}</span>
               <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:800; font-size:0.72rem; padding:2px 7px; border-radius:12px; border:1px solid #cbd5e1; margin-left:4px;">${groupTasks.length}</span>
             </div>
-            <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transition:transform 0.2s ease;"></i>
+            <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transform:rotate(-90deg); transition:transform 0.2s ease;"></i>
           </div>
-          <div id="${bodyId}" style="display:flex; flex-direction:column; gap:8px; padding-left:8px; border-left:2px solid var(--primary-gold); margin-top:4px; margin-bottom:8px;">
+          <div id="${bodyId}" style="display:none; flex-direction:column; gap:8px; padding-left:8px; border-left:2px solid var(--primary-gold); margin-top:4px; margin-bottom:8px;">
             ${groupTasks.map(t => makeCardHtml(t, true)).join('')}
           </div>
         `;
@@ -12751,5 +12944,325 @@ function openAdminSettingsPopup() {
       showToast("Pengaturan profil berhasil disimpan.");
       router();
     }
+  };
+}
+
+
+
+function openTimerReportPopup() {
+  const username = state.currentUser ? state.currentUser.username : '';
+  const popupHtml = `
+    <div style="font-family:'Mulish', sans-serif;">
+      <form id="timer-report-form">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Pilih / Ketik Nama Grup</label>
+          <input type="text" id="timer-group-input" class="form-input" placeholder="Ketik atau pilih nama grup..." required style="font-size:0.85rem; padding:8px 12px;">
+          <div id="timer-group-suggestions" class="suggestion-list hidden"></div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Kategori Timer Operational</label>
+          <select id="timer-category-select" class="form-select" required style="font-size:0.85rem; padding:8px 12px;">
+            <option value="Waktu Kedatangan Bandara Jeddah">Waktu Kedatangan Bandara Jeddah</option>
+            <option value="Waktu Kepulangan Bandara Jeddah">Waktu Kepulangan Bandara Jeddah</option>
+            <option value="Waktu Kedatangan Bandara Madinah">Waktu Kedatangan Bandara Madinah</option>
+            <option value="Waktu Kepulangan Bandara Madinah">Waktu Kepulangan Bandara Madinah</option>
+          </select>
+        </div>
+
+        <!-- Big Circle SET Button & Milestone Tracker -->
+        <div style="text-align:center; padding:16px 10px; background:#f8fafc; border-radius:16px; border:1px solid #e2e8f0; margin-bottom:16px;">
+          
+          <div id="timer-milestones-container" style="text-align:left; font-size:0.8rem; display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+            <div id="milestone-1-label" style="color:#64748b; font-weight:700;">1. Milestone 1: <span id="m1-time" style="color:#0f172a; font-weight:900;">Belum di-set</span></div>
+            <div id="milestone-2-label" style="color:#64748b; font-weight:700;">2. Milestone 2: <span id="m2-time" style="color:#0f172a; font-weight:900;">Belum di-set</span></div>
+            <div id="milestone-3-label" style="color:#64748b; font-weight:700;">3. Milestone 3: <span id="m3-time" style="color:#0f172a; font-weight:900;">Belum di-set</span></div>
+          </div>
+
+          <div id="timer-duration-display" class="hidden" style="background:#e0f2fe; color:#0369a1; padding:10px; border-radius:10px; font-weight:900; font-size:0.85rem; margin-bottom:16px;"></div>
+
+          <button type="button" id="timer-big-set-btn" style="width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg, #c5a850 0%, #b89230 100%); color:#fff; border:4px solid #fff; box-shadow:0 8px 20px rgba(197,168,80,0.4); font-size:1.3rem; font-weight:900; cursor:pointer; transition:transform 0.15s ease; margin:0 auto; display:inline-flex; align-items:center; justify-content:center;">
+            SET
+          </button>
+
+          <button type="submit" id="timer-submit-btn" class="btn btn-gold hidden" style="width:100%; padding:12px; font-size:0.9rem; font-weight:900; border-radius:12px; margin-top:8px;">
+            SUBMIT LAPORAN TIMER
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  openModal("Timer Operasional Bandara", popupHtml);
+  initSuggestionInput("timer-group-input", "timer-group-suggestions", state.groups.map(g => g.name));
+
+  const categorySelect = document.getElementById("timer-category-select");
+  const m1Label = document.getElementById("milestone-1-label");
+  const m2Label = document.getElementById("milestone-2-label");
+  const m3Label = document.getElementById("milestone-3-label");
+  const m1Time = document.getElementById("m1-time");
+  const m2Time = document.getElementById("m2-time");
+  const m3Time = document.getElementById("m3-time");
+  const bigSetBtn = document.getElementById("timer-big-set-btn");
+  const submitBtn = document.getElementById("timer-submit-btn");
+  const durationDiv = document.getElementById("timer-duration-display");
+
+  let step = 0;
+  let t1Val = "", t2Val = "", t3Val = "";
+  let durationMinutes = 0;
+
+  const updateMilestoneLabels = () => {
+    const isKedatangan = categorySelect.value.toLowerCase().includes('kedatangan');
+    m1Label.innerHTML = `1. ${isKedatangan ? 'Waktu Landing' : 'Bus Masuk Check Point'}: <span id="m1-time" style="color:#0f172a; font-weight:900;">${t1Val || 'Belum di-set'}</span>`;
+    m2Label.innerHTML = `2. ${isKedatangan ? 'Keluar Imigrasi' : 'Bus Naik'}: <span id="m2-time" style="color:#0f172a; font-weight:900;">${t2Val || 'Belum di-set'}</span>`;
+    m3Label.innerHTML = `3. ${isKedatangan ? 'Bus Berangkat' : 'Jamaah Masuk Imigrasi'}: <span id="m3-time" style="color:#0f172a; font-weight:900;">${t3Val || 'Belum di-set'}</span>`;
+  };
+
+  categorySelect.onchange = () => {
+    step = 0;
+    t1Val = ""; t2Val = ""; t3Val = "";
+    bigSetBtn.classList.remove("hidden");
+    submitBtn.classList.add("hidden");
+    durationDiv.classList.add("hidden");
+    updateMilestoneLabels();
+  };
+
+  updateMilestoneLabels();
+
+  bigSetBtn.onclick = () => {
+    const saudiTime = getSaudiDateTime().timeStr;
+    step++;
+    if (step === 1) {
+      t1Val = saudiTime;
+      showToast("Klik 1: Milestone 1 dicatat.");
+    } else if (step === 2) {
+      t2Val = saudiTime;
+      showToast("Klik 2: Milestone 2 dicatat.");
+    } else if (step === 3) {
+      t3Val = saudiTime;
+      showToast("Klik 3: Milestone 3 dicatat.");
+      bigSetBtn.classList.add("hidden");
+      submitBtn.classList.remove("hidden");
+
+      // Calculate duration between Milestone 2 & Milestone 3
+      const parseMinutes = (tStr) => {
+        if (!tStr) return 0;
+        const p = tStr.split(':');
+        return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1]) || 0);
+      };
+      const m2 = parseMinutes(t2Val);
+      const m3 = parseMinutes(t3Val);
+      durationMinutes = m3 >= m2 ? (m3 - m2) : (m3 + 1440 - m2);
+
+      const isKedatangan = categorySelect.value.toLowerCase().includes('kedatangan');
+      const durationTitle = isKedatangan ? 'Durasi Keluar Imigrasi s/d Bus Berangkat' : 'Durasi Bus Naik s/d Jamaah Masuk Imigrasi';
+      durationDiv.innerHTML = `⏱️ ${durationTitle}: <strong>${durationMinutes} Menit</strong>`;
+      durationDiv.classList.remove("hidden");
+    }
+    updateMilestoneLabels();
+  };
+
+  document.getElementById("timer-report-form").onsubmit = (e) => {
+    e.preventDefault();
+    const gName = document.getElementById("timer-group-input").value.trim();
+    const cat = categorySelect.value;
+    const isKedatangan = cat.toLowerCase().includes('kedatangan');
+
+    const detailText = `${isKedatangan ? 'Landing' : 'Check Point'}: ${t1Val} | ${isKedatangan ? 'Keluar Imigrasi' : 'Bus Naik'}: ${t2Val} | ${isKedatangan ? 'Bus Berangkat' : 'Masuk Imigrasi'}: ${t3Val}\nDurasi: ${durationMinutes} Menit`;
+
+    const newInc = {
+      id: `inc-${Date.now()}`,
+      username,
+      groupName: gName,
+      category: `Timer: ${cat}`,
+      detail: detailText,
+      date: getSaudiDateTime().gregorianStr,
+      status: "Diproses"
+    };
+
+    state.reports.incidents.push(newInc);
+    saveState();
+    closeModal();
+    showToast("Laporan Timer Operasional disubmit!");
+    loadUserTab("insiden");
+  };
+}
+
+
+
+function openGridPhotoReportPopup() {
+  const username = state.currentUser ? state.currentUser.username : '';
+  let uploadedPhotos = ["", "", "", ""];
+
+  const popupHtml = `
+    <div style="font-family:'Mulish', sans-serif;">
+      <form id="grid-photo-step1-form">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Pilih / Ketik Nama Grup</label>
+          <input type="text" id="grid-group-input" class="form-input" placeholder="Ketik nama grup..." required style="font-size:0.85rem; padding:8px 12px;">
+          <div id="grid-group-suggestions" class="suggestion-list hidden"></div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Kategori Inspektif</label>
+          <select id="grid-category-select" class="form-select" required style="font-size:0.85rem; padding:8px 12px;">
+            <option value="Kondisi Bus">Kondisi Bus</option>
+            <option value="Kondisi Kamar">Kondisi Kamar</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="grid-bus-no-container" style="margin-bottom:16px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Nomor Bus</label>
+          <input type="text" id="grid-bus-no-input" class="form-input" placeholder="Contoh: Bus 01 / Plate 4821" style="font-size:0.85rem; padding:8px 12px;">
+        </div>
+
+        <div class="form-group hidden" id="grid-room-no-container" style="margin-bottom:16px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">Nomor Kamar</label>
+          <input type="text" id="grid-room-no-input" class="form-input" placeholder="Contoh: Kamar 402 / Hotel Maden" style="font-size:0.85rem; padding:8px 12px;">
+        </div>
+
+        <!-- 4 Photo Grid (Rasio 1:1) -->
+        <div style="font-size:0.8rem; font-weight:800; color:#0f172a; margin-bottom:8px;">Dokumentasi Foto (Minimal 4 Foto - Rasio 1:1)</div>
+        <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; margin-bottom:16px;">
+          ${[0,1,2,3].map(i => `
+            <div style="aspect-ratio:1/1; background:#f8fafc; border:2px dashed #cbd5e1; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; overflow:hidden;" id="grid-slot-box-${i}">
+              <img id="grid-slot-img-${i}" class="hidden" style="width:100%; height:100%; object-fit:cover;">
+              <div id="grid-slot-empty-${i}" style="text-align:center; padding:8px;">
+                <i data-lucide="camera" style="width:24px; height:24px; color:#c5a850; margin-bottom:4px;"></i>
+                <div style="font-size:0.7rem; font-weight:800; color:#64748b;">Foto ${i+1}</div>
+              </div>
+              <input type="file" id="grid-file-input-${i}" accept="image/*" style="position:absolute; width:100%; height:100%; opacity:0; cursor:pointer;">
+            </div>
+          `).join('')}
+        </div>
+
+        <button type="submit" class="btn btn-gold" style="width:100%; padding:12px; font-size:0.9rem; font-weight:900; border-radius:12px;">
+          ISI FORM CHECKLIST &rarr;
+        </button>
+      </form>
+    </div>
+  `;
+
+  openModal("Grid Foto Dokumentasi", popupHtml);
+  lucide.createIcons();
+  initSuggestionInput("grid-group-input", "grid-group-suggestions", state.groups.map(g => g.name));
+
+  const catSelect = document.getElementById("grid-category-select");
+  const busContainer = document.getElementById("grid-bus-no-container");
+  const roomContainer = document.getElementById("grid-room-no-container");
+
+  catSelect.onchange = () => {
+    if (catSelect.value === "Kondisi Kamar") {
+      busContainer.classList.add("hidden");
+      roomContainer.classList.remove("hidden");
+    } else {
+      busContainer.classList.remove("hidden");
+      roomContainer.classList.add("hidden");
+    }
+  };
+
+  // Bind 4 photo inputs
+  [0,1,2,3].forEach(i => {
+    const fileInp = document.getElementById(`grid-file-input-${i}`);
+    const imgEl = document.getElementById(`grid-slot-img-${i}`);
+    const emptyEl = document.getElementById(`grid-slot-empty-${i}`);
+
+    fileInp.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          uploadedPhotos[i] = evt.target.result;
+          imgEl.src = evt.target.result;
+          imgEl.classList.remove("hidden");
+          emptyEl.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+  });
+
+  document.getElementById("grid-photo-step1-form").onsubmit = (e) => {
+    e.preventDefault();
+    const gName = document.getElementById("grid-group-input").value.trim();
+    const cat = catSelect.value;
+    const busNo = document.getElementById("grid-bus-no-input").value.trim();
+    const roomNo = document.getElementById("grid-room-no-input").value.trim();
+
+    const filledCount = uploadedPhotos.filter(p => !!p).length;
+    if (filledCount < 4) {
+      showToast("Mohon unggah/ambil minimal 4 foto dokumentasi!", "error");
+      return;
+    }
+
+    // Move to Step 2: Form Checklist
+    openChecklistFormPopup(gName, cat, cat === "Kondisi Bus" ? busNo : roomNo, uploadedPhotos);
+  };
+}
+
+function openChecklistFormPopup(groupName, category, targetNo, photos) {
+  const isBus = (category === "Kondisi Bus");
+  
+  const checklistItems = isBus 
+    ? ["Bersih", "Wangi", "AC", "WC", "Mic"]
+    : ["Bersih", "Wangi", "AC", "WC", "TV", "Handuk", "Amenities"];
+
+  const popupHtml = `
+    <div style="font-family:'Mulish', sans-serif;">
+      <form id="grid-checklist-step2-form">
+        <div style="background:#f8fafc; border-radius:12px; padding:12px; border:1px solid #e2e8f0; margin-bottom:16px; font-size:0.82rem;">
+          <div>Grup: <strong>${groupName}</strong></div>
+          <div>Kategori: <strong>${category}</strong> (${isBus ? 'No Bus' : 'No Kamar'}: <strong>${targetNo || '-'}</strong>)</div>
+          <div>Foto Terunggah: <strong>${photos.length} Foto 1:1</strong></div>
+        </div>
+
+        <div style="font-size:0.85rem; font-weight:800; color:#0f172a; margin-bottom:10px;">Checklist Kelayakan & Kondisi:</div>
+        <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; margin-bottom:16px;">
+          ${checklistItems.map(item => `
+            <label style="display:flex; align-items:center; gap:8px; background:#fff; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:700;">
+              <input type="checkbox" class="chk-item" value="${item}" checked style="width:16px; height:16px; accent-color:#c5a850;">
+              ${item}
+            </label>
+          `).join('')}
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label" style="font-size:0.8rem; font-weight:800;">${isBus ? 'Catatan Tambahan' : 'Keterangan Tambahan'}</label>
+          <textarea id="chk-notes-input" class="form-textarea" rows="3" placeholder="Tuliskan catatan kondisi detail..." style="font-size:0.85rem;"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-gold" style="width:100%; padding:12px; font-size:0.9rem; font-weight:900; border-radius:12px;">
+          SUBMIT LAPORAN CHECKLIST
+        </button>
+      </form>
+    </div>
+  `;
+
+  openModal(`Form Checklist ${category}`, popupHtml);
+
+  document.getElementById("grid-checklist-step2-form").onsubmit = (e) => {
+    e.preventDefault();
+    const username = state.currentUser ? state.currentUser.username : '';
+    const checked = Array.from(document.querySelectorAll(".chk-item:checked")).map(c => c.value);
+    const notes = document.getElementById("chk-notes-input").value.trim();
+
+    const detailText = `${isBus ? 'No Bus' : 'No Kamar'}: ${targetNo || '-'}\nChecklist: ${checked.join(', ')}\n${isBus ? 'Catatan' : 'Keterangan'}: ${notes || '-'}`;
+
+    const newInc = {
+      id: `inc-${Date.now()}`,
+      username,
+      groupName,
+      category: `Grid Foto: ${category}`,
+      detail: detailText,
+      photos,
+      date: getSaudiDateTime().gregorianStr,
+      status: "Diproses"
+    };
+
+    state.reports.incidents.push(newInc);
+    saveState();
+    closeModal();
+    showToast("Laporan Grid Foto & Checklist disubmit!");
+    loadUserTab("insiden");
   };
 }
