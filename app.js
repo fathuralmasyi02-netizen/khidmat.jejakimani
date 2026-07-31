@@ -111,6 +111,24 @@ function updateDbStatusUI() {
   });
 }
 
+
+function applyGlobalFontSize(size = null) {
+  const preferredSize = size || (typeof localStorage !== 'undefined' ? localStorage.getItem("jejak_imani_font_size") : "normal") || "normal";
+  const scaleMap = {
+    small: "90%",
+    normal: "100%",
+    large: "110%",
+    xlarge: "122%"
+  };
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.style.fontSize = scaleMap[preferredSize] || "100%";
+  }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem("jejak_imani_font_size", preferredSize);
+  }
+  return preferredSize;
+}
+
 function ensureStateCompat() {
   const ensureArray = (val, defaultVal = []) => {
     return Array.isArray(val) ? val.filter(x => x !== null && x !== undefined) : defaultVal;
@@ -337,6 +355,7 @@ function loadState() {
   }
   
   ensureStateCompat();
+  applyGlobalFontSize();
   
   // Load session
   const session = localStorage.getItem("jejak_imani_session");
@@ -1091,6 +1110,7 @@ function renderUserPortal(subView) {
     
     // Settings profile
     document.getElementById("user-settings-btn").onclick = () => {
+      const currentFontSize = localStorage.getItem("jejak_imani_font_size") || "normal";
       const settingsHtml = `
         <div style="text-align: center; margin-bottom: 20px;">
           <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gold); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 800; margin: 0 auto 10px auto;">
@@ -1125,11 +1145,39 @@ function renderUserPortal(subView) {
             <input type="password" id="prof-pass" class="form-input" placeholder="Kosongkan jika tidak diubah" autocomplete="new-password">
           </div>
           
+          <div class="form-group" style="margin-top:16px; margin-bottom:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
+            <label class="form-label" style="font-weight:800; color:#0f172a; display:flex; align-items:center; gap:6px;">
+              <i data-lucide="type" style="width:16px; height:16px; color:#c5a850;"></i> Ukuran Font Tampilan (Font Size)
+            </label>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin-top:6px;">
+              <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'small' ? 'btn-gold' : 'btn-secondary'}" data-size="small" style="padding:8px 2px; font-size:0.75rem;">Kecil</button>
+              <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'normal' ? 'btn-gold' : 'btn-secondary'}" data-size="normal" style="padding:8px 2px; font-size:0.75rem;">Normal</button>
+              <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'large' ? 'btn-gold' : 'btn-secondary'}" data-size="large" style="padding:8px 2px; font-size:0.75rem;">Besar</button>
+              <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'xlarge' ? 'btn-gold' : 'btn-secondary'}" data-size="xlarge" style="padding:8px 2px; font-size:0.75rem;">Sangat Besar</button>
+            </div>
+          </div>
+          
           <button type="submit" class="btn btn-primary" style="margin-bottom:12px;">SIMPAN PROFIL</button>
           <button type="button" id="user-logout" class="btn btn-danger">LOGOUT</button>
         </form>
       `;
       openModal("Pengaturan Akun", settingsHtml);
+      lucide.createIcons();
+      document.querySelectorAll(".font-size-setting-btn").forEach(btn => {
+        btn.onclick = () => {
+          const sz = btn.getAttribute("data-size");
+          applyGlobalFontSize(sz);
+          document.querySelectorAll(".font-size-setting-btn").forEach(b => {
+            if (b.getAttribute("data-size") === sz) {
+              b.className = "btn font-size-setting-btn btn-gold";
+            } else {
+              b.className = "btn font-size-setting-btn btn-secondary";
+            }
+          });
+          const labelMap = { small: 'Kecil', normal: 'Normal', large: 'Besar', xlarge: 'Sangat Besar' };
+          showToast("Ukuran font diubah ke: " + (labelMap[sz] || 'Normal'));
+        };
+      });
       
       document.getElementById("user-logout").onclick = () => {
         closeModal();
@@ -3351,6 +3399,9 @@ function renderAdminPortal(subView) {
               <h2 class="admin-page-title" id="admin-view-title" style="margin:0; font-size:1.2rem; font-weight:800; color:#0f172a;">Dashboard</h2>
             </div>
             <div class="admin-topbar-right" style="display:flex; align-items:center; gap:6px;">
+              <button class="btn btn-secondary icon-hdr-btn" onclick="openAdminSettingsPopup();" title="Pengaturan & Font Size" style="width:auto; padding:6px 10px; border-radius:8px; background:#f8fafc; border-color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center;">
+                <i data-lucide="settings" style="width: 16px; height: 16px; color:#0f172a;"></i>
+              </button>
               <button class="btn btn-secondary icon-hdr-btn" onclick="downloadDatabaseBackup();" title="Backup Data" style="width:auto; padding:6px 10px; border-radius:8px; background:#f8fafc; border-color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center;">
                 <i data-lucide="download" style="width: 16px; height: 16px; color:#0f172a;"></i>
               </button>
@@ -12622,4 +12673,83 @@ function renderUserScanQr() {
       processQrCodeResult(val);
     };
   }
+}
+
+
+
+function openAdminSettingsPopup() {
+  const currentFontSize = localStorage.getItem("jejak_imani_font_size") || "normal";
+  const currentUser = state.currentUser || {};
+  
+  const formHtml = `
+    <form id="admin-profile-settings-form">
+      <div class="form-group">
+        <label class="form-label">Nama Administrator</label>
+        <input type="text" id="adm-prof-name" class="form-input" value="${currentUser.name || ''}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nomor WhatsApp</label>
+        <input type="text" id="adm-prof-wa" class="form-input" value="${currentUser.whatsapp || ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ubah Password Baru</label>
+        <input type="password" id="adm-prof-pass" class="form-input" placeholder="Kosongkan jika tidak diubah" autocomplete="new-password">
+      </div>
+      
+      <div class="form-group" style="margin-top:16px; margin-bottom:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
+        <label class="form-label" style="font-weight:800; color:#0f172a; display:flex; align-items:center; gap:6px;">
+          <i data-lucide="type" style="width:16px; height:16px; color:#c5a850;"></i> Ukuran Font Tampilan (Font Size)
+        </label>
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin-top:6px;">
+          <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'small' ? 'btn-gold' : 'btn-secondary'}" data-size="small" style="padding:8px 2px; font-size:0.75rem;">Kecil</button>
+          <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'normal' ? 'btn-gold' : 'btn-secondary'}" data-size="normal" style="padding:8px 2px; font-size:0.75rem;">Normal</button>
+          <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'large' ? 'btn-gold' : 'btn-secondary'}" data-size="large" style="padding:8px 2px; font-size:0.75rem;">Besar</button>
+          <button type="button" class="btn font-size-setting-btn ${currentFontSize === 'xlarge' ? 'btn-gold' : 'btn-secondary'}" data-size="xlarge" style="padding:8px 2px; font-size:0.75rem;">Sangat Besar</button>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()" style="width:auto; padding:6px 14px;">Batal</button>
+        <button type="submit" class="btn btn-gold" style="width:auto; padding:6px 16px;">Simpan</button>
+      </div>
+    </form>
+  `;
+  openModal("Pengaturan Akun & Tampilan Admin", formHtml);
+  lucide.createIcons();
+
+  document.querySelectorAll(".font-size-setting-btn").forEach(btn => {
+    btn.onclick = () => {
+      const sz = btn.getAttribute("data-size");
+      applyGlobalFontSize(sz);
+      document.querySelectorAll(".font-size-setting-btn").forEach(b => {
+        if (b.getAttribute("data-size") === sz) {
+          b.className = "btn font-size-setting-btn btn-gold";
+        } else {
+          b.className = "btn font-size-setting-btn btn-secondary";
+        }
+      });
+      const labelMap = { small: 'Kecil', normal: 'Normal', large: 'Besar', xlarge: 'Sangat Besar' };
+      showToast("Ukuran font diubah ke: " + (labelMap[sz] || 'Normal'));
+    };
+  });
+
+  document.getElementById("admin-profile-settings-form").onsubmit = (e) => {
+    e.preventDefault();
+    const nName = document.getElementById("adm-prof-name").value.trim();
+    const nWa = document.getElementById("adm-prof-wa").value.trim();
+    const nPass = document.getElementById("adm-prof-pass").value;
+
+    const idx = state.users.findIndex(u => u.username === currentUser.username);
+    if (idx !== -1) {
+      state.users[idx].name = nName;
+      state.users[idx].whatsapp = nWa;
+      if (nPass) state.users[idx].password = nPass;
+      state.currentUser.name = nName;
+      state.currentUser.whatsapp = nWa;
+      saveState();
+      closeModal();
+      showToast("Pengaturan profil berhasil disimpan.");
+      router();
+    }
+  };
 }
