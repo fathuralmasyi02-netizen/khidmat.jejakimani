@@ -398,27 +398,11 @@ function mergeStates(remote, local) {
   const merged = { ...remote };
 
   const mergeArray = (remoteArr, localArr, keyFn) => {
-    const rArr = Array.isArray(remoteArr) ? remoteArr : [];
-    const lArr = Array.isArray(localArr) ? localArr : [];
-    const map = new Map();
-
-    rArr.forEach(item => {
-      if (item && typeof item === 'object') {
-        const k = keyFn(item);
-        if (k) map.set(k, item);
-      }
-    });
-
-    lArr.forEach(item => {
-      if (item && typeof item === 'object') {
-        const k = keyFn(item);
-        if (k && !map.has(k)) {
-          map.set(k, item);
-        }
-      }
-    });
-
-    return Array.from(map.values());
+    // If remote array is explicitly provided from Firebase cloud, trust cloud state so deletions in Firebase Console are respected
+    if (Array.isArray(remoteArr)) {
+      return remoteArr.filter(item => item && typeof item === 'object');
+    }
+    return Array.isArray(localArr) ? localArr.filter(item => item && typeof item === 'object') : [];
   };
 
   merged.users = mergeArray(remote.users, local.users, u => u.username || u.id);
@@ -570,7 +554,15 @@ function loadState() {
           modalContainer.classList.remove("hidden");
         }
       } else {
-        console.log("Firebase database node 'jejak_imani_v2_db' is empty on cloud. Pushing initial state...");
+        console.log("Firebase database node 'jejak_imani_v2_db' is empty or reset on cloud.");
+        // If cloud node was completely wiped/reset in Firebase console, reset local state as well
+        if (isFirebaseRemoteLoaded) {
+          state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+          localStorage.removeItem("jejak_imani_v2_db");
+          router();
+          updateDbStatusUI();
+          return;
+        }
         const localData = localStorage.getItem("jejak_imani_v2_db");
         if (!localData) {
           const stateToSave = {};
