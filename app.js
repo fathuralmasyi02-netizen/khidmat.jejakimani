@@ -860,7 +860,7 @@ function router() {
     let titleMeta = document.getElementById('app-title-meta') || document.querySelector('meta[name="apple-mobile-web-app-title"]');
     let nameMeta = document.getElementById('app-name-meta') || document.querySelector('meta[name="application-name"]');
 
-    if (hash.startsWith("#vendor-view")) {
+    if (hash.startsWith("#vendor-view") || hash.startsWith("#vendor")) {
       const params = new URLSearchParams(hash.split("?")[1] || "");
       const vId = params.get("id") || "";
       const manifestUrl = `vendor-manifest.json?id=${vId}`;
@@ -879,7 +879,7 @@ function router() {
     }
   }
 
-  if (hash.startsWith("#vendor-view")) {
+  if (hash.startsWith("#vendor-view") || hash.startsWith("#vendor")) {
     renderPublicVendorPortal();
     lucide.createIcons();
     updateDbStatusUI();
@@ -5336,7 +5336,30 @@ function renderTaskCardsAdmin() {
     const pubVal = document.getElementById("admin-task-pub-filter") ? document.getElementById("admin-task-pub-filter").value : "all";
     const quotaVal = document.getElementById("admin-task-quota-filter") ? document.getElementById("admin-task-quota-filter").value : "all";
     
-    let filtered = state.assignments;
+    const todayMs = new Date().setHours(0, 0, 0, 0);
+    
+    // Sort all assignments by date & time closest to today
+    let filtered = [...state.assignments].sort((a, b) => {
+      const parseTaskTime = (t) => {
+        if (!t.date) return 0;
+        const timeStr = t.time || (t.details && t.details.time) || "00:00";
+        return new Date(`${t.date}T${timeStr}:00`).getTime() || 0;
+      };
+
+      const timeA = parseTaskTime(a);
+      const timeB = parseTaskTime(b);
+
+      const isPastA = timeA < todayMs;
+      const isPastB = timeB < todayMs;
+
+      // Upcoming and today tasks come first, sorted chronologically ascending (closest date first!)
+      if (!isPastA && !isPastB) return timeA - timeB;
+      if (!isPastA && isPastB) return -1;
+      if (isPastA && !isPastB) return 1;
+
+      // Past tasks sorted descending (most recent past task first)
+      return timeB - timeA;
+    });
     if (q) {
       filtered = filtered.filter(t => {
         const typeStr = (t.type || t.title || '').toLowerCase();
@@ -5713,6 +5736,8 @@ function openPenjadwalanFormPopup(editId = null) {
             <select id="c-dest-target" class="form-select" required>
               <option value="Hotel Madinah" ${isEdit && task.details.destinationTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
               <option value="Hotel Makkah" ${isEdit && task.details.destinationTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+              <option value="Hotel Jeddah" ${isEdit && task.details.destinationTarget === 'Hotel Jeddah' ? 'selected' : ''}>Hotel Jeddah</option>
+              <option value="Hotel Jeddah" ${isEdit && task.details.destinationTarget === 'Hotel Jeddah' ? 'selected' : ''}>Hotel Jeddah</option>
             </select>
           </div>
           <div class="form-group">
@@ -5733,6 +5758,8 @@ function openPenjadwalanFormPopup(editId = null) {
             <select id="c-origin-target" class="form-select" required>
               <option value="Hotel Madinah" ${isEdit && task.details.originTarget === 'Hotel Madinah' ? 'selected' : ''}>Hotel Madinah</option>
               <option value="Hotel Makkah" ${isEdit && task.details.originTarget === 'Hotel Makkah' ? 'selected' : ''}>Hotel Makkah</option>
+              <option value="Hotel Jeddah" ${isEdit && task.details.originTarget === 'Hotel Jeddah' ? 'selected' : ''}>Hotel Jeddah</option>
+              <option value="Hotel Jeddah" ${isEdit && task.details.originTarget === 'Hotel Jeddah' ? 'selected' : ''}>Hotel Jeddah</option>
             </select>
           </div>
           <div class="form-group">
@@ -8831,7 +8858,8 @@ function loadVendorTab(tab) {
     const renderVendorList = () => {
       const query = searchInp.value.toLowerCase().trim();
       const tbody = document.getElementById("vendor-tbody");
-      const filtered = state.vendors.filter(v => 
+      const sortedVendors = [...state.vendors].reverse();
+      const filtered = sortedVendors.filter(v => 
         v.name.toLowerCase().includes(query) || 
         v.type.toLowerCase().includes(query) || 
         v.contact.toLowerCase().includes(query) ||
@@ -8874,7 +8902,7 @@ function loadVendorTab(tab) {
           const vId = btn.getAttribute("data-id");
           const vName = btn.getAttribute("data-name");
           const origin = window.location.origin + window.location.pathname;
-          const vendorUrl = `${origin}#vendor-view?id=${vId}`;
+          const vendorUrl = `${origin}#vendor-view?name=${encodeURIComponent(vName)}`;
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(vendorUrl);
           } else {
@@ -8895,7 +8923,7 @@ function loadVendorTab(tab) {
           const vName = btn.getAttribute("data-name");
           const rawContact = btn.getAttribute("data-contact") || "";
           const origin = window.location.origin + window.location.pathname;
-          const vendorUrl = `${origin}#vendor-view?id=${vId}`;
+          const vendorUrl = `${origin}#vendor-view?name=${encodeURIComponent(vName)}`;
           const cleanPhone = rawContact.replace(/[^0-9]/g, '');
           const msg = encodeURIComponent(`Assalamu'alaikum wr.wb,\nYth. ${vName}\n\nBerikut kami kirimkan link Halaman Jadwal Pemesanan (Booking Schedule) dari Tim Khidmat jejak imani saudi arabia:\n\n${vendorUrl}\n\nMohon dapat diperiksa dan dikonfirmasi. Terima kasih.`);
           window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
@@ -8953,7 +8981,15 @@ function loadVendorTab(tab) {
     const renderBookingList = () => {
       const query = searchInp.value.toLowerCase().trim();
       const tbody = document.getElementById("booking-tbody");
-      const filtered = state.bookings.filter(b => {
+      const sortedBookings = [...state.bookings].sort((a,b) => {
+        const dateA = a.dateStart || a.date || '2026-01-01';
+        const dateB = b.dateStart || b.date || '2026-01-01';
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA);
+        }
+        return (b.time || '00:00').localeCompare(a.time || '00:00');
+      });
+      const filtered = sortedBookings.filter(b => {
         const v = state.vendors.find(x => x.id === b.vendorId);
         const vName = v ? v.name : "";
         return b.groupName.toLowerCase().includes(query) || vName.toLowerCase().includes(query) || (b.notes && b.notes.toLowerCase().includes(query));
@@ -10861,15 +10897,17 @@ function cleanDocName(name, groupName) {
 
 function renderAdminDokumen() {
   const container = document.getElementById("admin-subview-content");
+  if (!container) return;
   
-  let visibleDocs = state.documents;
+  let visibleDocs = state.documents || [];
   if (adminDocGroupFilter !== "") {
-    visibleDocs = visibleDocs.filter(d => d.groupName === adminDocGroupFilter || d.groupName === "Umum");
+    visibleDocs = visibleDocs.filter(d => d && (d.groupName === adminDocGroupFilter || d.groupName === "Umum"));
   }
 
   // Group documents by groupName
   const groupedDocs = {};
   visibleDocs.forEach(d => {
+    if (!d) return;
     const gN = d.groupName || "Umum";
     if (!groupedDocs[gN]) groupedDocs[gN] = [];
     groupedDocs[gN].push(d);
@@ -10884,12 +10922,12 @@ function renderAdminDokumen() {
         <input type="text" id="doc-grup-filter-search" class="form-input" value="${adminDocGroupFilter || ''}" placeholder="Ketik nama grup...">
         <div id="doc-grup-filter-suggestions" class="suggestion-list hidden"></div>
       </div>
-      <button id="add-doc-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus-circle"></i> Tambah Dokumen Baru</button>
+      <button id="add-doc-popup-btn" class="btn btn-gold" style="width:auto; padding:8px 16px;"><i data-lucide="plus-circle"></i> Tambah Link Dokumen Baru</button>
     </div>
     
     <div id="admin-doc-accordion-container" style="display:flex; flex-direction:column; gap:12px;">
       ${sortedGroups.length === 0 ? `
-        <p style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:24px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Tidak ada berkas dokumen ditemukan.</p>
+        <p style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:24px; background:#fff; border-radius:12px; border:1px solid #e2e8f0;">Belum ada link dokumen yang disimpan.</p>
       ` : sortedGroups.map((gName, idx) => {
         const docList = groupedDocs[gName];
         const headerId = `doc-acc-header-${idx}`;
@@ -10904,35 +10942,33 @@ function renderAdminDokumen() {
                 <span style="font-weight:800; font-size:0.92rem; color:#0f172a;">${gName}</span>
               </div>
               <div style="display:flex; align-items:center; gap:10px;">
-                <span class="badge badge-gold" style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:800;">${docList.length} Berkas</span>
-                <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transition:transform 0.2s;"></i>
+                <span class="badge badge-gold" style="font-size:0.75rem; padding:3px 10px; border-radius:12px; font-weight:800;">${docList.length} Link Dokumen</span>
+                <i data-lucide="chevron-down" id="${iconId}" style="width:18px; height:18px; color:#64748b; transform:rotate(-90deg); transition:transform 0.2s;"></i>
               </div>
             </div>
             
-            <div id="${bodyId}" class="doc-accordion-body" style="padding:0;">
+            <div id="${bodyId}" class="doc-accordion-body hidden" style="padding:0; display:none;">
               <div class="table-wrapper">
                 <table class="data-table" style="margin:0; width:100%;">
                   <thead>
                     <tr style="background:#fafafa;">
                       <th style="padding-left:18px;">Nama Dokumen</th>
-                      <th>Kategori</th>
                       <th style="text-align:right; padding-right:18px;">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     ${docList.map(d => {
-                      const displayName = cleanDocName(d.name, d.groupName);
+                      const targetUrl = d.linkUrl || d.link || d.fileUrl || "#";
                       return `
                         <tr>
                           <td style="padding-left:18px;">
-                            <div style="font-weight:800; font-size:0.88rem; color:#0f172a;">${displayName}</div>
+                            <div style="font-weight:800; font-size:0.88rem; color:#0f172a;">${d.name || 'Dokumen Rombongan'}</div>
                           </td>
-                          <td>${getDocCategoryBadge(d.category || 'Dokumen')}</td>
                           <td style="text-align:right; padding-right:18px;">
                             <div style="display:inline-flex; gap:6px; justify-content:flex-end;">
-                              <button class="btn btn-gold preview-doc-admin-btn" data-id="${d.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:4px;">
-                                <i data-lucide="eye" style="width:13px; height:13px;"></i> Preview
-                              </button>
+                              <a href="${targetUrl}" target="_blank" class="btn btn-gold" style="width:auto; padding:5px 10px; font-size:0.75rem; font-weight:800; display:inline-flex; align-items:center; gap:4px; text-decoration:none;">
+                                <i data-lucide="external-link" style="width:13px; height:13px;"></i> Buka Link
+                              </a>
                               <button class="btn btn-danger delete-doc-btn" data-id="${d.id}" style="width:auto; padding:5px 10px; font-size:0.75rem; display:inline-flex; align-items:center; gap:4px;">
                                 <i data-lucide="trash-2" style="width:13px; height:13px;"></i> Hapus
                               </button>
@@ -10975,25 +11011,18 @@ function renderAdminDokumen() {
     const iconEl = document.getElementById(`doc-acc-icon-${idx}`);
     if (headerEl && bodyEl && iconEl) {
       headerEl.onclick = () => {
-        bodyEl.classList.toggle("hidden");
-        const isHidden = bodyEl.classList.contains("hidden");
-        iconEl.style.transform = isHidden ? "rotate(0deg)" : "rotate(180deg)";
+        const isHidden = (bodyEl.style.display === 'none' || bodyEl.classList.contains("hidden"));
+        if (isHidden) {
+          bodyEl.style.display = 'block';
+          bodyEl.classList.remove("hidden");
+          iconEl.style.transform = "rotate(0deg)";
+        } else {
+          bodyEl.style.display = 'none';
+          bodyEl.classList.add("hidden");
+          iconEl.style.transform = "rotate(-90deg)";
+        }
       };
     }
-  });
-
-  // Bind Preview Buttons
-  document.querySelectorAll(".preview-doc-admin-btn").forEach(btn => {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute("data-id");
-      const doc = state.documents.find(d => d.id === id);
-      if (doc) {
-        openDocPreviewModal(doc);
-      } else {
-        showToast("Dokumen tidak ditemukan", "error");
-      }
-    };
   });
 
   // Bind Delete Buttons
@@ -11001,12 +11030,12 @@ function renderAdminDokumen() {
     btn.onclick = (e) => {
       e.stopPropagation();
       const id = btn.getAttribute("data-id");
-      if (confirm("Hapus dokumen dari arsip?")) {
+      if (confirm("Hapus link dokumen ini dari arsip?")) {
         const idx = state.documents.findIndex(d => d.id === id);
         if (idx !== -1) {
           state.documents.splice(idx, 1);
           saveState();
-          showToast("Dokumen dihapus.");
+          showToast("Link dokumen dihapus.");
           renderAdminDokumen();
         }
       }
@@ -11017,49 +11046,52 @@ function renderAdminDokumen() {
     const popupHtml = `
       <form id="doc-submit-form-popup">
         <div class="form-group" style="position:relative;">
-          <label class="form-label">Relasi Grup</label>
-          <input type="text" id="ad-group-search" class="form-input" placeholder="Ketik nama grup (atau 'Umum')..." required>
+          <label class="form-label" style="font-size:0.82rem; font-weight:800;">1. Pilih / Ketik Grup</label>
+          <input type="text" id="ad-group-search" class="form-input" placeholder="Ketik nama grup (atau 'Umum')..." required style="font-size:0.85rem;">
           <div id="ad-group-suggestions" class="suggestion-list hidden"></div>
         </div>
         <div class="form-group">
-          <label class="form-label">Kategori Dokumen</label>
-          <select id="ad-category" class="form-select" required>
-            <option value="Profiling Jamaah">Profiling Jamaah</option>
-            <option value="Visa">Visa</option>
-            <option value="Paspor">Paspor</option>
-            <option value="E-Ticket">E-Ticket</option>
-            <option value="Bus List">Bus List</option>
-            <option value="Paket Info">Paket Info</option>
-            <option value="Itinerary">Itinerary</option>
-            <option value="Lainnya">Lainnya</option>
-          </select>
+          <label class="form-label" style="font-size:0.82rem; font-weight:800;">2. Nama Dokumen</label>
+          <input type="text" id="ad-name" class="form-input" placeholder="Mis. Manifest Jamaah Umroh PDF / Rooming List" required style="font-size:0.85rem;">
         </div>
-        <div class="form-group"><label class="form-label">Nama Dokumen</label><input type="text" id="ad-name" class="form-input" placeholder="Mis. Manifest Paspor & Scan" required></div>
-        <div class="form-group"><label class="form-label">Pilih Berkas Dokumen</label><input type="file" id="ad-file" class="form-input" required></div>
-        <button type="submit" class="btn btn-primary">UNGGAH DOKUMEN</button>
+        <div class="form-group">
+          <label class="form-label" style="font-size:0.82rem; font-weight:800;">3. Link Dokumen (URL)</label>
+          <input type="url" id="ad-link-url" class="form-input" placeholder="https://drive.google.com/file/d/... atau https://..." required style="font-size:0.85rem;">
+        </div>
+        <button type="submit" class="btn btn-gold" style="width:100%; padding:12px; font-weight:900; border-radius:12px;">
+          SIMPAN LINK DOKUMEN
+        </button>
       </form>
     `;
-    openModal("Arsipkan File Baru (Pop Up)", popupHtml);
+    openModal("Tambah Link Dokumen Baru", popupHtml);
     
     initSuggestionInput("ad-group-search", "ad-group-suggestions", ["Umum", ...state.groups.map(g => g.name)]);
     
     document.getElementById("doc-submit-form-popup").onsubmit = (e) => {
       e.preventDefault();
-      const groupName = document.getElementById("ad-group-search").value;
-      const category = document.getElementById("ad-category").value;
+      const groupName = document.getElementById("ad-group-search").value.trim();
       const name = document.getElementById("ad-name").value.trim();
-      const fileInput = document.getElementById("ad-file").files[0];
+      let linkUrl = document.getElementById("ad-link-url").value.trim();
+      
+      if (!linkUrl.startsWith('http://') && !linkUrl.startsWith('https://')) {
+        linkUrl = 'https://' + linkUrl;
+      }
       
       state.documents.push({
-        id: `doc-${Date.now()}`, groupName, category, name, file: fileInput ? fileInput.name : "upload.pdf"
+        id: `doc-${Date.now()}`,
+        groupName,
+        name,
+        linkUrl,
+        date: getSaudiDateTime().gregorianStr
       });
       saveState();
       closeModal();
-      showToast("Dokumen diarsipkan!");
+      showToast("Link dokumen berhasil disimpan!");
       renderAdminDokumen();
     };
   };
 }
+
 function renderAdminAset() {
   const container = document.getElementById("admin-subview-content");
   if (!container) return;
@@ -12005,8 +12037,17 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
             const dt = formatDateShortMonth(b.dateStart || b.date) + ' | ' + (b.time || '05:30');
             const st = b.status || 'Pesanan Baru';
             let badgeClass = 'badge-baru';
-            if (st === 'Proses') badgeClass = 'badge-proses';
-            else if (st === 'Selesai') badgeClass = 'badge-selesai';
+            let displayStatus = 'Akan Datang';
+            if (st === 'Proses') {
+              badgeClass = 'badge-proses';
+              displayStatus = 'Proses';
+            } else if (st === 'Selesai') {
+              badgeClass = 'badge-selesai';
+              displayStatus = 'Selesai';
+            } else {
+              badgeClass = 'badge-baru';
+              displayStatus = 'Akan Datang';
+            }
 
             const prods = (b.products && b.products.length > 0) ? b.products : [
               { name: b.notes || 'Snack Kering', qty: b.qty || 1, unit: b.unit || 'Pcs', amount: b.amount || (b.totalPrice || 242) }
@@ -12026,7 +12067,7 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
                   <div style="font-weight:800; margin-top:3px; color:#0f172a;">Total: SAR ${(b.totalPrice || 0).toLocaleString('id-ID')}</div>
                 </td>
                 <td style="text-align:center;">
-                  <span class="status-badge ${badgeClass}">${st}</span>
+                  <span class="status-badge ${badgeClass}">${displayStatus}</span>
                 </td>
               </tr>
             `;
@@ -12225,7 +12266,10 @@ function openVendorProcessModal(bookingId) {
         <div style="font-size:0.85rem; line-height:1.7; margin-bottom:18px;">
           <div>Muthowwif: <strong>Ust. ${muthawwifName}</strong></div>
           <div>Lokasi Pengantaran: <strong>${locationName}</strong></div>
-          <div style="margin-top:8px; border-top:1px dashed #cbd5e1; padding-top:8px;">
+          <div style="margin-top:6px; background:#f8fafc; padding:8px 12px; border-radius:8px; border-left:3px solid #dfc06b; font-size:0.82rem;">
+            <strong>Keterangan / Catatan:</strong> ${b.notes || b.remarks || b.customText || '-'}
+          </div>
+          <div style="margin-top:10px; border-top:1px dashed #cbd5e1; padding-top:8px;">
             <strong>Daftar Item Pemesanan:</strong>
             ${(b.products && b.products.length > 0 ? b.products : [{name: 'Item Produk', qty: 1, unit: 'Pcs', amount: b.totalPrice}]).map(p => `
               <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-top:2px;">
@@ -12499,12 +12543,112 @@ function openVendorProcessModal(bookingId) {
   }
 }
 
+function formatDateIndonesian(dateStr) {
+  if (!dateStr) return "-";
+  try {
+    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agust", "Sep", "Okt", "Nov", "Des"];
+    const parts = String(dateStr).split("-");
+    if (parts.length === 3) {
+      const day = parts[2];
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const year = parts[0];
+      if (monthIdx >= 0 && monthIdx < 12) {
+        return `${day} ${months[monthIdx]} ${year}`;
+      }
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const m = months[d.getMonth()];
+      const y = d.getFullYear();
+      return `${day} ${m} ${y}`;
+    }
+  } catch(e) {}
+  return dateStr;
+}
+
+function openVendorPdfOptionsModal(vendorId) {
+  const vendor = (state.vendors || []).find(v => v.id === vendorId);
+  if (!vendor) {
+    showToast("Data vendor tidak ditemukan.", "error");
+    return;
+  }
+
+  const modalHtml = `
+    <form id="vendor-pdf-options-form" style="font-family:'Mulish', sans-serif; color:#1e293b;">
+      <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:12px; padding:12px 14px; margin-bottom:16px;">
+        <div style="font-size:0.75rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:2px;">MITRA VENDOR SAUDI ARABIA</div>
+        <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label" style="font-weight:800; font-size:0.85rem;">1. Pilihan Jenis Laporan PDF</label>
+        <select id="pdf-report-type" class="form-select" required style="font-size:0.88rem; font-weight:700;">
+          <option value="rekap">Rekapitulasi Pemesanan Vendor</option>
+          <option value="keuangan">Laporan Keuangan & Mutasi Saldo</option>
+        </select>
+      </div>
+
+      <div class="grid-2col" style="margin-bottom:18px;">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:800; font-size:0.82rem;">2. Tanggal Mulai (Opsional)</label>
+          <input type="date" id="pdf-date-start" class="form-input" style="font-size:0.85rem;">
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:800; font-size:0.82rem;">3. Tanggal Selesai (Opsional)</label>
+          <input type="date" id="pdf-date-end" class="form-input" style="font-size:0.85rem;">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-gold" style="width:100%; padding:12px; font-weight:900; font-size:0.95rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <i data-lucide="printer" style="width:18px; height:18px;"></i> CETAK DOKUMEN PDF
+      </button>
+    </form>
+  `;
+
+  openModal("Cetak PDF Laporan Vendor", modalHtml);
+  lucide.createIcons();
+
+  document.getElementById("vendor-pdf-options-form").onsubmit = (e) => {
+    e.preventDefault();
+    const type = document.getElementById("pdf-report-type").value;
+    const dateStart = document.getElementById("pdf-date-start").value;
+    const dateEnd = document.getElementById("pdf-date-end").value;
+
+    closeModal();
+    printPublicVendorPDF(vendorId, type, dateStart, dateEnd);
+  };
+}
+
 function renderPublicVendorPortal() {
   const hash = window.location.hash;
-  const params = new URLSearchParams(hash.split("?")[1] || "");
-  const vendorId = params.get("id");
+  const queryString = hash.includes("?") ? hash.split("?")[1] : "";
+  const params = new URLSearchParams(queryString);
+  
+  const nameParam = params.get("name") || params.get("vendor");
+  const idParam = params.get("id");
 
-  const vendor = state.vendors.find(v => v.id === vendorId);
+  let vendor = null;
+
+  // Search vendor by Name (Supports encoded names or slugified names e.g. name=Katering+Madinah or name=katering-madinah)
+  if (nameParam) {
+    const cleanParam = decodeURIComponent(nameParam).toLowerCase().trim().replace(/[-+]/g, ' ');
+    vendor = (state.vendors || []).find(v => {
+      if (!v || !v.name) return false;
+      const vName = v.name.toLowerCase().trim();
+      return vName === cleanParam || vName.replace(/\s+/g, '-') === cleanParam.replace(/\s+/g, '-');
+    });
+  }
+
+  // Fallback 1: Search by ID if name param not provided
+  if (!vendor && idParam) {
+    vendor = (state.vendors || []).find(v => v.id === idParam);
+  }
+
+  // Fallback 2: Default to first vendor in state.vendors if no param provided or vendor not found
+  if (!vendor && state.vendors && state.vendors.length > 0) {
+    vendor = state.vendors[0];
+  }
 
   if (!vendor) {
     APP_CONTAINER.innerHTML = `
@@ -12690,7 +12834,7 @@ function renderPublicVendorPortal() {
 
                   <div>
                     <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:auto; padding:8px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
-                      <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF Laporan / PO
+                      <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
                     </button>
                   </div>
                 </div>
@@ -13649,7 +13793,7 @@ function renderUserDocuments() {
   const groupObj = state.groups.find(g => g && g.name === groupNameParam) || (state.groups.length > 0 ? state.groups[0] : null);
   const selectedGroupName = groupObj ? groupObj.name : "";
 
-  // Filter strictly REAL ADMIN DATA from state.documents
+  // Filter strictly REAL ADMIN LINK DATA from state.documents
   const realDocs = (state.documents || []).filter(d => 
     d && d.groupName && d.groupName.toLowerCase() === selectedGroupName.toLowerCase()
   );
@@ -13659,24 +13803,31 @@ function renderUserDocuments() {
     docListHtml = `
       <div style="text-align:center; padding:32px 16px; color:#64748b; background:#fff; border-radius:16px; border:1px solid #e2e8f0; font-size:0.85rem;">
         <i data-lucide="folder-open" style="width:36px; height:36px; color:#cbd5e1; display:block; margin:0 auto 10px auto;"></i>
-        Belum ada dokumen yang diunggah Admin untuk rombongan grup ini.
+        Belum ada link dokumen yang diunggah Admin untuk rombongan grup ini.
       </div>
     `;
   } else {
-    docListHtml = realDocs.map(d => `
-      <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:16px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div style="width:42px; height:42px; border-radius:12px; background:#fffdf5; border:1px solid #fef3c7; display:flex; align-items:center; justify-content:center; color:#b89230;">
-            <i data-lucide="file-text" style="width:22px; height:22px;"></i>
+    docListHtml = realDocs.map(d => {
+      const targetUrl = d.linkUrl || d.link || d.fileUrl || "#";
+      return `
+        <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; color:inherit; display:block;">
+          <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:16px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.02); transition:transform 0.15s ease, box-shadow 0.15s ease;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:42px; height:42px; border-radius:12px; background:#fffdf5; border:1px solid #fef3c7; display:flex; align-items:center; justify-content:center; color:#b89230; flex-shrink:0;">
+                <i data-lucide="file-text" style="width:22px; height:22px;"></i>
+              </div>
+              <div>
+                <strong style="font-size:0.92rem; color:#0f172a; display:block;">${d.name || 'Dokumen Rombongan'}</strong>
+                <span style="font-size:0.75rem; color:#64748b;">Klik untuk membuka link dokumen</span>
+              </div>
+            </div>
+            <div style="width:36px; height:36px; border-radius:10px; background:#fffdf5; border:1px solid #fef3c7; display:flex; align-items:center; justify-content:center; color:#b89230;">
+              <i data-lucide="external-link" style="width:18px; height:18px;"></i>
+            </div>
           </div>
-          <div>
-            <strong style="font-size:0.9rem; color:#0f172a;">${d.name || 'Dokumen Rombongan'}</strong>
-            <div style="font-size:0.75rem; color:#64748b;">${d.category || 'Dokumen'} • ${d.date || 'Tersedia'}</div>
-          </div>
-        </div>
-        <a href="${d.fileUrl || '#'}" download="${d.name || 'Dokumen.pdf'}" class="btn btn-gold" onclick="if(!${d.fileUrl ? 'true' : 'false'}) showToast('Mengunduh berkas dokumen...');" style="width:auto; padding:6px 14px; font-size:0.75rem; font-weight:800; border-radius:8px; text-decoration:none;">Unduh</a>
-      </div>
-    `).join('');
+        </a>
+      `;
+    }).join('');
   }
 
   container.innerHTML = `
@@ -13684,7 +13835,7 @@ function renderUserDocuments() {
       
       <!-- Group Info Header -->
       <div style="background:#ffffff; border-radius:18px; border:1px solid #e2e8f0; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
-        <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:4px;">DOKUMEN PENUGASAN & ROMBONGAN (ADMIN SYNC)</div>
+        <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:4px;">DOKUMEN PENUGASAN & ROMBONGAN</div>
         <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0;">${selectedGroupName || 'Pilih Rombongan Grup'}</h3>
       </div>
 
