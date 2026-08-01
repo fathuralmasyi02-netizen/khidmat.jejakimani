@@ -11899,12 +11899,6 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     return;
   }
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    showToast("Gagal membuka jendela cetak. Izinkan pop-up di browser.", "error");
-    return;
-  }
-
   let tableContentHtml = "";
   let documentTitle = mode === 'keuangan' ? 'LAPORAN KEUANGAN VENDOR' : 'REKAPITULASI PEMESANAN VENDOR';
 
@@ -11945,11 +11939,8 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
       }
     });
 
-    // Filter dates
     if (dateStart) finItems = finItems.filter(x => x.date >= dateStart);
     if (dateEnd) finItems = finItems.filter(x => x.date <= dateEnd);
-
-    // Sort by date ascending
     finItems.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     let runningBal = 0;
@@ -12079,7 +12070,6 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     `;
   }
 
-  // Calculate period text in Indonesian long format
   let periodText = "";
   if (dateStart && dateEnd) {
     periodText = `Periode: ${formatDateLongIndo(dateStart)} s/d ${formatDateLongIndo(dateEnd)}`;
@@ -12089,166 +12079,57 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     periodText = `Periode s/d: ${formatDateLongIndo(dateEnd)}`;
   }
 
-  const printHtml = `
-    <!DOCTYPE html>
-    <html lang="id">
-    <head>
-      <meta charset="UTF-8">
-      <title>${documentTitle} - ${vendor.name}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Martel:wght@400;700;900&family=Mulish:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-      <style>
-        @page {
-          size: A4 portrait;
-          margin: 0;
-        }
-        body {
-          margin: 0;
-          padding: 0;
-          font-family: 'Mulish', sans-serif;
-          color: #0f172a;
-          background: #ffffff;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        .page-container {
-          width: 210mm;
-          min-height: 297mm;
-          margin: 0 auto;
-          box-sizing: border-box;
-          background: #ffffff;
-          padding: 30px 44px 44px 44px;
-          position: relative;
-        }
-        .header-title {
-          text-align: center;
-          margin-bottom: 20px;
-          border-bottom: 2px solid #dfc06b;
-          padding-bottom: 10px;
-        }
-        .header-title h1 {
-          font-family: 'Martel', serif;
-          font-size: 1.3rem;
-          margin: 0;
-          color: #0f172a;
-          text-transform: uppercase;
-        }
-        .header-title p {
-          margin: 4px 0 0 0;
-          font-size: 0.8rem;
-          color: #64748b;
-          font-weight: 700;
-        }
-        .vendor-info-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 18px;
-          font-size: 9pt;
-          background: rgba(248,250,252,0.9);
-          border-radius: 8px;
-        }
-        .vendor-info-table td {
-          padding: 7px 12px;
-          border: 1px solid #cbd5e1;
-        }
-        .booking-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 24px;
-          font-size: 9pt;
-        }
-        .booking-table th {
-          background: #0f172a;
-          color: #ffffff;
-          padding: 8px 10px;
-          text-align: center;
-          font-weight: 800;
-          font-size: 9pt;
-          border: 1px solid #0f172a;
-        }
-        .booking-table td {
-          padding: 8px 10px;
-          border: 1px solid #cbd5e1;
-          vertical-align: top;
-          background: #ffffff;
-          font-size: 9pt;
-        }
-        .status-badge {
-          display: inline-block;
-          padding: 2px 8px;
-          border-radius: 10px;
-          font-weight: 800;
-          font-size: 8pt;
-          text-align: center;
-        }
-        .badge-baru { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-        .badge-proses { background: #fffbe6; color: #d97706; border: 1px solid #fde68a; }
-        .badge-selesai { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-        .footer-note {
-          margin-top: 30px;
-          text-align: center;
-          font-size: 8pt;
-          color: #64748b;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 10px;
-        }
-        @media print {
-          .no-print { display: none !important; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="no-print" style="position:fixed; top:12px; right:20px; z-index:9999;">
-        <button onclick="window.print();" style="padding:10px 20px; background:#dfc06b; color:#0f172a; border:none; border-radius:10px; font-weight:900; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-          🖨️ Cetak / Simpan PDF
-        </button>
+  // Generate In-App Printable PDF Modal Viewer (100% Reliable across all browsers & pop-up blockers)
+  const pdfViewHtml = `
+    <div id="pdf-printable-area" style="font-family:'Mulish', sans-serif; color:#0f172a; background:#ffffff; padding:24px 20px; border-radius:14px; border:1px solid #cbd5e1; box-shadow:0 10px 25px rgba(0,0,0,0.08); max-width:800px; margin:0 auto;">
+      
+      <!-- Top Action Control Bar (Hidden on Print) -->
+      <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:12px; border-bottom:1px solid #e2e8f0; flex-wrap:wrap; gap:10px;">
+        <span style="font-size:0.85rem; font-weight:800; color:#b89230;">📄 PRATINJAU DOKUMEN PDF RESMI</span>
+        <div style="display:flex; gap:10px;">
+          <button onclick="window.print();" class="btn btn-gold" style="padding:8px 18px; font-weight:900; font-size:0.85rem; border-radius:10px; display:inline-flex; align-items:center; gap:6px;">
+            <i data-lucide="printer" style="width:16px; height:16px;"></i> CETAK / SIMPAN PDF
+          </button>
+          <button onclick="closeModal();" class="btn btn-secondary" style="padding:8px 14px; font-weight:800; font-size:0.85rem; border-radius:10px;">
+            TUTUP
+          </button>
+        </div>
       </div>
 
-      <div class="page-container">
-        
-        <div class="header-title">
-          <h1>${documentTitle}</h1>
+      <!-- PDF DOCUMENT BODY -->
+      <div class="page-container" style="background:#ffffff; width:100%; box-sizing:border-box;">
+        <div class="header-title" style="text-align:center; margin-bottom:20px; border-bottom:2px solid #dfc06b; padding-bottom:10px;">
+          <h1 style="font-family:'Martel', serif; font-size:1.3rem; margin:0; color:#0f172a; text-transform:uppercase;">${documentTitle}</h1>
           ${periodText ? `<p style="color:#d97706; font-size:0.85rem; font-weight:800; margin-top:4px;">${periodText}</p>` : ''}
         </div>
 
-        <table class="vendor-info-table">
+        <table class="vendor-info-table" style="width:100%; border-collapse:collapse; margin-bottom:18px; font-size:9pt; background:#f8fafc;">
           <tr>
-            <td style="width:18%; color:#64748b;">Mitra Vendor</td>
-            <td style="width:32%;"><strong>${vendor.name}</strong></td>
-            <td style="width:18%; color:#64748b;">Tipe Layanan</td>
-            <td style="width:32%;"><strong>${vendor.type || 'Mitra Layanan'}</strong></td>
+            <td style="width:18%; color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Mitra Vendor</td>
+            <td style="width:32%; padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.name}</strong></td>
+            <td style="width:18%; color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Tipe Layanan</td>
+            <td style="width:32%; padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.type || 'Mitra Layanan'}</strong></td>
           </tr>
           <tr>
-            <td style="color:#64748b;">Kontak</td>
-            <td><strong>${vendor.contact || '-'}</strong></td>
-            <td style="color:#64748b;">Keterangan</td>
-            <td><strong>${vendor.notes || vendor.description || '-'}</strong></td>
+            <td style="color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Kontak</td>
+            <td style="padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.contact || '-'}</strong></td>
+            <td style="color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Keterangan</td>
+            <td style="padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.notes || vendor.description || '-'}</strong></td>
           </tr>
         </table>
 
         ${tableContentHtml}
 
-        <div class="footer-note">
+        <div class="footer-note" style="margin-top:30px; text-align:center; font-size:8pt; color:#64748b; border-top:1px solid #e2e8f0; padding-top:10px;">
           Dokumen resmi terverifikasi secara sistem oleh Tim Khidmat jejak imani Saudi Arabia
         </div>
-
       </div>
-    </body>
-    </html>
+
+    </div>
   `;
 
-  printWindow.document.open();
-  printWindow.document.write(printHtml);
-  printWindow.document.close();
-
-  // Smoothly focus and launch print preview after DOM content settles
-  setTimeout(() => {
-    try {
-      printWindow.focus();
-      printWindow.print();
-    } catch(e) {
-      console.warn("Auto print failed:", e);
-    }
-  }, 400);
+  openModal("Pratinjau Dokumen PDF Vendor", pdfViewHtml);
+  lucide.createIcons();
 }
 
 window.printPublicVendorPDF = printPublicVendorPDF;
