@@ -11892,9 +11892,12 @@ function renderUserTaskDetailFull() {
 }
 
 
-function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateEnd = '', statusFilter = '') {
-  const vendor = state.vendors.find(v => v.id === vendorId);
-  if (!vendor) return;
+function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd = '', statusFilter = '') {
+  const vendor = (state.vendors || []).find(v => v.id === vendorId);
+  if (!vendor) {
+    showToast("Vendor tidak ditemukan.", "error");
+    return;
+  }
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -11906,11 +11909,10 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
   let documentTitle = mode === 'keuangan' ? 'LAPORAN KEUANGAN VENDOR' : 'REKAPITULASI PEMESANAN VENDOR';
 
   if (mode === 'keuangan') {
-    // Collect financial items: transfers to vendor (debit) & completed orders (kredit)
     let finItems = [];
     
     // Transfers from Dompet Utama to vendor
-    state.financial.transactions.forEach(tx => {
+    (state.financial.transactions || []).forEach(tx => {
       if (tx.recipient === `vendor:${vendorId}` || tx.recipient === vendor.name) {
         finItems.push({
           date: tx.date,
@@ -11918,14 +11920,14 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
           groupName: 'Uang Masuk',
           goal: '',
           products: '',
-          debit: tx.amount,
+          debit: tx.amount || 0,
           kredit: 0
         });
       }
     });
 
     // Completed bookings
-    state.bookings.forEach(b => {
+    (state.bookings || []).forEach(b => {
       if (b.vendorId === vendorId && b.status === 'Selesai') {
         const goal = b.activityGoal || b.location || b.hotel || b.notes || 'Operasional';
         const prods = (b.products && b.products.length > 0) ? b.products.map(p => `${p.name || 'Snack'} (${p.qty || 1} ${p.unit || 'Pcs'})`).join(', ') : (b.notes || 'Snack');
@@ -11934,7 +11936,7 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
         finItems.push({
           date: b.dateStart || b.date,
           type: 'kredit',
-          groupName: b.groupName,
+          groupName: b.groupName || 'Rombongan',
           goal: goal,
           products: prods,
           debit: 0,
@@ -12003,7 +12005,7 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
 
   } else {
     // Mode === 'rekap'
-    let vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
+    let vendorBookings = (state.bookings || []).filter(b => b.vendorId === vendor.id);
     
     if (statusFilter) {
       vendorBookings = vendorBookings.filter(b => (b.status || 'Pesanan Baru') === statusFilter);
@@ -12113,9 +12115,8 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
           min-height: 297mm;
           margin: 0 auto;
           box-sizing: border-box;
-          background: url('assets/vendor_pdf_bg.png') no-repeat center top;
-          background-size: 100% 100%;
-          padding: 145px 44px 44px 44px;
+          background: #ffffff;
+          padding: 30px 44px 44px 44px;
           position: relative;
         }
         .header-title {
@@ -12190,9 +12191,18 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
           border-top: 1px solid #e2e8f0;
           padding-top: 10px;
         }
+        @media print {
+          .no-print { display: none !important; }
+        }
       </style>
     </head>
-    <body onload="window.print();">
+    <body>
+      <div class="no-print" style="position:fixed; top:12px; right:20px; z-index:9999;">
+        <button onclick="window.print();" style="padding:10px 20px; background:#dfc06b; color:#0f172a; border:none; border-radius:10px; font-weight:900; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+          🖨️ Cetak / Simpan PDF
+        </button>
+      </div>
+
       <div class="page-container">
         
         <div class="header-title">
@@ -12229,6 +12239,16 @@ function printPublicVendorPDF(vendorId, mode = 'keuangan', dateStart = '', dateE
   printWindow.document.open();
   printWindow.document.write(printHtml);
   printWindow.document.close();
+
+  // Smoothly focus and launch print preview after DOM content settles
+  setTimeout(() => {
+    try {
+      printWindow.focus();
+      printWindow.print();
+    } catch(e) {
+      console.warn("Auto print failed:", e);
+    }
+  }, 400);
 }
 
 window.printPublicVendorPDF = printPublicVendorPDF;
