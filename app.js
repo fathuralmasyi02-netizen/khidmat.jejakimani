@@ -1067,13 +1067,31 @@ function renderRegister() {
   };
 }
 
+function isTaskAssignedToUser(task, user) {
+  if (!task || !user) return false;
+  if (!Array.isArray(task.staff) || task.staff.length === 0) return false;
+
+  const targetUsername = String(user.username || "").toLowerCase().trim();
+  const targetName = String(user.name || "").toLowerCase().trim();
+
+  return task.staff.some(s => {
+    if (!s) return false;
+    const sStr = String(s).toLowerCase().trim();
+    if (targetUsername && sStr === targetUsername) return true;
+    if (targetName && sStr === targetName) return true;
+    if (targetUsername && (sStr.includes(`(${targetUsername})`) || sStr.includes(targetUsername))) return true;
+    if (targetName && sStr.includes(targetName)) return true;
+    return false;
+  });
+}
+
 // --- 8. PORTAL USER (MOBILE VIEW) ---
 function renderUserPortal(subView) {
   const { gregorianLongStr, hijriStr, timeStr } = getSaudiDateTime();
   const activeSubView = subView.split("?")[0];
   
   // Unread green dot tracking
-  const myTasks = state.assignments.filter(t => t && Array.isArray(t.staff) && t.staff.includes(state.currentUser.username));
+  const myTasks = state.assignments.filter(t => t && isTaskAssignedToUser(t, state.currentUser));
   const myGroups = myTasks.map(t => t.groupName);
   const userNotifications = state.notifications.filter(n => {
     if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
@@ -1172,7 +1190,7 @@ function renderUserPortal(subView) {
       const greenDot = document.querySelector(".badge-dot-green");
       if (greenDot) greenDot.remove();
       
-      const myTasks2 = state.assignments.filter(t => t && Array.isArray(t.staff) && t.staff.includes(state.currentUser.username));
+      const myTasks2 = state.assignments.filter(t => t && isTaskAssignedToUser(t, state.currentUser));
       const myGroups2 = myTasks2.map(t => t.groupName);
       const userNotifications = state.notifications.filter(n => {
         if (n.type === "penjadwalan" && n.message.includes("Pengajuan Registrasi Baru")) return false;
@@ -1628,7 +1646,7 @@ function stopActiveMediaStream() {
 function openAttendanceFormPopup(preselectedTaskId = "") {
   stopActiveMediaStream();
   const username = state.currentUser ? state.currentUser.username : '';
-  const myActiveTasks = state.assignments.filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
+  const myActiveTasks = state.assignments.filter(a => a && isTaskAssignedToUser(a, state.currentUser) && a.status !== "Selesai" && a.published !== false);
   const hasActiveTask = (myActiveTasks.length > 0);
   let capturedPhotoBase64 = null;
   let currentGpsCoords = "21.5433, 39.1728";
@@ -2072,7 +2090,7 @@ function renderUserDashboard() {
     const myWalletBal = (state.financial && state.financial.wallets && state.financial.wallets[username]) || 0;
     
     // Pick user active tasks
-    const myActiveTasks = (state.assignments || []).filter(a => a && Array.isArray(a.staff) && a.staff.includes(username) && a.status !== "Selesai" && a.published !== false);
+    const myActiveTasks = (state.assignments || []).filter(a => a && isTaskAssignedToUser(a, state.currentUser) && a.status !== "Selesai" && a.published !== false);
     const pendingInflows = (state.financial && state.financial.transactions || []).filter(tx => tx && tx.recipient === username && tx.status === "Pending Confirmation");
 
     container.innerHTML = `
@@ -2441,7 +2459,7 @@ function renderUserLaporan() {
 
 function openUserLaporKasPopup(prefilledGroup = "") {
   const username = state.currentUser ? state.currentUser.username : "";
-  const activeTasks = state.assignments.filter(a => a && a.staff && a.staff.includes(username));
+  const activeTasks = state.assignments.filter(a => a && isTaskAssignedToUser(a, state.currentUser));
   let activityOptions = activeTasks.map(t => `<option value="${t.type}">${t.type} (${(t.groupName || "").substring(0, 20)}...)</option>`).join('');
   
   if (!activityOptions) {
@@ -5926,15 +5944,28 @@ function openPenjadwalanFormPopup(editId = null) {
   const addStaffBtn = document.getElementById("add-staff-badge-btn");
   if (addStaffBtn) {
     addStaffBtn.onclick = () => {
-      if (selectedStaffUsername) {
-        if (!plottedStaffs.includes(selectedStaffUsername)) {
-          plottedStaffs.push(selectedStaffUsername);
+      const searchEl = document.getElementById("task-staff-search");
+      const rawInput = searchEl ? searchEl.value.trim() : "";
+      if (!rawInput && !selectedStaffUsername) return;
+
+      let foundUser = state.users.filter(u => u.role === 'user').find(u => 
+        (selectedStaffUsername && u.username === selectedStaffUsername) ||
+        u.username.toLowerCase() === rawInput.toLowerCase() ||
+        u.name.toLowerCase() === rawInput.toLowerCase() ||
+        rawInput.toLowerCase().includes(`(${u.username.toLowerCase()})`) ||
+        rawInput.toLowerCase().includes(u.name.toLowerCase())
+      );
+
+      const targetUsername = foundUser ? foundUser.username : (selectedStaffUsername || rawInput);
+
+      if (targetUsername) {
+        if (!plottedStaffs.includes(targetUsername)) {
+          plottedStaffs.push(targetUsername);
           renderBadges();
-          const staffSearchEl = document.getElementById("task-staff-search");
-          if (staffSearchEl) staffSearchEl.value = "";
+          if (searchEl) searchEl.value = "";
           selectedStaffUsername = "";
         } else {
-          showToast("Petugas sudah terpilih", "error");
+          showToast("Petugas sudah terpilih dalam penugasan ini", "error");
         }
       }
     };
@@ -6015,6 +6046,7 @@ function openPenjadwalanFormPopup(editId = null) {
     }
     
     saveState();
+    pushData();
     closeModal();
     showToast(isEdit ? "Jadwal penugasan berhasil diedit!" : "Jadwal penugasan berhasil dibuat!");
     renderAdminPenjadwalan();
