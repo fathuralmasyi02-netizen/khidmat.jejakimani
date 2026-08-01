@@ -11924,7 +11924,7 @@ function renderUserTaskDetailFull() {
 }
 
 
-function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd = '', statusFilter = '') {
+function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd = '', action = 'download') {
   const vendor = (state.vendors || []).find(v => v.id === vendorId);
   if (!vendor) {
     showToast("Vendor tidak ditemukan.", "error");
@@ -12030,9 +12030,6 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     // Mode === 'rekap'
     let vendorBookings = (state.bookings || []).filter(b => b.vendorId === vendor.id);
     
-    if (statusFilter) {
-      vendorBookings = vendorBookings.filter(b => (b.status || 'Pesanan Baru') === statusFilter);
-    }
     if (dateStart) {
       vendorBookings = vendorBookings.filter(b => (b.dateStart || b.date) >= dateStart);
     }
@@ -12111,57 +12108,144 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     periodText = `Periode s/d: ${formatDateLongIndo(dateEnd)}`;
   }
 
-  // Generate In-App Printable PDF Modal Viewer (100% Reliable across all browsers & pop-up blockers)
-  const pdfViewHtml = `
-    <div id="pdf-printable-area" style="font-family:'Mulish', sans-serif; color:#0f172a; background:#ffffff; padding:24px 20px; border-radius:14px; border:1px solid #cbd5e1; box-shadow:0 10px 25px rgba(0,0,0,0.08); max-width:800px; margin:0 auto;">
-      
-      <!-- Top Action Control Bar (Hidden on Print) -->
-      <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:12px; border-bottom:1px solid #e2e8f0; flex-wrap:wrap; gap:10px;">
-        <span style="font-size:0.85rem; font-weight:800; color:#b89230;">📄 PRATINJAU DOKUMEN PDF RESMI</span>
-        <div style="display:flex; gap:10px;">
-          <button onclick="window.print();" class="btn btn-gold" style="padding:8px 18px; font-weight:900; font-size:0.85rem; border-radius:10px; display:inline-flex; align-items:center; gap:6px;">
-            <i data-lucide="printer" style="width:16px; height:16px;"></i> CETAK / SIMPAN PDF
-          </button>
-          <button onclick="closeModal();" class="btn btn-secondary" style="padding:8px 14px; font-weight:800; font-size:0.85rem; border-radius:10px;">
-            TUTUP
-          </button>
-        </div>
-      </div>
-
-      <!-- PDF DOCUMENT BODY -->
-      <div class="page-container" style="background:#ffffff; width:100%; box-sizing:border-box;">
-        <div class="header-title" style="text-align:center; margin-bottom:20px; border-bottom:2px solid #dfc06b; padding-bottom:10px;">
-          <h1 style="font-family:'Martel', serif; font-size:1.3rem; margin:0; color:#0f172a; text-transform:uppercase;">${documentTitle}</h1>
+  const fullDocumentHtml = `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>${documentTitle} - ${vendor.name}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Martel:wght@400;700;900&family=Mulish:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+      <style>
+        @page { size: A4 portrait; margin: 12mm; }
+        body { margin: 0; padding: 0; font-family: 'Mulish', sans-serif; color: #0f172a; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        .page-container { width: 100%; box-sizing: border-box; background: #ffffff; padding: 10px; }
+        .header-title { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #dfc06b; padding-bottom: 10px; }
+        .header-title h1 { font-family: 'Martel', serif; font-size: 1.3rem; margin: 0; color: #0f172a; text-transform: uppercase; }
+        .header-title p { margin: 4px 0 0 0; font-size: 0.8rem; color: #64748b; font-weight: 700; }
+        .vendor-info-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 9pt; background: #f8fafc; }
+        .vendor-info-table td { padding: 7px 12px; border: 1px solid #cbd5e1; }
+        .booking-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 9pt; }
+        .booking-table th { background: #0f172a; color: #ffffff; padding: 8px 10px; text-align: center; font-weight: 800; font-size: 9pt; border: 1px solid #0f172a; }
+        .booking-table td { padding: 8px 10px; border: 1px solid #cbd5e1; vertical-align: top; background: #ffffff; font-size: 9pt; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 800; font-size: 8pt; text-align: center; }
+        .badge-baru { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .badge-proses { background: #fffbe6; color: #d97706; border: 1px solid #fde68a; }
+        .badge-selesai { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .footer-note { margin-top: 30px; text-align: center; font-size: 8pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+      </style>
+    </head>
+    <body>
+      <div class="page-container" id="pdf-printable-element">
+        <div class="header-title">
+          <h1>${documentTitle}</h1>
           ${periodText ? `<p style="color:#d97706; font-size:0.85rem; font-weight:800; margin-top:4px;">${periodText}</p>` : ''}
         </div>
-
-        <table class="vendor-info-table" style="width:100%; border-collapse:collapse; margin-bottom:18px; font-size:9pt; background:#f8fafc;">
+        <table class="vendor-info-table">
           <tr>
-            <td style="width:18%; color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Mitra Vendor</td>
-            <td style="width:32%; padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.name}</strong></td>
-            <td style="width:18%; color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Tipe Layanan</td>
-            <td style="width:32%; padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.type || 'Mitra Layanan'}</strong></td>
+            <td style="width:18%; color:#64748b;">Mitra Vendor</td>
+            <td style="width:32%;"><strong>${vendor.name}</strong></td>
+            <td style="width:18%; color:#64748b;">Tipe Layanan</td>
+            <td style="width:32%;"><strong>${vendor.type || 'Mitra Layanan'}</strong></td>
           </tr>
           <tr>
-            <td style="color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Kontak</td>
-            <td style="padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.contact || '-'}</strong></td>
-            <td style="color:#64748b; padding:7px 12px; border:1px solid #cbd5e1;">Keterangan</td>
-            <td style="padding:7px 12px; border:1px solid #cbd5e1;"><strong>${vendor.notes || vendor.description || '-'}</strong></td>
+            <td style="color:#64748b;">Kontak</td>
+            <td><strong>${vendor.contact || '-'}</strong></td>
+            <td style="color:#64748b;">Keterangan</td>
+            <td><strong>${vendor.notes || vendor.description || '-'}</strong></td>
           </tr>
         </table>
-
         ${tableContentHtml}
-
-        <div class="footer-note" style="margin-top:30px; text-align:center; font-size:8pt; color:#64748b; border-top:1px solid #e2e8f0; padding-top:10px;">
+        <div class="footer-note">
           Dokumen resmi terverifikasi secara sistem oleh Tim Khidmat jejak imani Saudi Arabia
         </div>
       </div>
-
-    </div>
+    </body>
+    </html>
   `;
 
-  openModal("Pratinjau Dokumen PDF Vendor", pdfViewHtml);
-  lucide.createIcons();
+  const fileName = `${documentTitle.replace(/\s+/g, '_')}_${vendor.name.replace(/\s+/g, '_')}.pdf`;
+
+  if (action === 'download') {
+    closeModal();
+    showToast("Sedang membuat file PDF...", "info");
+
+    // Render off-screen container for 100% reliable html2pdf capture
+    const tempContainer = document.createElement("div");
+    tempContainer.style.position = "fixed";
+    tempContainer.style.left = "-9999px";
+    tempContainer.style.top = "0";
+    tempContainer.style.width = "210mm";
+    tempContainer.style.background = "#ffffff";
+    tempContainer.innerHTML = fullDocumentHtml;
+    document.body.appendChild(tempContainer);
+
+    if (typeof html2pdf !== 'undefined') {
+      const opt = {
+        margin:       [8, 8, 8, 8],
+        filename:     fileName,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(tempContainer).save().then(() => {
+        document.body.removeChild(tempContainer);
+        showToast("File PDF berhasil di-download!", "success");
+      }).catch(err => {
+        console.warn("html2pdf error, fallback to HTML blob:", err);
+        document.body.removeChild(tempContainer);
+        const blob = new Blob([fullDocumentHtml], { type: 'text/html;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName.replace('.pdf', '.html');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("File dokumen berhasil di-download!");
+      });
+    } else {
+      document.body.removeChild(tempContainer);
+      const blob = new Blob([fullDocumentHtml], { type: 'text/html;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName.replace('.pdf', '.html');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("File dokumen berhasil di-download!");
+    }
+
+  } else {
+    // Action === 'print'
+    closeModal();
+    let printFrame = document.getElementById("pdf-print-hidden-iframe");
+    if (printFrame) printFrame.remove();
+
+    printFrame = document.createElement("iframe");
+    printFrame.id = "pdf-print-hidden-iframe";
+    printFrame.style.position = "fixed";
+    printFrame.style.right = "0";
+    printFrame.style.bottom = "0";
+    printFrame.style.width = "0px";
+    printFrame.style.height = "0px";
+    printFrame.style.border = "none";
+    document.body.appendChild(printFrame);
+
+    const frameDoc = printFrame.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(fullDocumentHtml);
+    frameDoc.close();
+
+    setTimeout(() => {
+      try {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      } catch(e) {
+        console.warn("iFrame print fallback error:", e);
+        window.print();
+      }
+    }, 300);
+  }
 }
 
 window.printPublicVendorPDF = printPublicVendorPDF;
@@ -12510,7 +12594,7 @@ function openVendorPdfOptionsModal(vendorId) {
   const modalHtml = `
     <form id="vendor-pdf-options-form" style="font-family:'Mulish', sans-serif; color:#1e293b;">
       <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:12px; padding:12px 14px; margin-bottom:16px;">
-        <div style="font-size:0.75rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:2px;">MITRA VENDOR SAUDI ARABIA</div>
+        <div style="font-size:0.75rem; font-weight:800; color:#b89230; text-transform:uppercase;">MITRA VENDOR SAUDI ARABIA</div>
         <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
       </div>
 
@@ -12533,23 +12617,34 @@ function openVendorPdfOptionsModal(vendorId) {
         </div>
       </div>
 
-      <button type="submit" class="btn btn-gold" style="width:100%; padding:12px; font-weight:900; font-size:0.95rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px;">
-        <i data-lucide="printer" style="width:18px; height:18px;"></i> CETAK DOKUMEN PDF
-      </button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" id="pdf-action-print" class="btn btn-gold" style="flex:1; padding:12px; font-weight:900; font-size:0.9rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <i data-lucide="printer" style="width:16px; height:16px;"></i> CETAK / SIMPAN PDF
+        </button>
+        <button type="button" id="pdf-action-download" class="btn btn-secondary" style="flex:1; padding:12px; font-weight:900; font-size:0.9rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px; background:#0284c7; color:#fff; border:none;">
+          <i data-lucide="download" style="width:16px; height:16px;"></i> DOWNLOAD FILE PDF
+        </button>
+      </div>
     </form>
   `;
 
   openModal("Cetak PDF Laporan Vendor", modalHtml);
   lucide.createIcons();
 
-  document.getElementById("vendor-pdf-options-form").onsubmit = (e) => {
-    e.preventDefault();
-    const type = document.getElementById("pdf-report-type").value;
-    const dateStart = document.getElementById("pdf-date-start").value;
-    const dateEnd = document.getElementById("pdf-date-end").value;
+  const getOptions = () => ({
+    type: document.getElementById("pdf-report-type").value,
+    dateStart: document.getElementById("pdf-date-start").value,
+    dateEnd: document.getElementById("pdf-date-end").value
+  });
 
-    closeModal();
-    printPublicVendorPDF(vendorId, type, dateStart, dateEnd);
+  document.getElementById("pdf-action-print").onclick = () => {
+    const { type, dateStart, dateEnd } = getOptions();
+    printPublicVendorPDF(vendorId, type, dateStart, dateEnd, 'print');
+  };
+
+  document.getElementById("pdf-action-download").onclick = () => {
+    const { type, dateStart, dateEnd } = getOptions();
+    printPublicVendorPDF(vendorId, type, dateStart, dateEnd, 'download');
   };
 }
 
@@ -12773,18 +12868,45 @@ function renderPublicVendorPortal() {
                 </div>
 
                 <!-- Vendor Financial Wallet Sub-Banner -->
-                <div style="background:${vendorBal < 0 ? '#7f1d1d' : '#065f46'}; color:#ffffff; border-radius:14px; padding:12px 18px; margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                  <div>
-                    <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:${vendorBal < 0 ? '#fca5a5' : '#a7f3d0'}; font-weight:800;">Saldo Dompet Keuangan Vendor</div>
-                    <div style="font-size:1.4rem; font-weight:900; color:#ffffff; display:flex; align-items:center; gap:8px;">
-                      SAR ${vendorBal.toLocaleString('id-ID')}
-                      ${vendorBal < 0 ? '<span style="font-size:0.75rem; background:#ef4444; color:#ffffff; padding:2px 8px; border-radius:10px; font-weight:800;">MINUS / SALDO TERTUNGGAK</span>' : ''}
+                <!-- Vendor Financial & Estimate Grid (2 Cards Side-by-Side) -->
+                ${(() => {
+                  const estimatedBudgetCost = vendorBookings
+                    .filter(b => {
+                      const st = b.status || 'Pesanan Baru';
+                      return st === 'Pesanan Baru' || st === 'Proses' || st === 'Aktif';
+                    })
+                    .reduce((sum, b) => {
+                      const cost = b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0) || 0;
+                      return sum + cost;
+                    }, 0);
+
+                  return `
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:14px;">
+                      
+                      <!-- Widget 1: SALDO DOMPET VENDOR -->
+                      <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
+                        <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
+                          SALDO DOMPET VENDOR
+                        </div>
+                        <div style="font-size:1.35rem; font-weight:900; color:${vendorBal < 0 ? '#dc2626' : '#0f172a'}; display:flex; align-items:center; gap:8px;">
+                          SAR ${vendorBal.toLocaleString('id-ID')}
+                          ${vendorBal < 0 ? '<span style="font-size:0.7rem; background:#ef4444; color:#ffffff; padding:2px 6px; border-radius:8px; font-weight:800;">MINUS</span>' : ''}
+                        </div>
+                      </div>
+
+                      <!-- Widget 2: ESTIMASI KEBUTUHAN -->
+                      <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
+                        <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
+                          ESTIMASI KEBUTUHAN
+                        </div>
+                        <div style="font-size:1.35rem; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;">
+                          SAR ${estimatedBudgetCost.toLocaleString('id-ID')}
+                        </div>
+                      </div>
+
                     </div>
-                  </div>
-                  <div style="font-size:0.78rem; color:${vendorBal < 0 ? '#fecaca' : '#d1fae5'}; font-weight:600;">
-                    ${vendorBal < 0 ? 'Saldo bernilai minus setelah penyelesaian pemesanan. Hubungi admin untuk top-up.' : ''}
-                  </div>
-                </div>
+                  `;
+                })()}
               </div>
             `;
           })()} 
