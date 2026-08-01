@@ -740,6 +740,8 @@ function showToast(message, type = "success") {
   }
 
 
+
+
   // Bind search for Dompet Vendor widget
   const searchVendorInput = document.getElementById("admin-financial-dompet-vendor-search");
   if (searchVendorInput) {
@@ -11924,12 +11926,29 @@ function renderUserTaskDetailFull() {
 }
 
 
-function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd = '', action = 'download') {
+function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd = '', statusFilter = '') {
   const vendor = (state.vendors || []).find(v => v.id === vendorId);
   if (!vendor) {
     showToast("Vendor tidak ditemukan.", "error");
     return;
   }
+
+  // Date normalizer to handle any format (YYYY-MM-DD, DD/MM/YYYY, ISO)
+  const normalizeDateStr = (dStr) => {
+    if (!dStr) return '';
+    const str = String(dStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+    const parts = str.split(/[\/\-\s]/);
+    if (parts.length >= 3) {
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    return str;
+  };
+
+  const normStart = normalizeDateStr(dateStart);
+  const normEnd = normalizeDateStr(dateEnd);
 
   let tableContentHtml = "";
   let documentTitle = mode === 'keuangan' ? 'LAPORAN KEUANGAN VENDOR' : 'REKAPITULASI PEMESANAN VENDOR';
@@ -11971,8 +11990,8 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
       }
     });
 
-    if (dateStart) finItems = finItems.filter(x => x.date >= dateStart);
-    if (dateEnd) finItems = finItems.filter(x => x.date <= dateEnd);
+    if (normStart) finItems = finItems.filter(x => normalizeDateStr(x.date) >= normStart);
+    if (normEnd) finItems = finItems.filter(x => normalizeDateStr(x.date) <= normEnd);
     finItems.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     let runningBal = 0;
@@ -12020,7 +12039,7 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
             <td colspan="3" style="text-align:center;">TOTAL MUTASI & SALDO AKHIR</td>
             <td style="text-align:center; white-space:nowrap; color:#10b981;">+ SAR ${totalDebit.toLocaleString('id-ID')}</td>
             <td style="text-align:center; white-space:nowrap; color:#ef4444;">- SAR ${totalKredit.toLocaleString('id-ID')}</td>
-            <td style="text-align:center; white-space:nowrap; font-size:9.5pt; color:${runningBal < 0 ? '#ef4444' : '#065f46'};">SAR ${runningBal.toLocaleString('id-ID')}</td>
+            <td style="text-align:center; white-space:nowrap; font-size:9pt; color:${runningBal < 0 ? '#ef4444' : '#065f46'};">SAR ${runningBal.toLocaleString('id-ID')}</td>
           </tr>
         </tbody>
       </table>
@@ -12030,11 +12049,11 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     // Mode === 'rekap'
     let vendorBookings = (state.bookings || []).filter(b => b.vendorId === vendor.id);
     
-    if (dateStart) {
-      vendorBookings = vendorBookings.filter(b => (b.dateStart || b.date) >= dateStart);
+    if (normStart) {
+      vendorBookings = vendorBookings.filter(b => normalizeDateStr(b.dateStart || b.date) >= normStart);
     }
-    if (dateEnd) {
-      vendorBookings = vendorBookings.filter(b => (b.dateStart || b.date) <= dateEnd);
+    if (normEnd) {
+      vendorBookings = vendorBookings.filter(b => normalizeDateStr(b.dateStart || b.date) <= normEnd);
     }
 
     tableContentHtml = `
@@ -12116,14 +12135,23 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
       <title>${documentTitle} - ${vendor.name}</title>
       <link href="https://fonts.googleapis.com/css2?family=Martel:wght@400;700;900&family=Mulish:wght@400;600;700;800;900&display=swap" rel="stylesheet">
       <style>
-        @page { size: A4 portrait; margin: 12mm; }
+        @page { size: A4 portrait; margin: 0; }
         body { margin: 0; padding: 0; font-family: 'Mulish', sans-serif; color: #0f172a; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        .page-container { width: 100%; box-sizing: border-box; background: #ffffff; padding: 10px; }
+        .page-container {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto;
+          box-sizing: border-box;
+          background: url('assets/vendor_pdf_bg.png') no-repeat center top;
+          background-size: 100% 100%;
+          padding: 145px 44px 44px 44px;
+          position: relative;
+        }
         .header-title { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #dfc06b; padding-bottom: 10px; }
         .header-title h1 { font-family: 'Martel', serif; font-size: 1.3rem; margin: 0; color: #0f172a; text-transform: uppercase; }
-        .header-title p { margin: 4px 0 0 0; font-size: 0.8rem; color: #64748b; font-weight: 700; }
-        .vendor-info-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 9pt; background: #f8fafc; }
-        .vendor-info-table td { padding: 7px 12px; border: 1px solid #cbd5e1; }
+        .header-title p { margin: 4px 0 0 0; font-size: 0.85rem; color: #d97706; font-weight: 800; }
+        .vendor-info-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 9pt; background: rgba(248,250,252,0.9); border-radius: 8px; }
+        .vendor-info-table td { padding: 7px 12px; border: 1px solid #cbd5e1; font-size: 9pt; }
         .booking-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 9pt; }
         .booking-table th { background: #0f172a; color: #ffffff; padding: 8px 10px; text-align: center; font-weight: 800; font-size: 9pt; border: 1px solid #0f172a; }
         .booking-table td { padding: 8px 10px; border: 1px solid #cbd5e1; vertical-align: top; background: #ffffff; font-size: 9pt; }
@@ -12134,8 +12162,8 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
         .footer-note { margin-top: 30px; text-align: center; font-size: 8pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 10px; }
       </style>
     </head>
-    <body>
-      <div class="page-container" id="pdf-printable-element">
+    <body onload="window.print();">
+      <div class="page-container">
         <div class="header-title">
           <h1>${documentTitle}</h1>
           ${periodText ? `<p style="color:#d97706; font-size:0.85rem; font-weight:800; margin-top:4px;">${periodText}</p>` : ''}
@@ -12163,89 +12191,23 @@ function printPublicVendorPDF(vendorId, mode = 'rekap', dateStart = '', dateEnd 
     </html>
   `;
 
-  const fileName = `${documentTitle.replace(/\s+/g, '_')}_${vendor.name.replace(/\s+/g, '_')}.pdf`;
-
-  if (action === 'download') {
-    closeModal();
-    showToast("Sedang membuat file PDF...", "info");
-
-    // Render off-screen container for 100% reliable html2pdf capture
-    const tempContainer = document.createElement("div");
-    tempContainer.style.position = "fixed";
-    tempContainer.style.left = "-9999px";
-    tempContainer.style.top = "0";
-    tempContainer.style.width = "210mm";
-    tempContainer.style.background = "#ffffff";
-    tempContainer.innerHTML = fullDocumentHtml;
-    document.body.appendChild(tempContainer);
-
-    if (typeof html2pdf !== 'undefined') {
-      const opt = {
-        margin:       [8, 8, 8, 8],
-        filename:     fileName,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      html2pdf().set(opt).from(tempContainer).save().then(() => {
-        document.body.removeChild(tempContainer);
-        showToast("File PDF berhasil di-download!", "success");
-      }).catch(err => {
-        console.warn("html2pdf error, fallback to HTML blob:", err);
-        document.body.removeChild(tempContainer);
-        const blob = new Blob([fullDocumentHtml], { type: 'text/html;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName.replace('.pdf', '.html');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast("File dokumen berhasil di-download!");
-      });
-    } else {
-      document.body.removeChild(tempContainer);
-      const blob = new Blob([fullDocumentHtml], { type: 'text/html;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName.replace('.pdf', '.html');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast("File dokumen berhasil di-download!");
-    }
-
-  } else {
-    // Action === 'print'
-    closeModal();
-    let printFrame = document.getElementById("pdf-print-hidden-iframe");
-    if (printFrame) printFrame.remove();
-
-    printFrame = document.createElement("iframe");
-    printFrame.id = "pdf-print-hidden-iframe";
-    printFrame.style.position = "fixed";
-    printFrame.style.right = "0";
-    printFrame.style.bottom = "0";
-    printFrame.style.width = "0px";
-    printFrame.style.height = "0px";
-    printFrame.style.border = "none";
-    document.body.appendChild(printFrame);
-
-    const frameDoc = printFrame.contentWindow.document;
-    frameDoc.open();
-    frameDoc.write(fullDocumentHtml);
-    frameDoc.close();
-
-    setTimeout(() => {
-      try {
-        printFrame.contentWindow.focus();
-        printFrame.contentWindow.print();
-      } catch(e) {
-        console.warn("iFrame print fallback error:", e);
-        window.print();
-      }
-    }, 300);
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    showToast("Gagal membuka jendela cetak. Izinkan pop-up di browser.", "error");
+    return;
   }
+  printWindow.document.open();
+  printWindow.document.write(fullDocumentHtml);
+  printWindow.document.close();
+
+  setTimeout(() => {
+    try {
+      printWindow.focus();
+      printWindow.print();
+    } catch(e) {
+      console.warn("Print window error:", e);
+    }
+  }, 350);
 }
 
 window.printPublicVendorPDF = printPublicVendorPDF;
@@ -12594,7 +12556,7 @@ function openVendorPdfOptionsModal(vendorId) {
   const modalHtml = `
     <form id="vendor-pdf-options-form" style="font-family:'Mulish', sans-serif; color:#1e293b;">
       <div style="background:#fffdf5; border:1px solid #fef3c7; border-radius:12px; padding:12px 14px; margin-bottom:16px;">
-        <div style="font-size:0.75rem; font-weight:800; color:#b89230; text-transform:uppercase;">MITRA VENDOR SAUDI ARABIA</div>
+        <div style="font-size:0.75rem; font-weight:800; color:#b89230; text-transform:uppercase; margin-bottom:2px;">MITRA VENDOR SAUDI ARABIA</div>
         <h3 style="font-size:1.05rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
       </div>
 
@@ -12617,34 +12579,23 @@ function openVendorPdfOptionsModal(vendorId) {
         </div>
       </div>
 
-      <div style="display:flex; gap:10px;">
-        <button type="button" id="pdf-action-print" class="btn btn-gold" style="flex:1; padding:12px; font-weight:900; font-size:0.9rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
-          <i data-lucide="printer" style="width:16px; height:16px;"></i> CETAK / SIMPAN PDF
-        </button>
-        <button type="button" id="pdf-action-download" class="btn btn-secondary" style="flex:1; padding:12px; font-weight:900; font-size:0.9rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:6px; background:#0284c7; color:#fff; border:none;">
-          <i data-lucide="download" style="width:16px; height:16px;"></i> DOWNLOAD FILE PDF
-        </button>
-      </div>
+      <button type="submit" class="btn btn-gold" style="width:100%; padding:14px; font-weight:900; font-size:0.95rem; border-radius:12px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <i data-lucide="printer" style="width:18px; height:18px;"></i> CETAK DOKUMEN PDF
+      </button>
     </form>
   `;
 
   openModal("Cetak PDF Laporan Vendor", modalHtml);
   lucide.createIcons();
 
-  const getOptions = () => ({
-    type: document.getElementById("pdf-report-type").value,
-    dateStart: document.getElementById("pdf-date-start").value,
-    dateEnd: document.getElementById("pdf-date-end").value
-  });
+  document.getElementById("vendor-pdf-options-form").onsubmit = (e) => {
+    e.preventDefault();
+    const type = document.getElementById("pdf-report-type").value;
+    const dateStart = document.getElementById("pdf-date-start").value;
+    const dateEnd = document.getElementById("pdf-date-end").value;
 
-  document.getElementById("pdf-action-print").onclick = () => {
-    const { type, dateStart, dateEnd } = getOptions();
-    printPublicVendorPDF(vendorId, type, dateStart, dateEnd, 'print');
-  };
-
-  document.getElementById("pdf-action-download").onclick = () => {
-    const { type, dateStart, dateEnd } = getOptions();
-    printPublicVendorPDF(vendorId, type, dateStart, dateEnd, 'download');
+    closeModal();
+    printPublicVendorPDF(vendorId, type, dateStart, dateEnd);
   };
 }
 
@@ -12693,46 +12644,6 @@ function renderPublicVendorPortal() {
   // Dynamic Vendor PWA Metadata & Manifest
   document.title = `Vendor JI - ${vendor.name}`;
 
-  const vendorManifestData = {
-    name: `Vendor JI - ${vendor.name}`,
-    short_name: "Vendor JI",
-    description: `Portal Pemesanan Vendor JI - ${vendor.name} (PT. JEJAK IMANI BERKAH BERSAMA)`,
-    start_url: window.location.href,
-    display: "standalone",
-    background_color: "#f4f6f9",
-    theme_color: "#0f172a",
-    icons: [
-      {
-        src: "assets/icon.png",
-        sizes: "192x192",
-        type: "image/png",
-        purpose: "any maskable"
-      },
-      {
-        src: "assets/icon.png",
-        sizes: "512x512",
-        type: "image/png",
-        purpose: "any maskable"
-      }
-    ]
-  };
-
-  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
-    const stringManifest = JSON.stringify(vendorManifestData);
-    const blob = new Blob([stringManifest], { type: 'application/json' });
-    const manifestUrl = URL.createObjectURL(blob);
-    let manifestLink = document.querySelector('link[rel="manifest"]');
-    if (manifestLink) {
-      manifestLink.setAttribute('href', manifestUrl);
-    }
-
-    let appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-    if (appleTitleMeta) {
-      appleTitleMeta.setAttribute('content', 'Vendor JI');
-    }
-  }
-
-  // Filter all bookings for this vendor & sort by date descending (newest first)
   const vendorBookings = state.bookings
     .filter(b => b.vendorId === vendor.id)
     .sort((a, b) => (b.dateStart || b.date || '').localeCompare(a.dateStart || a.date || ''));
@@ -12850,66 +12761,78 @@ function renderPublicVendorPortal() {
           ${(() => {
             const vendorBal = (state.financial.vendorWallets && state.financial.vendorWallets[vendor.id]) || 0;
             return `
-              <!-- Biodata Vendor -->
-              <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
-                  <div style="flex:1; min-width:180px;">
+              <!-- Biodata Vendor & Widget Area (Collapsible) -->
+              <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:14px 16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:12px;">
+                
+                <!-- Header Bar of Card (Always Visible) -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                  <div style="flex:1; min-width:180px; display:flex; align-items:center; gap:8px;">
                     <span style="background:#fef3c7; color:#92400e; font-weight:900; font-size:0.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase;">${vendor.type || 'Mitra Layanan'}</span>
-                    <h1 style="margin:4px 0 2px 0; font-size:1.3rem; font-weight:900; color:#0f172a;">${vendor.name}</h1>
-                    <div style="font-size:0.82rem; color:#475569; margin-bottom:2px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
-                    <div style="font-size:0.78rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
+                    <h1 style="margin:0; font-size:1.25rem; font-weight:900; color:#0f172a; display:inline-block;">${vendor.name}</h1>
                   </div>
 
-                  <div>
-                    <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:auto; padding:8px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <!-- Toggle Expand/Collapse Button -->
+                    <button id="pv-toggle-header-btn" onclick="toggleVendorWidgetHeader('${vendor.id}')" class="btn" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="Buka/Tutup Detail Widget">
+                      <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:14px; height:14px;"></i>
+                      <span id="pv-toggle-text">Sembunyikan Widget</span>
+                    </button>
+
+                    <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:auto; padding:7px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
                       <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
                     </button>
                   </div>
                 </div>
 
-                <!-- Vendor Financial Wallet Sub-Banner -->
-                <!-- Vendor Financial & Estimate Grid (2 Cards Side-by-Side) -->
-                ${(() => {
-                  const estimatedBudgetCost = vendorBookings
-                    .filter(b => {
-                      const st = b.status || 'Pesanan Baru';
-                      return st === 'Pesanan Baru' || st === 'Proses' || st === 'Aktif';
-                    })
-                    .reduce((sum, b) => {
-                      const cost = b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0) || 0;
-                      return sum + cost;
-                    }, 0);
+                <!-- Collapsible Body (Contact, Notes, & 2 Widgets) -->
+                <div id="pv-collapsible-body" style="margin-top:10px; transition:all 0.3s ease;">
+                  <div style="font-size:0.82rem; color:#475569; margin-bottom:2px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
+                  <div style="font-size:0.78rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
 
-                  return `
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:14px;">
-                      
-                      <!-- Widget 1: SALDO DOMPET VENDOR -->
-                      <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
-                        <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
-                          SALDO DOMPET VENDOR
+                  <!-- Vendor Financial & Estimate Grid (2 Cards Side-by-Side) -->
+                  ${(() => {
+                    const estimatedBudgetCost = vendorBookings
+                      .filter(b => {
+                        const st = b.status || 'Pesanan Baru';
+                        return st === 'Pesanan Baru' || st === 'Proses' || st === 'Aktif';
+                      })
+                      .reduce((sum, b) => {
+                        const cost = b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0) || 0;
+                        return sum + cost;
+                      }, 0);
+
+                    return `
+                      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:12px;">
+                        
+                        <!-- Widget 1: SALDO DOMPET VENDOR -->
+                        <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
+                          <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
+                            SALDO DOMPET VENDOR
+                          </div>
+                          <div style="font-size:1.35rem; font-weight:900; color:${vendorBal < 0 ? '#dc2626' : '#0f172a'}; display:flex; align-items:center; gap:8px;">
+                            SAR ${vendorBal.toLocaleString('id-ID')}
+                            ${vendorBal < 0 ? '<span style="font-size:0.7rem; background:#ef4444; color:#ffffff; padding:2px 6px; border-radius:8px; font-weight:800;">MINUS</span>' : ''}
+                          </div>
                         </div>
-                        <div style="font-size:1.35rem; font-weight:900; color:${vendorBal < 0 ? '#dc2626' : '#0f172a'}; display:flex; align-items:center; gap:8px;">
-                          SAR ${vendorBal.toLocaleString('id-ID')}
-                          ${vendorBal < 0 ? '<span style="font-size:0.7rem; background:#ef4444; color:#ffffff; padding:2px 6px; border-radius:8px; font-weight:800;">MINUS</span>' : ''}
+
+                        <!-- Widget 2: ESTIMASI KEBUTUHAN -->
+                        <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
+                          <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
+                            ESTIMASI KEBUTUHAN
+                          </div>
+                          <div style="font-size:1.35rem; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;">
+                            SAR ${estimatedBudgetCost.toLocaleString('id-ID')}
+                          </div>
                         </div>
+
                       </div>
+                    `;
+                  })()}
+                </div>
 
-                      <!-- Widget 2: ESTIMASI KEBUTUHAN -->
-                      <div style="background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:14px; padding:12px 18px; display:flex; flex-direction:column; justify-content:center; border:1px solid #dfc06b; box-shadow:0 4px 12px rgba(223,192,107,0.15);">
-                        <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; color:#b45309; font-weight:900; margin-bottom:2px;">
-                          ESTIMASI KEBUTUHAN
-                        </div>
-                        <div style="font-size:1.35rem; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;">
-                          SAR ${estimatedBudgetCost.toLocaleString('id-ID')}
-                        </div>
-                      </div>
-
-                    </div>
-                  `;
-                })()}
               </div>
             `;
-          })()} 
+          })()}
 
           <!-- Filter Tab Bar: Semua, Pesanan Baru, Proses, Selesai -->
           <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; scrollbar-width:none;">
@@ -12947,6 +12870,17 @@ function renderPublicVendorPortal() {
   `;
 
   lucide.createIcons();
+
+  // Restore initial collapsed state if saved
+  if (typeof localStorage !== 'undefined' && localStorage.getItem("pv_collapsed_" + vendor.id) === "true") {
+    const collBody = document.getElementById("pv-collapsible-body");
+    const toggleIcon = document.getElementById("pv-toggle-icon");
+    const toggleText = document.getElementById("pv-toggle-text");
+    if (collBody) collBody.style.display = "none";
+    if (toggleIcon) toggleIcon.setAttribute("data-lucide", "chevron-down");
+    if (toggleText) toggleText.textContent = "Tampilkan Widget";
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  }
 
   const applyVendorFilters = () => {
     const q = (document.getElementById("pv-search")?.value || "").toLowerCase().trim();
