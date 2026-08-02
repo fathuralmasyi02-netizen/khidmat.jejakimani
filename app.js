@@ -12621,45 +12621,42 @@ function toggleVendorWidgetHeader() {
 function renderPublicVendorPortal() {
   const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
   const vendorId = params.get("id") || "";
-  
-  // 1. Ambil data vendor dengan pembacaan yang aman (Fallback)
-  const vendorList = (state && state.vendors) ? state.vendors : [];
-  const vendor = vendorList.find(v => v && v.id === vendorId) || {
-    id: vendorId || "v-1",
-    name: "Fakhru Katering",
-    type: "KATERING",
-    phone: "966568960507",
-    description: "Katering Makkah"
-  };
+  const vendor = state.vendors.find(v => v.id === vendorId) || state.vendors[0];
 
-  // 2. Definisi aman untuk Saldo & Estimasi (Menghindari Error Undefined)
-  const vendorWallets = (state && state.financial && state.financial.vendorWallets) ? state.financial.vendorWallets : {};
-  const vendorBalance = vendorWallets[vendor.id] || 0;
-  
-  // Perhitungan estimasi dari data booking vendor jika ada
-  const bookingList = (state && state.bookings) ? state.bookings : [];
-  const vendorBookings = bookingList.filter(b => b && b.vendorId === vendor.id);
-  const vendorEstimasi = vendorBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0) || 1270;
+  if (!vendor) {
+    APP_CONTAINER.innerHTML = `
+      <div style="padding:40px; text-align:center;">
+        <h3 style="color:#ef4444;">Vendor Tidak Ditemukan</h3>
+        <p style="color:#64748b; font-size:0.9rem;">Link portal vendor tidak valid atau data vendor telah dihapus.</p>
+      </div>
+    `;
+    return;
+  }
 
-  if (!APP_CONTAINER) return;
+  const vendorBookings = state.bookings.filter(b => b.vendorId === vendor.id);
+  const vendorBalance = (state.financial.vendorWallets && state.financial.vendorWallets[vendor.id]) || 0;
 
-  // 3. Render HTML dengan Struktur Header & Collapsible Body Terpisah
+  // Calculate estimated kebutuhan dana
+  const vendorEstimasi = vendorBookings.filter(b => b.status !== "Selesai" && b.status !== "Batal").reduce((sum, b) => {
+    return sum + (b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0));
+  }, 0);
+
   APP_CONTAINER.innerHTML = `
-    <div style="max-width: 800px; margin: 0 auto; padding: 20px; font-family: 'Mulish', sans-serif;">
+    <div style="max-width:960px; margin:0 auto; padding:20px 16px 80px 16px; font-family:'Mulish', sans-serif;">
       
-      <!-- KARTU WIDGET VENDOR UTAMA -->
-      <div class="vendor-widget-card" style="background:#ffffff; border-radius:18px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); border:1px solid #f1f5f9; margin-bottom:20px;">
+      <!-- TOP WIDGET CARD (HEADER VENDOR) -->
+      <div class="glass-card" style="background:#ffffff; border-radius:18px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); border:1px solid #f1f5f9; margin-bottom:20px;">
         
-        <!-- A. HEADER CARD (TETAP TAMPIL - Berisi Judul & Tombol Icon Only) -->
+        <!-- A. HEADER WIDGET (TETAP TAMPIL - Berisi Judul & Tombol Icon Only) -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span class="badge badge-gold" style="font-size:0.75rem; padding:4px 10px;">${vendor.type || 'KATERING'}</span>
-            <h3 style="font-size:1.15rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
+            <span class="badge badge-gold" style="font-size:0.75rem; padding:4px 10px;">${vendor.type || 'VENDOR'}</span>
+            <h3 style="font-size:1.2rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
           </div>
           
-          <!-- Tombol Aksi Icon Only (Panah Chevron & Printer) -->
+          <!-- Tombol Aksi Icon Only (Toggle Panah & Cetak PDF) -->
           <div style="display:flex; align-items:center; gap:8px;">
-            <button id="pv-toggle-header-btn" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Detail">
+            <button id="pv-toggle-header-btn" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Detail Widget">
               <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:18px; height:18px;"></i>
             </button>
             <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:36px; height:36px; padding:0; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(223,192,107,0.3);" title="Cetak PDF">
@@ -12672,29 +12669,92 @@ function renderPublicVendorPortal() {
         <div id="pv-collapsible-body" style="margin-top:14px; transition: all 0.3s ease;">
           <!-- Info Contact & Keterangan -->
           <div style="font-size:0.85rem; color:#475569; margin-bottom:14px; display:flex; flex-direction:column; gap:4px;">
-            <div>📞 Contact: <strong>${vendor.phone || vendor.contact || '966568960507'}</strong></div>
-            <div>📝 Keterangan: <em>${vendor.description || vendor.notes || 'Katering Makkah'}</em></div>
+            ${vendor.phone || vendor.contact ? `<div>📞 Contact: <strong>${vendor.phone || vendor.contact}</strong></div>` : ''}
+            ${vendor.description || vendor.notes ? `<div>📝 Keterangan: <em>${vendor.description || vendor.notes}</em></div>` : ''}
           </div>
 
-          <!-- Grid Saldo & Estimasi -->
+          <!-- Grid Saldo Dompet Vendor & Estimasi Kebutuhan -->
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
             <div style="background:#ffffff; border:1.5px solid #dfc06b; border-radius:14px; padding:12px 16px;">
               <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase;">SALDO DOMPET VENDOR</div>
-              <div style="font-size:1.2rem; font-weight:900; color:#0f172a; margin-top:2px;">SAR ${vendorBalance.toLocaleString('id-ID')}</div>
+              <div style="font-size:1.2rem; font-weight:900; color:${vendorBalance < 0 ? '#ef4444' : '#0f172a'}; margin-top:2px;">
+                SAR ${vendorBalance.toLocaleString('id-ID')} ${vendorBalance < 0 ? '(Minus)' : ''}
+              </div>
             </div>
             <div style="background:#ffffff; border:1.5px solid #dfc06b; border-radius:14px; padding:12px 16px;">
               <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase;">ESTIMASI KEBUTUHAN</div>
-              <div style="font-size:1.2rem; font-weight:900; color:#0f172a; margin-top:2px;">SAR ${vendorEstimasi.toLocaleString('id-ID')}</div>
+              <div style="font-size:1.2rem; font-weight:900; color:#0f172a; margin-top:2px;">
+                SAR ${vendorEstimasi.toLocaleString('id-ID')}
+              </div>
             </div>
           </div>
         </div>
 
       </div>
 
+      <!-- DAFTAR PEMESANAN / BOOKINGS VENDOR -->
+      <div class="table-card" style="margin-bottom:24px;">
+        <div class="table-header-bar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <h3 class="table-title">Daftar Pemesanan Layanan</h3>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="pv-search-booking" class="form-input" placeholder="Cari pemesanan / grup..." style="max-width:200px; padding:6px 12px; font-size:0.8rem; height:auto; margin:0;">
+          </div>
+        </div>
+        
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Rombongan / Grup</th>
+                <th>Layanan / Produk</th>
+                <th>Total Biaya</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="pv-booking-tbody">
+              ${vendorBookings.length === 0 ? `
+                <tr><td colspan="6" style="text-align:center; color:var(--text-light); padding:20px;">Belum ada riwayat pemesanan untuk vendor ini.</td></tr>
+              ` : vendorBookings.slice().reverse().map(b => {
+                let statusBadge = `<span class="badge badge-warning">${b.status || 'Proses'}</span>`;
+                if (b.status === "Selesai") statusBadge = `<span class="badge badge-success">Selesai</span>`;
+                if (b.status === "Batal") statusBadge = `<span class="badge badge-danger">Batal</span>`;
+
+                const totalVal = b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0);
+
+                return `
+                  <tr>
+                    <td>${formatDateDisplay(b.date)}</td>
+                    <td><strong>${b.groupName || b.location || '-'}</strong></td>
+                    <td style="font-size:0.8rem;">${b.products ? b.products.map(p => `${p.name || p.title} (${p.qty}x)`).join(', ') : (b.notes || '-')}</td>
+                    <td><strong>SAR ${totalVal.toLocaleString('id-ID')}</strong></td>
+                    <td>${statusBadge}</td>
+                    <td>
+                      <button class="btn btn-secondary pv-detail-booking-btn" data-id="${b.id}" style="width:auto; padding:4px 8px; font-size:0.75rem;">Rincian</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   `;
 
-  // 4. Binding Klik Tombol di JavaScript
+  // -------------------------------------------------------------
+  // BINDING EVENT LISTENERS JAVASCRIPT UNTUK TOMBOL-TOMBOL
+  // -------------------------------------------------------------
+
+  // 1. Binding Listener Tombol Cetak PDF
+  const pvPrintBtn = document.getElementById("pv-print-pdf-btn");
+  if (pvPrintBtn) {
+    pvPrintBtn.onclick = () => openVendorPdfOptionsModal(vendor.id);
+  }
+
+  // 2. Binding Listener Tombol Toggle Buka / Tutup Widget
   const pvToggleBtn = document.getElementById("pv-toggle-header-btn");
   if (pvToggleBtn) {
     pvToggleBtn.onclick = (e) => {
@@ -12703,18 +12763,52 @@ function renderPublicVendorPortal() {
     };
   }
 
-  const pvPrintBtn = document.getElementById("pv-print-pdf-btn");
-  if (pvPrintBtn) {
-    pvPrintBtn.onclick = () => {
-      if (typeof openVendorPdfOptionsModal === "function") {
-        openVendorPdfOptionsModal(vendor.id);
-      } else {
-        window.print();
+  // 3. Binding Search Booking Filter
+  const searchInp = document.getElementById("pv-search-booking");
+  if (searchInp) {
+    searchInp.oninput = (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const tbody = document.getElementById("pv-booking-tbody");
+      if (!tbody) return;
+
+      const filtered = vendorBookings.filter(b => {
+        return (b.groupName && b.groupName.toLowerCase().includes(q)) ||
+               (b.location && b.location.toLowerCase().includes(q)) ||
+               (b.notes && b.notes.toLowerCase().includes(q));
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-light); padding:20px;">Pemesanan tidak ditemukan.</td></tr>`;
+        return;
       }
+
+      tbody.innerHTML = filtered.slice().reverse().map(b => {
+        let statusBadge = `<span class="badge badge-warning">${b.status || 'Proses'}</span>`;
+        if (b.status === "Selesai") statusBadge = `<span class="badge badge-success">Selesai</span>`;
+        if (b.status === "Batal") statusBadge = `<span class="badge badge-danger">Batal</span>`;
+
+        const totalVal = b.totalPrice || (b.products ? b.products.reduce((s, p) => s + ((p.amount || p.price || 0) * (p.qty || 1)), 0) : 0);
+
+        return `
+          <tr>
+            <td>${formatDateDisplay(b.date)}</td>
+            <td><strong>${b.groupName || b.location || '-'}</strong></td>
+            <td style="font-size:0.8rem;">${b.products ? b.products.map(p => `${p.name || p.title} (${p.qty}x)`).join(', ') : (b.notes || '-')}</td>
+            <td><strong>SAR ${totalVal.toLocaleString('id-ID')}</strong></td>
+            <td>${statusBadge}</td>
+            <td>
+              <button class="btn btn-secondary pv-detail-booking-btn" data-id="${b.id}" style="width:auto; padding:4px 8px; font-size:0.75rem;">Rincian</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     };
   }
 
-  if (window.lucide) lucide.createIcons();
+  // 4. Render Lucide Icons
+  if (window.lucide && lucide.createIcons) {
+    lucide.createIcons();
+  }
 }
 
 // Utility to reset database to 100% clean production launch state
