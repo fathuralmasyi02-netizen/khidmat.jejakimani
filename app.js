@@ -12774,7 +12774,7 @@ function renderPublicVendorPortal() {
 
                   <div style="display:flex; align-items:center; gap:8px;">
                     <!-- Toggle Expand/Collapse Button -->
-                    <button id="pv-toggle-header-btn" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Widget">
+                    <button id="pv-toggle-header-btn" onclick="toggleVendorWidgetHeader()" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Widget">
                       <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:18px; height:18px;"></i>
                       <span id="pv-toggle-text" class="hidden"></span>
                     </button>
@@ -12952,6 +12952,7 @@ function renderPublicVendorPortal() {
   if (pvPrintBtn) {
     pvPrintBtn.onclick = () => openVendorPdfOptionsModal(vendor.id);
   }
+  
   const pvToggleBtn = document.getElementById("pv-toggle-header-btn");
   if (pvToggleBtn) {
     pvToggleBtn.onclick = () => {
@@ -13639,19 +13640,22 @@ function renderUserDocuments() {
 }
 
 function toggleVendorWidgetHeader() {
-  const body = document.getElementById("pv-widget-header-content");
+  // Targetkan ID kontainer widget yang benar
+  const widgetContent = document.getElementById("pv-widget-header-content") || document.querySelector(".vendor-widget-body");
   const icon = document.getElementById("pv-toggle-icon");
-  if (!body) return;
+  if (!widgetContent) return;
 
-  if (body.classList.contains("hidden")) {
-    body.classList.remove("hidden");
+  // Toggle tampilan menyembunyikan / menampilkan widget secara pasti
+  if (widgetContent.style.display === "none") {
+    widgetContent.style.display = ""; // Tampilkan widget
     if (icon) icon.setAttribute("data-lucide", "chevron-up");
   } else {
-    body.classList.add("hidden");
+    widgetContent.style.display = "none"; // Sembunyikan widget
     if (icon) icon.setAttribute("data-lucide", "chevron-down");
   }
-  
-  if (window.lucide) {
+
+  // Render ulang icon Lucide agar panah berubah
+  if (window.lucide && lucide.createIcons) {
     lucide.createIcons();
   }
 }
