@@ -12546,23 +12546,6 @@ function formatDateIndonesian(dateStr) {
   return dateStr;
 }
 
-function toggleVendorWidgetHeader() {
-  const body = document.getElementById("pv-widget-header-content");
-  const icon = document.getElementById("pv-toggle-icon");
-  if (!body) return;
-
-  if (body.classList.contains("hidden")) {
-    body.classList.remove("hidden");
-    if (icon) icon.setAttribute("data-lucide", "chevron-up");
-  } else {
-    body.classList.add("hidden");
-    if (icon) icon.setAttribute("data-lucide", "chevron-down");
-  }
-  
-  if (window.lucide) {
-    lucide.createIcons();
-  }
-}
 
 function openVendorPdfOptionsModal(vendorId) {
   const vendor = (state.vendors || []).find(v => v.id === vendorId);
@@ -13632,4 +13615,22 @@ function renderUserDocuments() {
   `;
 
   lucide.createIcons();
+}
+
+function toggleVendorWidgetHeader() {
+  const body = document.getElementById("pv-widget-header-content");
+  const icon = document.getElementById("pv-toggle-icon");
+  if (!body) return;
+
+  if (body.classList.contains("hidden")) {
+    body.classList.remove("hidden");
+    if (icon) icon.setAttribute("data-lucide", "chevron-up");
+  } else {
+    body.classList.add("hidden");
+    if (icon) icon.setAttribute("data-lucide", "chevron-down");
+  }
+  
+  if (window.lucide) {
+    lucide.createIcons();
+  }
 }
