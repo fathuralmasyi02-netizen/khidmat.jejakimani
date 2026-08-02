@@ -12762,23 +12762,21 @@ function renderPublicVendorPortal() {
           ${(() => {
             const vendorBal = (state.financial.vendorWallets && state.financial.vendorWallets[vendor.id]) || 0;
             return `
-              <!-- Biodata Vendor & Widget Area (Collapsible) -->
-              <div style="background:linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.85) 100%); backdrop-filter:blur(12px); border-radius:18px; padding:14px 16px; border:1px solid rgba(255,255,255,0.9); box-shadow:0 8px 20px rgba(0,0,0,0.02); margin-bottom:12px;">
-                
-                <!-- Header Bar of Card (Always Visible) -->
+              <!-- KARTU WIDGET VENDOR UTAMA -->
+              <div class="vendor-widget-card" style="background:#ffffff; border-radius:18px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); border:1px solid #f1f5f9; margin-bottom:20px;">
+
+                <!-- A. HEADER CARD (TETAP TAMPIL - Berisi Judul & Tombol Aksi) -->
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                  <div style="flex:1; min-width:180px; display:flex; align-items:center; gap:8px;">
-                    <span style="background:#fef3c7; color:#92400e; font-weight:900; font-size:0.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase;">${vendor.type || 'Mitra Layanan'}</span>
-                    <h1 style="margin:0; font-size:1.25rem; font-weight:900; color:#0f172a; display:inline-block;">${vendor.name}</h1>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="badge badge-gold" style="font-size:0.75rem; padding:4px 10px;">${vendor.type || 'KATERING'}</span>
+                    <h3 style="font-size:1.15rem; font-weight:900; color:#0f172a; margin:0;">${vendor.name}</h3>
                   </div>
 
+                  <!-- Tombol Aksi Icon Only -->
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <!-- Toggle Expand/Collapse Button -->
-                    <button id="pv-toggle-header-btn" onclick="toggleVendorWidgetHeader()" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Widget">
+                    <button id="pv-toggle-header-btn" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Detail">
                       <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:18px; height:18px;"></i>
-                      <span id="pv-toggle-text" class="hidden"></span>
                     </button>
-
                     <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:36px; height:36px; padding:0; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(223,192,107,0.3);" title="Cetak PDF">
                       <i data-lucide="printer" style="width:18px; height:18px;"></i>
                     </button>
@@ -12786,11 +12784,28 @@ function renderPublicVendorPortal() {
                 </div>
 
                 <!-- Collapsible Body (Contact, Notes, & 2 Widgets) -->
-                <div id="pv-collapsible-body" style="margin-top:10px; transition:all 0.3s ease;">
-                  <div style="font-size:0.82rem; color:#475569; margin-bottom:2px;">📞 Contact: <strong>${vendor.contact || '-'}</strong></div>
-                  <div style="font-size:0.78rem; color:#64748b;">📝 Keterangan: <em>${vendor.notes || vendor.description || 'Mitra Penyelenggara Layanan Operational Tim Khidmat jejak imani Saudi Arabia'}</em></div>
+                <div id="pv-collapsible-body" style="margin-top:14px; transition: all 0.3s ease;">
+                  <!-- Info Contact & Keterangan -->
+                  <div style="font-size:0.85rem; color:#475569; margin-bottom:14px; display:flex; flex-direction:column; gap:4px;">
+                    <div>📞 Contact: <strong>${vendor.phone || vendor.contact || '-'}</strong></div>
+                    <div>📝 Keterangan: <em>${vendor.description || vendor.notes || '-'}</em></div>
+                  </div>
 
-                  <!-- Vendor Financial & Estimate Grid (2 Cards Side-by-Side) -->
+                  <!-- Grid Saldo & Estimasi -->
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div style="background:#ffffff; border:1.5px solid #dfc06b; border-radius:14px; padding:12px 16px;">
+                      <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase;">SALDO DOMPET VENDOR</div>
+                      <div style="font-size:1.2rem; font-weight:900; color:#0f172a; margin-top:2px;">SAR ${(vendorBalance || 0).toLocaleString('id-ID')}</div>
+                    </div>
+                    <div style="background:#ffffff; border:1.5px solid #dfc06b; border-radius:14px; padding:12px 16px;">
+                      <div style="font-size:0.7rem; font-weight:800; color:#b89230; text-transform:uppercase;">ESTIMASI KEBUTUHAN</div>
+                      <div style="font-size:1.2rem; font-weight:900; color:#0f172a; margin-top:2px;">SAR ${(vendorEstimasi || 0).toLocaleString('id-ID')}</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
                   ${(() => {
                     const estimatedBudgetCost = vendorBookings
                       .filter(b => {
@@ -12953,27 +12968,30 @@ function renderPublicVendorPortal() {
     pvPrintBtn.onclick = () => openVendorPdfOptionsModal(vendor.id);
   }
   
+  // 2. Binding untuk Tombol Toggle Buka/Tutup Widget
   const pvToggleBtn = document.getElementById("pv-toggle-header-btn");
   if (pvToggleBtn) {
-    pvToggleBtn.onclick = () => {
-      const widgetContent = document.getElementById("pv-widget-header-content") || document.querySelector(".vendor-widget-body");
-      const icon = document.getElementById("pv-toggle-icon");
-      if (widgetContent) {
-        if (widgetContent.style.display === "none") {
-          widgetContent.style.display = ""; // Tampilkan widget
-          if (icon) icon.setAttribute("data-lucide", "chevron-up");
+    pvToggleBtn.onclick = (e) => {
+      e.preventDefault();
+      const bodyEl = document.getElementById("pv-collapsible-body");
+      const iconEl = document.getElementById("pv-toggle-icon");
+      
+      if (bodyEl) {
+        if (bodyEl.style.display === "none") {
+          bodyEl.style.display = "block"; // Munculkan isi widget
+          if (iconEl) iconEl.setAttribute("data-lucide", "chevron-up");
         } else {
-          widgetContent.style.display = "none"; // Sembunyikan widget
-          if (icon) icon.setAttribute("data-lucide", "chevron-down");
+          bodyEl.style.display = "none"; // Sembunyikan isi widget
+          if (iconEl) iconEl.setAttribute("data-lucide", "chevron-down");
         }
         
+        // Render ulang icon Lucide agar panah berubah (up/down)
         if (window.lucide && lucide.createIcons) {
           lucide.createIcons();
         }
       }
-    }
+    };
   }
-
 }
 
 
