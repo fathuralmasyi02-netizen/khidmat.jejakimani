@@ -12791,13 +12791,13 @@ function renderPublicVendorPortal() {
 
                   <div style="display:flex; align-items:center; gap:8px;">
                     <!-- Toggle Expand/Collapse Button -->
-                    <button id="pv-toggle-header-btn" onclick="toggleVendorWidgetHeader('${vendor.id}')" class="btn" style="width:auto; padding:6px 12px; font-size:0.75rem; font-weight:800; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="Buka/Tutup Detail Widget">
-                      <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:14px; height:14px;"></i>
-                      <span id="pv-toggle-text">Sembunyikan Widget</span>
+                    <button id="pv-toggle-header-btn" onclick="toggleVendorWidgetHeader('${vendor.id}')" class="btn" style="width:36px; height:36px; padding:0; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" title="Sembunyikan / Tampilkan Widget">
+                      <i id="pv-toggle-icon" data-lucide="chevron-up" style="width:18px; height:18px;"></i>
+                      <span id="pv-toggle-text" class="hidden"></span>
                     </button>
 
-                    <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:auto; padding:7px 14px; font-size:0.78rem; font-weight:800; border-radius:10px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(223,192,107,0.3);">
-                      <i data-lucide="printer" style="width:14px; height:14px;"></i> Cetak PDF
+                    <button id="pv-print-pdf-btn" class="btn btn-gold" style="width:36px; height:36px; padding:0; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(223,192,107,0.3);" title="Cetak PDF">
+                      <i data-lucide="printer" style="width:18px; height:18px;"></i>
                     </button>
                   </div>
                 </div>
